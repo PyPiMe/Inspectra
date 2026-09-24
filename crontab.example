@@ -1,0 +1,11 @@
+# PyPiMeOps 内置调度器已覆盖定时巡检，无需系统 cron。
+# 本文件仅为可选冗余示例：例如每日对整机做一次灾备备份。
+#
+# 用法：crontab -e 后按需取消注释（注意替换 APP_DIR 与执行用户）
+#
+# 每日 03:30 整机备份
+# 30 3 * * * cd /opt/pypimeops && BACKUP_DIR=/opt/pypimeops/backups bash backup.sh >> /opt/pypimeops/logs/backup.log 2>&1
+#
+# 注意：
+# - 定时巡检请在 Web「定时任务」页配置，不要用 cron 调用 app.py 之外的方式。
+# - 单进程约束：不要用 cron 重复拉起 app.py。

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% from "_macros.html" import json_view %}
+{% block title %}版本 #{{ version.id }}{% endblock %}
+{% block content %}
+<h4 class="d-flex align-items-center gap-2 flex-wrap">
+  <span>{{ display_name }}</span>
+  <span class="badge bg-secondary">{{ version.object_type }}</span>
+  <span class="badge bg-info text-dark">{{ version.action }}</span>
+  <span class="text-muted small">v{{ version.version }}</span>
+  <span class="text-muted small ms-auto">版本 #{{ version.id }}</span>
+</h4>
+
+{% if missing %}
+<div class="alert alert-danger">
+  <strong>引用完整性校验失败</strong>：缺少依赖 {{ missing|join('、') }}，恢复会失败，请先恢复依赖。
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-6">
+    <div class="card"><div class="card-header">快照</div><div class="card-body">
+      {{ json_view(snapshot, 'snap') }}
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card"><div class="card-header">与当前状态差异</div><div class="card-body">
+      <table class="table table-sm">
+        <thead><tr><th>字段</th><th>当前</th><th>快照</th></tr></thead>
+        <tbody>
+        {% for d in diff %}
+          {% set cls = 'diff-add' if d.old is none else ('diff-del' if d.new is none else 'diff-chg') %}
+          <tr class="{{ cls }}">
+            <td>{{ d.key }}</td>
+            <td class="small text-break-all">{{ d.old }}</td>
+            <td class="small text-break-all">{{ d.new }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="3" class="text-muted">无差异</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+    <button class="btn btn-warning mt-2" data-bs-toggle="modal" data-bs-target="#restoreModal">恢复此版本</button>
+  </div>
+</div>
+<a class="btn btn-outline-secondary mt-2" href="{{ url_for('backups') }}">返回</a>
+
+<div class="modal fade" id="restoreModal"><div class="modal-dialog"><div class="modal-content">
+  <form method="post" action="{{ url_for('backup_restore', vid=version.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="modal-header"><h5 class="modal-title">恢复版本 v{{ version.version }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      {% if missing %}
+        <div class="alert alert-danger mb-2">缺少依赖：{{ missing|join('、') }}，请先恢复依赖后再试。</div>
+      {% else %}
+        <p>确认恢复到该版本？<strong>恢复前会自动把当前状态存为新版本</strong>（可回退），操作会写入审计。</p>
+      {% endif %}
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+      <button class="btn btn-warning" {{ 'disabled' if missing else '' }}>确认恢复</button>
+    </div>
+  </form>
+</div></div></div>
+{% endblock %}

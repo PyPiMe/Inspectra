@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, quick_range %}
+{% block title %}审计日志{% endblock %}
+{% block content %}
+<h4>审计日志</h4>
+
+<form id="auditFilter" class="row g-2 mb-2 align-items-end" method="get" action="{{ url_for('audit_logs') }}">
+  <div class="col-auto"><input class="form-control form-control-sm" name="ip" placeholder="来源IP" value="{{ request.args.get('ip','') }}"></div>
+  <div class="col-auto">
+    <select class="form-select form-select-sm" name="action">
+      <option value="">全部动作</option>
+      {% for a in ['create','update','delete','run','restore','rekey','import','export','cleanup','notify_failed','model_extra_id'] %}
+        <option value="{{ a }}" {{ 'selected' if request.args.get('action')==a else '' }}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select class="form-select form-select-sm" name="target_type">
+      <option value="">全部对象</option>
+      {% for t in ['group','server','script','datasource','model','notification','schedule','setting','credential','run','report','backup','applog','all','server_datasource'] %}
+        <option value="{{ t }}" {{ 'selected' if request.args.get('target_type')==t else '' }}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto"><input class="form-control form-control-sm" name="q" placeholder="关键词" value="{{ request.args.get('q','') }}"></div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="datetime-local" name="start" step="1" value="{{ request.args.get('start','') }}" title="开始时间"></div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="datetime-local" name="end" step="1" value="{{ request.args.get('end','') }}" title="结束时间"></div>
+  <div class="col-auto">{{ quick_range('auditFilter') }}</div>
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">筛选</button></div>
+  <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('audit_logs') }}">重置</a></div>
+  <div class="col-auto">
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('audit_export', format='csv', ip=request.args.get('ip',''), action=request.args.get('action',''), target_type=request.args.get('target_type',''), q=request.args.get('q',''), start=request.args.get('start',''), end=request.args.get('end','')) }}">导出 CSV</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('audit_export', format='json', ip=request.args.get('ip',''), action=request.args.get('action',''), target_type=request.args.get('target_type',''), q=request.args.get('q',''), start=request.args.get('start',''), end=request.args.get('end','')) }}">导出 JSON</a>
+  </div>
+</form>
+
+{% set action_color = {'create':'success','update':'primary','delete':'danger','restore':'warning','rekey':'warning','import':'info','export':'secondary','run':'dark','cleanup':'secondary','notify_failed':'danger','model_extra_id':'secondary'} %}
+{% set cur_action = request.args.get('action','') %}
+{% set base_args = {'ip': request.args.get('ip',''), 'target_type': request.args.get('target_type',''), 'q': request.args.get('q',''), 'status': request.args.get('status',''), 'start': request.args.get('start',''), 'end': request.args.get('end','')} %}
+<div class="mb-2">
+  <a class="btn btn-sm btn-{{ 'secondary' if not cur_action else 'outline-secondary' }}" href="{{ url_for('audit_logs', **base_args) }}">全部</a>
+  {% for a in ['create','update','delete','run','restore','rekey','import','export','cleanup','notify_failed','model_extra_id'] %}
+    <a class="btn btn-sm btn-{{ action_color.get(a,'secondary') if cur_action == a else 'outline-' + action_color.get(a,'secondary') }}"
+       href="{{ url_for('audit_logs', action=a, ip=base_args.ip, target_type=base_args.target_type, q=base_args.q, status=base_args.status, start=base_args.start, end=base_args.end) }}">{{ a }}</a>
+  {% endfor %}
+</div>
+<table class="table table-sm table-hover">
+  <thead><tr><th>时间</th><th>IP</th><th>动作</th><th>对象</th><th>名称</th><th>状态</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for l in logs %}
+    <tr class="{{ 'table-warning' if l.action in high_risk and l.target_type in ['credential','script'] else '' }}">
+      <td class="small">{{ l.ts|local }}</td>
+      <td>{{ l.ip }}</td>
+      <td><span class="badge bg-{{ action_color.get(l.action, 'secondary') }}">{{ l.action }}</span></td>
+      <td>{{ l.target_type }}</td>
+      <td>{{ l.target_name }}</td>
+      <td><span class="badge bg-{{ 'success' if l.status == 'ok' else 'danger' }}">{{ l.status }}</span></td>
+      <td class="text-nowrap">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#detailModal"
+                onclick="showAuditDetail(this)"
+                data-detail="{{ l.detail }}"
+                data-title="{{ l.action }} {{ l.target_type }} #{{ l.target_id }}">详情</button>
+        {% if l.version_id %}
+          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=l.version_id) }}">查看</a>
+          <form method="post" action="{{ url_for('audit_restore', aid=l.id) }}" class="d-inline" onsubmit="return confirm('恢复到该操作对应的版本？恢复前会自动备份当前状态')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button class="btn btn-sm btn-warning">恢复</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7" class="text-muted">暂无审计记录</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager('audit_logs', {'ip': request.args.get('ip',''), 'action': request.args.get('action',''), 'target_type': request.args.get('target_type',''), 'q': request.args.get('q',''), 'status': request.args.get('status',''), 'start': request.args.get('start',''), 'end': request.args.get('end','')}, page, pages, total, per_page) }}
+
+<div class="modal fade" id="detailModal"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title" id="detailTitle">审计详情</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <div id="detailDiff" class="mb-2 d-none"></div>
+    <div class="json-wrap">
+      <div class="json-actions">
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('detailPre').textContent, this)">复制</button>
+      </div>
+      <pre class="json-view" id="detailPre"></pre>
+    </div>
+  </div>
+</div></div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showAuditDetail(btn) {
+  const raw = btn.getAttribute('data-detail') || '';
+  document.getElementById('detailTitle').textContent = btn.getAttribute('data-title') || '审计详情';
+  const pre = document.getElementById('detailPre');
+  let obj = null;
+  try { obj = JSON.parse(raw); } catch (e) { obj = null; }
+  pre.dataset.hl = '';
+  pre.textContent = obj ? JSON.stringify(obj, null, 2) : raw;
+  if (typeof highlightJson === 'function') highlightJson();
+  const diff = document.getElementById('detailDiff');
+  if (obj && typeof obj === 'object' && ('old' in obj) && ('new' in obj)) {
+    diff.className = 'mb-2 diff-chg p-2';
+    diff.innerHTML = '<strong>变更：</strong><br>old: ' + escapeHtml(String(obj.old)) + '<br>new: ' + escapeHtml(String(obj.new));
+  } else {
+    diff.className = 'mb-2 d-none';
+    diff.innerHTML = '';
+  }
+}
+</script>
+{% endblock %}

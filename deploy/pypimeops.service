@@ -1,0 +1,23 @@
+[Unit]
+Description=PyPiMeOps 服务器运维巡检 Web 管理端（单进程）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__SVC_USER__
+Group=__SVC_USER__
+WorkingDirectory=__APP_DIR__
+ExecStart=__APP_DIR__/venv/bin/python __APP_DIR__/app.py
+Restart=on-failure
+RestartSec=3
+# 单进程约束：内置调度器 + 进程内线程池，禁止 gunicorn 多 worker
+KillMode=mixed
+TimeoutStopSec=30
+
+# 基础加固
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

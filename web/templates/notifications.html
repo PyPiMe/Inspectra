@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}通知{% endblock %}
+{% block content %}
+<h4>通知服务</h4>
+<div class="alert alert-secondary small">多条通知可同时启用，告警时全部触发。密码/加签 secret 用环境变量名引用（真实值填 <code>secrets.env</code>）。<strong>测试阶段可「全部停用」</strong>，告警仅写日志与审计。</div>
+
+<div class="d-flex align-items-center mb-2 gap-2 flex-wrap">
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createNotif">新增通知</button>
+  <span class="badge bg-{{ 'success' if enabled_count else 'secondary' }}">已启用 {{ enabled_count }} / {{ total_all }}</span>
+  <form method="post" action="{{ url_for('notifications_toggle_all') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="enable" value="1">
+    <button class="btn btn-sm btn-outline-success" {{ 'disabled' if enabled_count == total_all else '' }}>全部启用</button>
+  </form>
+  <form method="post" action="{{ url_for('notifications_toggle_all') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-sm btn-outline-warning" {{ 'disabled' if not enabled_count else '' }}>全部停用</button>
+  </form>
+</div>
+
+<form class="row g-2 mb-2" method="get" action="{{ url_for('notifications') }}">
+  <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="名称"></div>
+  <div class="col-auto">
+    <select class="form-select form-select-sm" name="type">
+      <option value="">全部类型</option>
+      <option value="smtp" {{ 'selected' if ntype == 'smtp' else '' }}>SMTP</option>
+      <option value="dingtalk" {{ 'selected' if ntype == 'dingtalk' else '' }}>钉钉</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <select class="form-select form-select-sm" name="enabled">
+      <option value="">全部状态</option>
+      <option value="1" {{ 'selected' if enabled == '1' else '' }}>启用</option>
+      <option value="0" {{ 'selected' if enabled == '0' else '' }}>停用</option>
+    </select>
+  </div>
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
+  <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('notifications') }}">重置</a></div>
+</form>
+<table class="table table-sm">
+  <thead><tr><th>名称</th><th>类型</th><th>secret_env</th><th>状态</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for n in notifications %}
+    <tr>
+      <td>{{ n.name }}</td><td>{{ n.type }}</td><td>{{ n.secret_env }}</td>
+      <td>{% if n.enabled %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">停用</span>{% endif %}</td>
+      <td class="text-nowrap">
+        <form method="post" action="{{ url_for('notifications_toggle', nid=n.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-sm {{ 'btn-outline-warning' if n.enabled else 'btn-outline-success' }}">{{ '停用' if n.enabled else '启用' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('notifications_test', nid=n.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-success">发送测试消息</button>
+        </form>
+        <form method="post" action="{{ url_for('notifications_delete', nid=n.id) }}" class="d-inline" onsubmit="return confirm('确认删除？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="text-muted">暂无通知</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager('notifications', {'q': q, 'type': ntype, 'enabled': enabled}, page, pages, total, per_page) }}
+
+<div class="modal fade" id="createNotif"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <form method="post" action="{{ url_for('notifications_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="modal-header"><h5 class="modal-title">新增通知</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-2">
+        <div class="col-md-3"><label class="form-label">名称</label><input class="form-control" name="name" required></div>
+        <div class="col-md-3"><label class="form-label">类型</label>
+          <select class="form-select" name="type" id="ntype">
+            <option value="smtp">SMTP</option><option value="dingtalk">钉钉</option>
+          </select>
+        </div>
+        <div class="col-md-3"><label class="form-label">secret_env</label><input class="form-control" name="secret_env" placeholder="SMTP_PASSWORD / DINGTALK_SECRET"></div>
+        <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">启用</label></div></div>
+      </div>
+      <div id="smtpFields" class="row g-2 mt-1">
+        <div class="col-md-3"><label class="form-label">SMTP host</label><input class="form-control" name="smtp_host"></div>
+        <div class="col-md-2"><label class="form-label">端口</label><input class="form-control" name="smtp_port" value="465"></div>
+        <div class="col-md-3"><label class="form-label">发件人</label><input class="form-control" name="smtp_from"></div>
+        <div class="col-md-4"><label class="form-label">收件人（逗号分隔）</label><input class="form-control" name="smtp_to"></div>
+        <div class="col-md-3"><label class="form-label">用户</label><input class="form-control" name="smtp_user"></div>
+        <div class="col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="smtp_ssl" checked><label class="form-check-label">SSL</label></div></div>
+        <div class="col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="smtp_tls"><label class="form-check-label">STARTTLS</label></div></div>
+      </div>
+      <div id="dingFields" class="row g-2 mt-1 d-none">
+        <div class="col-md-6"><label class="form-label">Webhook URL</label><input class="form-control" name="webhook_url"></div>
+        <div class="col-md-3"><label class="form-label">@手机号（逗号分隔）</label><input class="form-control" name="at_mobiles"></div>
+        <div class="col-md-2 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="at_all"><label class="form-check-label">@所有人</label></div></div>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+  </form>
+</div></div></div>
+{% endblock %}
+{% block scripts %}
+<script>
+const sel = document.getElementById('ntype');
+function toggle(){ const smtp = sel.value==='smtp'; document.getElementById('smtpFields').classList.toggle('d-none', !smtp); document.getElementById('dingFields').classList.toggle('d-none', smtp); }
+sel.addEventListener('change', toggle); toggle();
+</script>
+{% endblock %}

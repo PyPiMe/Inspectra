@@ -1,0 +1,265 @@
+{% extends "base.html" %}
+{% block title %}{{ script.name or '新增脚本' }}{% endblock %}
+{% block content %}
+<h4 class="d-flex align-items-center gap-2 flex-wrap">
+  <span>{{ script.name or '新增脚本' }}</span>
+  <span class="badge bg-secondary" id="kindBadge">{{ script.kind or 'shell' }}</span>
+  {% if script.id %}<span class="text-muted small ms-auto">#{{ script.id }}</span>{% endif %}
+</h4>
+
+<div class="alert alert-secondary small mb-2">
+  <span id="specShell">
+    <strong>Shell 输出规范</strong>：精简、结构化（<code>key=value</code> 或表格），避免 dump 全量日志；异常用 <code>ERROR:</code> 前缀。
+  </span>
+  <span id="specPromql" class="d-none">
+    <strong>PromQL 头部元数据</strong>：<code># NAME / # MODE: instant|range / # WINDOW / # STEP / # THRESHOLD / # UNIT</code>；
+    用 <code>$instance</code>（实例）与 <code>$guest</code>（虚拟机）占位符注入匹配器。
+  </span>
+</div>
+
+<form id="scriptForm" method="post" action="{{ url_for('scripts_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if script.id %}<input type="hidden" name="id" value="{{ script.id }}">{% endif %}
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span>内容</span>
+          <span class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" id="fontDec" title="缩小字号">A-</button>
+            <button type="button" class="btn btn-outline-secondary" id="fontInc" title="放大字号">A+</button>
+            <button type="button" class="btn btn-outline-secondary" id="wrapToggle">换行:关</button>
+            <button type="button" class="btn btn-outline-secondary" id="insertTpl">插入示例</button>
+            <button type="button" class="btn btn-outline-primary" id="validateBtn">校验</button>
+          </span>
+        </div>
+        <div class="card-body p-0">
+          <div class="code-editor" id="editor">
+            <pre class="editor-gutter" id="gutter">1</pre>
+            <textarea class="editor-area" name="content" id="content" spellcheck="false" wrap="off">{{ content }}</textarea>
+          </div>
+        </div>
+        <div class="card-footer py-1"><span id="validateResult" class="small text-muted">Ctrl+S 保存 · Ctrl+Enter 校验 · Tab 缩进</span></div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      <div class="card mb-3"><div class="card-header">基本信息</div><div class="card-body row g-2">
+        <div class="col-12"><label class="form-label">名称</label><input class="form-control" name="name" value="{{ script.name }}" required></div>
+        <div class="col-6"><label class="form-label">类型</label>
+          <select class="form-select" name="kind" id="kind">
+            <option value="shell" {{ 'selected' if script.kind=='shell' else '' }}>shell</option>
+            <option value="promql" {{ 'selected' if script.kind=='promql' else '' }}>promql</option>
+          </select>
+        </div>
+        <div class="col-6"><label class="form-label">展示名</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
+        <div class="col-12"><label class="form-label">说明</label><input class="form-control" name="desc" value="{{ script.desc }}"></div>
+      </div></div>
+
+      <div class="card mb-3 d-none" id="metaCard"><div class="card-header">PromQL 元数据（自动生成头部注释）</div><div class="card-body row g-2">
+        <div class="col-12"><label class="form-label">NAME</label><input class="form-control form-control-sm" id="metaName"></div>
+        <div class="col-6"><label class="form-label">MODE</label>
+          <select class="form-select form-select-sm" id="metaMode"><option value="instant">instant</option><option value="range">range</option></select>
+        </div>
+        <div class="col-6"><label class="form-label">UNIT</label><input class="form-control form-control-sm" id="metaUnit" placeholder="如 % / s"></div>
+        <div class="col-6 meta-range"><label class="form-label">WINDOW</label><input class="form-control form-control-sm" id="metaWindow" placeholder="5m"></div>
+        <div class="col-6 meta-range"><label class="form-label">STEP</label><input class="form-control form-control-sm" id="metaStep" placeholder="1m"></div>
+        <div class="col-12"><label class="form-label">THRESHOLD</label><input class="form-control form-control-sm" id="metaThreshold" placeholder=">90 / &lt;1 / ==0"></div>
+        <div class="col-12"><button type="button" class="btn btn-sm btn-outline-secondary w-100" id="syncHeaderBtn">同步头部到内容</button></div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="mt-3">
+    <button class="btn btn-primary">保存</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">返回列表</a>
+  </div>
+</form>
+
+{% if script.id %}
+<div class="mt-2">
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">历史</a>
+  <form method="post" action="{{ url_for('scripts_clone', sid=script.id) }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-sm btn-outline-secondary">复制</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const area = document.getElementById('content');
+const gutter = document.getElementById('gutter');
+const kindSel = document.getElementById('kind');
+const kindBadge = document.getElementById('kindBadge');
+const metaCard = document.getElementById('metaCard');
+const resultEl = document.getElementById('validateResult');
+const form = document.getElementById('scriptForm');
+let fontSize = 13;
+let wrapOn = false;
+
+const SHELL_TPL = `#!/usr/bin/env bash
+# 输出规范：精简、结构化（key=value 或表格），避免 dump 全量日志
+set -u
+echo "example_key=value"
+`;
+const PROMQL_TPL = `# NAME: 示例指标
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+node_load1{$instance}
+`;
+
+function updateGutter() {
+  const n = area.value.split('\n').length;
+  let s = '';
+  for (let i = 1; i <= n; i++) s += i + '\n';
+  gutter.textContent = s;
+  gutter.scrollTop = area.scrollTop;
+}
+area.addEventListener('input', () => { updateGutter(); scheduleValidate(); });
+area.addEventListener('scroll', () => { gutter.scrollTop = area.scrollTop; });
+
+// Tab / Shift+Tab 缩进
+area.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const s = area.selectionStart, en = area.selectionEnd;
+    if (!e.shiftKey) {
+      area.setRangeText('  ', s, en, 'end');
+    } else {
+      const before = area.value.lastIndexOf('\n', s - 1) + 1;
+      if (area.value.slice(before, before + 2) === '  ') {
+        area.setRangeText('', before, before + 2, 'preserve');
+      }
+    }
+    updateGutter();
+  }
+});
+
+// 字号 / 换行
+function applyFont() {
+  area.style.fontSize = fontSize + 'px';
+  gutter.style.fontSize = fontSize + 'px';
+}
+document.getElementById('fontInc').addEventListener('click', () => { fontSize = Math.min(20, fontSize + 1); applyFont(); });
+document.getElementById('fontDec').addEventListener('click', () => { fontSize = Math.max(11, fontSize - 1); applyFont(); });
+document.getElementById('wrapToggle').addEventListener('click', (e) => {
+  wrapOn = !wrapOn;
+  area.classList.toggle('wrap', wrapOn);
+  area.setAttribute('wrap', wrapOn ? 'soft' : 'off');
+  gutter.classList.toggle('d-none', wrapOn);
+  e.target.textContent = '换行:' + (wrapOn ? '开' : '关');
+  updateGutter();
+});
+
+// 插入示例
+document.getElementById('insertTpl').addEventListener('click', () => {
+  const tpl = kindSel.value === 'promql' ? PROMQL_TPL : SHELL_TPL;
+  if (area.value.trim() && !confirm('内容非空，确认插入示例模板？')) return;
+  const s = area.selectionStart, en = area.selectionEnd;
+  area.setRangeText(tpl, s, en, 'end');
+  updateGutter();
+  scheduleValidate();
+});
+
+// 校验
+async function doValidate() {
+  resultEl.textContent = '校验中…';
+  resultEl.className = 'small text-muted';
+  try {
+    const body = new URLSearchParams({
+      csrf_token: window.pypimeops.csrf(), content: area.value, kind: kindSel.value,
+    });
+    const d = await (await fetch('{{ url_for("scripts_validate") }}', { method: 'POST', body })).json();
+    resultEl.textContent = d.ok ? '✅ 校验通过' : ('❌ ' + (d.errors || []).join('；'));
+    resultEl.className = 'small ' + (d.ok ? 'text-success' : 'text-danger');
+  } catch (e) {
+    resultEl.textContent = '校验失败：' + e;
+    resultEl.className = 'small text-danger';
+  }
+}
+let vTimer = null;
+function scheduleValidate() {
+  clearTimeout(vTimer);
+  vTimer = setTimeout(doValidate, 900);
+}
+document.getElementById('validateBtn').addEventListener('click', doValidate);
+
+// Ctrl+S 保存 / Ctrl+Enter 校验
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); form.submit(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); doValidate(); }
+});
+
+// PromQL 元数据 <-> 头部注释
+const metaIds = ['metaName', 'metaMode', 'metaWindow', 'metaStep', 'metaThreshold', 'metaUnit'];
+const mval = (id) => (document.getElementById(id).value || '').trim();
+
+function splitHeader(text) {
+  const lines = text.split('\n');
+  let i = 0;
+  while (i < lines.length && (lines[i].trim() === '' || lines[i].trim().startsWith('#'))) i++;
+  return { body: lines.slice(i) };
+}
+function generateHeader() {
+  const mode = mval('metaMode') || 'instant';
+  const out = [];
+  if (mval('metaName')) out.push('# NAME: ' + mval('metaName'));
+  out.push('# MODE: ' + mode);
+  if (mode === 'range') {
+    if (mval('metaWindow')) out.push('# WINDOW: ' + mval('metaWindow'));
+    if (mval('metaStep')) out.push('# STEP: ' + mval('metaStep'));
+  }
+  if (mval('metaThreshold')) out.push('# THRESHOLD: ' + mval('metaThreshold'));
+  if (mval('metaUnit')) out.push('# UNIT: ' + mval('metaUnit'));
+  return out.join('\n');
+}
+function syncHeader() {
+  if (kindSel.value !== 'promql') return;
+  const body = splitHeader(area.value).body.join('\n').replace(/^\n+/, '');
+  area.value = generateHeader() + (body ? '\n' + body : '\n');
+  updateGutter();
+}
+function parseHeader() {
+  const lines = area.value.split('\n');
+  const map = {};
+  for (const l of lines) {
+    const t = l.trim();
+    if (!t.startsWith('#')) continue;
+    const m = t.replace(/^#\s*/, '').match(/^([A-Z]+)\s*:\s*(.*)$/);
+    if (m) map[m[1]] = m[2].trim();
+  }
+  document.getElementById('metaName').value = map.NAME || '';
+  document.getElementById('metaMode').value = (map.MODE || 'instant').toLowerCase() === 'range' ? 'range' : 'instant';
+  document.getElementById('metaWindow').value = map.WINDOW || '';
+  document.getElementById('metaStep').value = map.STEP || '';
+  document.getElementById('metaThreshold').value = map.THRESHOLD || '';
+  document.getElementById('metaUnit').value = map.UNIT || '';
+  toggleRangeFields();
+}
+function toggleRangeFields() {
+  const show = mval('metaMode') === 'range';
+  document.querySelectorAll('.meta-range').forEach((el) => el.classList.toggle('d-none', !show));
+}
+metaIds.forEach((id) => document.getElementById(id).addEventListener('change', () => { toggleRangeFields(); syncHeader(); scheduleValidate(); }));
+document.getElementById('metaMode').addEventListener('change', toggleRangeFields);
+document.getElementById('syncHeaderBtn').addEventListener('click', syncHeader);
+
+function applyKind() {
+  const isPromql = kindSel.value === 'promql';
+  kindBadge.textContent = kindSel.value;
+  metaCard.classList.toggle('d-none', !isPromql);
+  document.getElementById('specShell').classList.toggle('d-none', isPromql);
+  document.getElementById('specPromql').classList.toggle('d-none', !isPromql);
+  if (isPromql) parseHeader();
+}
+kindSel.addEventListener('change', () => { applyKind(); scheduleValidate(); });
+
+applyKind();
+applyFont();
+updateGutter();
+</script>
+{% endblock %}

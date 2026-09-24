@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}应用日志{% endblock %}
+{% block content %}
+<h4>应用日志</h4>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>日志内容</span>
+        <span>
+          {% if not (start or end or q) %}
+            <button type="button" class="btn btn-sm btn-success" id="rtBtn">开始实时</button>
+            <span id="rtState" class="text-muted small ms-1">已暂停</span>
+          {% else %}
+            <span class="badge bg-secondary">筛选模式</span>
+          {% endif %}
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="clearBtn">清屏</button>
+        </span>
+      </div>
+      <div class="card-body">
+        <form class="row g-2 mb-2" method="get" action="{{ url_for('logs_page') }}">
+          <div class="col-md-4">
+            <select class="form-select" name="file" onchange="this.form.submit()">
+              {% for f in files %}
+                <option value="{{ f.name }}" {{ 'selected' if f.name == selected else '' }}>{{ f.name }}{{ '（当前）' if f.active else '' }} — {{ (f.size/1024)|round(1) }}KB</option>
+              {% else %}
+                <option value="{{ selected }}">{{ selected }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-3"><input class="form-control" type="datetime-local" name="start" step="1" value="{{ start }}" title="开始时间"></div>
+          <div class="col-md-3"><input class="form-control" type="datetime-local" name="end" step="1" value="{{ end }}" title="结束时间"></div>
+          <div class="col-md-2"><button class="btn btn-outline-secondary w-100">按范围查询</button></div>
+          <div class="col-md-4"><input class="form-control" name="q" value="{{ q }}" placeholder="关键词（可选）"></div>
+          <div class="col-md-2"><input class="form-control" name="limit" value="{{ limit }}" title="最大行数"></div>
+          <div class="col-md-2"><a class="btn btn-outline-secondary" href="{{ url_for('logs_page', file=selected) }}">重置</a></div>
+        </form>
+        <pre id="logbox" class="report-pre">{{ lines|join('\n') }}</pre>
+        <div class="text-muted small">当前文件：{{ selected }}{% if start or end %}；范围：{{ start }} ~ {{ end }}{% endif %}{% if q %}；关键词：{{ q }}{% endif %}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card mb-3">
+      <div class="card-header">手动清理</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('logs_cleanup') }}" onsubmit="return confirm('确认清理日志？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <input type="hidden" name="file" value="{{ selected }}">
+          <div class="mb-2"><label class="form-label">删除轮转文件：早于 N 天</label>
+            <input class="form-control" type="number" name="days" min="1" value="{{ retention_days }}"></div>
+          <div class="form-check mb-1"><input class="form-check-input" type="checkbox" name="remove_all" id="remove_all"><label class="form-check-label" for="remove_all">删除全部轮转文件</label></div>
+          <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="truncate_current" id="truncate_current"><label class="form-check-label" for="truncate_current">清空当前日志（{{ active_log }}）</label></div>
+          <button class="btn btn-outline-danger w-100">执行清理</button>
+        </form>
+        <div class="text-muted small mt-2">自动保留：应用日志按 <code>app_log_retention_days={{ retention_days }}</code> 天清理轮转文件（在设置页可改）。</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">日志文件</div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0">
+          <thead><tr><th>文件</th><th>大小</th><th>修改时间</th><th></th></tr></thead>
+          <tbody>
+          {% for f in files %}
+            <tr>
+              <td><a href="{{ url_for('logs_page', file=f.name) }}">{{ f.name }}</a>{% if f.active %} <span class="badge bg-primary">当前</span>{% endif %}</td>
+              <td class="small">{{ (f.size/1024)|round(1) }}KB</td>
+              <td class="small">{{ f.mtime }}</td>
+              <td>
+                {% if not f.active %}
+                <form method="post" action="{{ url_for('logs_delete') }}" onsubmit="return confirm('删除 {{ f.name }}？')">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input type="hidden" name="file" value="{{ f.name }}">
+                  <button class="btn btn-sm btn-outline-danger">删除</button>
+                </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="text-muted">暂无日志文件</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const box = document.getElementById('logbox');
+  box.scrollTop = box.scrollHeight;
+  const clearBtn = document.getElementById('clearBtn');
+  if (clearBtn) clearBtn.addEventListener('click', () => { box.textContent = ''; });
+
+  const rtBtn = document.getElementById('rtBtn');
+  if (!rtBtn) return;
+  const file = {{ selected | tojson }};
+  const dataUrl = {{ url_for('logs_data') | tojson }};
+  let offset = {{ offset }};
+  let timer = null;
+  const state = document.getElementById('rtState');
+
+  function append(lines) {
+    if (!lines || !lines.length) return;
+    const atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+    box.textContent += (box.textContent && !box.textContent.endsWith('\n') ? '\n' : '') + lines.join('\n');
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  }
+  function poll() {
+    fetch(dataUrl + '?file=' + encodeURIComponent(file) + '&offset=' + offset)
+      .then(r => r.json())
+      .then(d => { if (d.lines && d.lines.length) append(d.lines); if (typeof d.offset === 'number') offset = d.offset; })
+      .catch(() => {});
+  }
+  function start() {
+    if (timer) return;
+    timer = setInterval(poll, 2000);
+    rtBtn.textContent = '暂停';
+    rtBtn.className = 'btn btn-sm btn-warning';
+    state.textContent = '实时中（每 2s）';
+  }
+  function stop() {
+    clearInterval(timer); timer = null;
+    rtBtn.textContent = '开始实时';
+    rtBtn.className = 'btn btn-sm btn-success';
+    state.textContent = '已暂停';
+  }
+  rtBtn.addEventListener('click', () => { timer ? stop() : start(); });
+})();
+</script>
+{% endblock %}

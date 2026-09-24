@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ label }}历史{% endblock %}
+{% block content %}
+<h4 class="d-flex align-items-center gap-2 flex-wrap">
+  <span>{{ display_name }}</span>
+  <span class="badge bg-secondary">{{ label }}</span>
+  <span class="text-muted">版本历史</span>
+  <span class="text-muted small ms-auto">#{{ object_id }}</span>
+</h4>
+<table class="table table-sm">
+  <thead><tr><th>版本</th><th>动作</th><th>时间</th><th>操作人IP</th><th>备注</th><th></th></tr></thead>
+  <tbody>
+  {% for v in versions %}
+    <tr>
+      <td>v{{ v.version }}</td>
+      <td>{{ v.action }}</td>
+      <td>{{ v.created_at|local }}</td>
+      <td>{{ v.operator_ip }}</td>
+      <td class="small">{{ v.note }}</td>
+      <td><a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=v.id) }}">查看/恢复</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="text-muted">暂无版本记录</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<a class="btn btn-outline-secondary" href="{{ request.referrer or url_for('dashboard') }}">返回</a>
+{% endblock %}

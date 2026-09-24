@@ -1,0 +1,105 @@
+{% macro perpage(endpoint, params, per_page) %}
+<form class="d-inline-block" method="get" action="{{ url_for(endpoint) }}">
+  {% for k, v in params.items() %}{% if v not in ('', none) %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  <select class="form-select form-select-sm d-inline-block w-auto" name="per_page" onchange="this.form.submit()">
+    {% for n in [20, 50, 100] %}
+      <option value="{{ n }}" {{ 'selected' if per_page == n else '' }}>{{ n }} 条/页</option>
+    {% endfor %}
+  </select>
+</form>
+{% endmacro %}
+
+{% macro pager(endpoint, params, page, pages, total, per_page) %}
+<div class="d-flex align-items-center gap-3 flex-wrap mt-1">
+  <span class="text-muted small">共 {{ total }} 条{% if pages > 1 %}，第 {{ page }}/{{ pages }} 页{% endif %}</span>
+  {{ perpage(endpoint, params, per_page) }}
+  {% if pages > 1 %}
+  {% set start = [1, page - 2] | max %}
+  {% set end = [pages, page + 2] | min %}
+  <nav>
+    <ul class="pagination pagination-sm mb-0">
+      <li class="page-item {{ 'disabled' if page <= 1 else '' }}">
+        <a class="page-link" href="{{ url_for(endpoint, page=page - 1, **params) }}">上一页</a>
+      </li>
+      {% if start > 1 %}
+        <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, page=1, **params) }}">1</a></li>
+        {% if start > 2 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+      {% endif %}
+      {% for p in range(start, end + 1) %}
+        <li class="page-item {{ 'active' if p == page else '' }}">
+          <a class="page-link" href="{{ url_for(endpoint, page=p, **params) }}">{{ p }}</a>
+        </li>
+      {% endfor %}
+      {% if end < pages %}
+        {% if end < pages - 1 %}<li class="page-item disabled"><span class="page-link">…</span></li>{% endif %}
+        <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, page=pages, **params) }}">{{ pages }}</a></li>
+      {% endif %}
+      <li class="page-item {{ 'disabled' if page >= pages else '' }}">
+        <a class="page-link" href="{{ url_for(endpoint, page=page + 1, **params) }}">下一页</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro conn_badge(ct) %}
+{% if ct == 'SSH' %}<span class="badge bg-primary">SSH</span>
+{% elif ct == 'Prometheus' %}<span class="badge bg-info text-dark">Prometheus</span>
+{% elif ct == 'SSH + Prometheus' %}<span class="badge bg-success">SSH + Prometheus</span>
+{% else %}<span class="badge bg-secondary">未配置</span>{% endif %}
+{% endmacro %}
+
+{% macro status_badge(s) %}
+{% set st = (s or '') | lower %}
+{% if st in ('success', 'ok') %}<span class="badge bg-success">{{ s }}</span>
+{% elif st in ('partial', 'warn') %}<span class="badge bg-warning text-dark">{{ s }}</span>
+{% elif st in ('error', 'fail') %}<span class="badge bg-danger">{{ s }}</span>
+{% elif st == 'running' %}<span class="badge bg-info text-dark">{{ s }}</span>
+{% else %}<span class="badge bg-secondary">{{ s or 'UNKNOWN' }}</span>{% endif %}
+{% endmacro %}
+
+{% macro json_view(obj, ident) %}
+<div class="json-wrap">
+  <div class="json-actions">
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('{{ ident }}').textContent, this)">复制</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadText('{{ ident }}.json', document.getElementById('{{ ident }}').textContent)">下载</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleFold('{{ ident }}', this)">折叠</button>
+  </div>
+  <pre class="json-view" id="{{ ident }}">{{ obj | tojson(indent=2) }}</pre>
+</div>
+{% endmacro %}
+
+{% macro quick_range(form_id) %}
+<span class="btn-group btn-group-sm">
+  <button type="button" class="btn btn-outline-secondary" onclick="setRange(0, '{{ form_id }}')">今天</button>
+  <button type="button" class="btn btn-outline-secondary" onclick="setRange(7, '{{ form_id }}')">近7天</button>
+  <button type="button" class="btn btn-outline-secondary" onclick="setRange(30, '{{ form_id }}')">近30天</button>
+</span>
+{% endmacro %}
+
+{% macro check_picker(name, items, selected, picker_id) %}
+{% set sel = selected or [] %}
+<div class="script-picker" id="{{ picker_id }}">
+  <div class="d-flex gap-1 mb-1 flex-wrap align-items-center">
+    <input class="form-control form-control-sm sp-search" style="max-width: 14rem;" placeholder="搜索…">
+    <button type="button" class="btn btn-sm btn-outline-secondary sp-all">全选</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary sp-none">清空</button>
+    <span class="badge bg-secondary sp-count">已选 0</span>
+  </div>
+  <div class="sp-list">
+    {% for it in items %}
+      <label class="form-check sp-item" data-name="{{ (it.name ~ ' ' ~ (it.kind or '')) | lower }}">
+        <input class="form-check-input" type="checkbox" name="{{ name }}" value="{{ it.id }}" {{ 'checked' if it.id in sel else '' }}>
+        <span class="form-check-label">{{ it.name }}{% if it.kind %} <span class="text-muted small">({{ it.kind }})</span>{% endif %}</span>
+      </label>
+    {% else %}
+      <div class="text-muted small">暂无可选项</div>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}
+
+{% macro script_picker(name, items, selected, picker_id) %}
+{{ check_picker(name, items, selected, picker_id) }}
+{% endmacro %}

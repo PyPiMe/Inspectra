@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}模型{% endblock %}
+{% block content %}
+<h4>模型配置</h4>
+<div class="alert alert-secondary small mb-2">
+  API key <strong>不落库</strong>，仅存环境变量名（如 <code>DEEPSEEK_API_KEY</code>），真实值填在 <code>secrets.env</code>。
+  支持各供应商的 <abbr title="OpenAI 兼容联盟：DeepSeek / OpenAI / 通义千问 / Kimi / GLM / Ollama / vLLM 等">OpenAI 兼容 API</abbr>。默认模型：<strong>{{ default_model or '未设置' }}</strong>
+</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModel">新增模型</button>
+  <form class="row g-2" method="get" action="{{ url_for('models_page') }}">
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="名称/模型标识"></div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="enabled">
+        <option value="">全部状态</option>
+        <option value="1" {{ 'selected' if enabled == '1' else '' }}>启用</option>
+        <option value="0" {{ 'selected' if enabled == '0' else '' }}>停用</option>
+      </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('models_page') }}">重置</a></div>
+  </form>
+</div>
+
+<table class="table table-sm table-hover">
+  <thead><tr><th>名称</th><th>供应商</th><th>模型标识</th><th>地址</th><th>策略</th><th>默认</th><th>启用</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for m in models %}
+    <tr>
+      <td>{{ m.label }}</td>
+      <td>{% set p = PROVIDER_PRESETS.get(m.provider) %}{{ p.label if p else (m.provider or '自定义') }}</td>
+      <td>{{ m.model_id }}</td>
+      <td class="small">{{ m.base_url }}</td>
+      <td>{{ m.data_policy }}</td>
+      <td>{% if default_model == m.id|string %}<span class="badge bg-success">默认</span>{% endif %}</td>
+      <td>{{ '是' if m.enabled else '否' }}</td>
+      <td class="text-nowrap">
+        <form method="post" action="{{ url_for('models_test_saved', mid=m.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-secondary">测试</button>
+        </form>
+        {% if default_model != m.id|string %}
+        <form method="post" action="{{ url_for('models_default', mid=m.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-success">设为默认</button>
+        </form>
+        {% endif %}
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ m.id }}">编辑</button>
+        <form method="post" action="{{ url_for('models_delete', mid=m.id) }}" class="d-inline" onsubmit="return confirm('确认删除？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="8" class="text-muted">暂无模型</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager('models_page', {'q': q, 'enabled': enabled}, page, pages, total, per_page) }}
+
+<!-- 新增模型 -->
+<div class="modal fade" id="createModel"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <form method="post" action="{{ url_for('models_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <div class="modal-header"><h5 class="modal-title">新增模型</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-md-4"><label class="form-label">预设供应商</label>
+        <select class="form-select" onchange="applyPreset(this, 'createModel')">
+          <option value="">--</option>
+          {% for k, v in PROVIDER_PRESETS.items() %}<option value="{{ k }}" data-url="{{ v.base_url }}" data-env="{{ v.api_key_env }}" data-extra="{{ v.extra_json }}" data-temp="{{ v.temperature }}" data-topp="{{ v.top_p }}">{{ v.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4"><label class="form-label">名称</label><input class="form-control" name="label" required></div>
+      <div class="col-md-4"><label class="form-label">provider</label><input class="form-control" name="provider" value="openai_compat"></div>
+      <div class="col-md-8"><label class="form-label">地址</label><input class="form-control" name="base_url" required></div>
+      <div class="col-md-4"><label class="form-label">key 变量</label><input class="form-control" name="api_key_env" placeholder="DEEPSEEK_API_KEY"></div>
+      <div class="col-md-6"><label class="form-label">模型标识</label>
+        <div class="input-group mb-1">
+          <select class="form-select" id="createModel-modelSelect" onchange="document.getElementById('createModel-model_id').value=this.value">
+            <option value="">（先点“拉取模型”）</option>
+          </select>
+          <button type="button" class="btn btn-outline-secondary" onclick="pullModels('createModel', this)">拉取模型</button>
+        </div>
+        <input class="form-control" name="model_id" id="createModel-model_id" placeholder="可下拉选择或手填" required>
+      </div>
+      <div class="col-md-6 d-flex align-items-end gap-2">
+        <button type="button" class="btn btn-outline-secondary" onclick="testModelForm('createModel', this)">测试连通性</button>
+        <span id="createModel-result" class="small"></span>
+      </div>
+      <div class="col-md-3"><label class="form-label">策略</label>
+        <select class="form-select" name="data_policy"><option value="cloud">cloud</option><option value="local">local</option></select>
+      </div>
+      <div class="col-md-3"><label class="form-label">temperature</label><input class="form-control" name="temperature" placeholder="留空=不支持"></div>
+      <div class="col-md-3"><label class="form-label">top_p</label><input class="form-control" name="top_p"></div>
+      <div class="col-md-3"><label class="form-label">extra_json 模板</label>
+        <select class="form-select" onchange="document.getElementById('createModel-extra_json').value=this.value">
+          {% for t in EXTRA_JSON_TEMPLATES %}<option value="{{ t.value }}">{{ t.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12"><label class="form-label">extra_json（可手改）</label><input class="form-control" name="extra_json" id="createModel-extra_json" placeholder='{"thinking": {"type": "disabled"}}'></div>
+      <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">启用</label></div></div>
+      <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="set_default"><label class="form-check-label">设为默认</label></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+  </form>
+</div></div></div>
+
+{% for m in models %}
+<div class="modal fade" id="edit{{ m.id }}"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <form method="post" action="{{ url_for('models_save') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="id" value="{{ m.id }}">
+    <div class="modal-header"><h5 class="modal-title">编辑模型「{{ m.label }}」</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body row g-2">
+      <div class="col-md-4"><label class="form-label">预设供应商（可重选以填充）</label>
+        <select class="form-select" onchange="applyPreset(this, 'edit{{ m.id }}')">
+          <option value="">--</option>
+          {% for k, v in PROVIDER_PRESETS.items() %}<option value="{{ k }}" data-url="{{ v.base_url }}" data-env="{{ v.api_key_env }}" data-extra="{{ v.extra_json }}" data-temp="{{ v.temperature }}" data-topp="{{ v.top_p }}">{{ v.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-4"><label class="form-label">名称</label><input class="form-control" name="label" value="{{ m.label }}" required></div>
+      <div class="col-md-4"><label class="form-label">provider</label><input class="form-control" name="provider" value="{{ m.provider }}"></div>
+      <div class="col-md-8"><label class="form-label">地址</label><input class="form-control" name="base_url" value="{{ m.base_url }}" required></div>
+      <div class="col-md-4"><label class="form-label">key 变量</label><input class="form-control" name="api_key_env" value="{{ m.api_key_env }}"></div>
+      <div class="col-md-6"><label class="form-label">模型标识</label>
+        <div class="input-group mb-1">
+          <select class="form-select" id="edit{{ m.id }}-modelSelect" onchange="document.getElementById('edit{{ m.id }}-model_id').value=this.value">
+            <option value="">（先点“拉取模型”）</option>
+          </select>
+          <button type="button" class="btn btn-outline-secondary" onclick="pullModels('edit{{ m.id }}', this)">拉取模型</button>
+        </div>
+        <input class="form-control" name="model_id" id="edit{{ m.id }}-model_id" value="{{ m.model_id }}" required>
+      </div>
+      <div class="col-md-6 d-flex align-items-end gap-2">
+        <button type="button" class="btn btn-outline-secondary" onclick="testModelForm('edit{{ m.id }}', this)">测试连通性</button>
+        <span id="edit{{ m.id }}-result" class="small"></span>
+      </div>
+      <div class="col-md-3"><label class="form-label">策略</label>
+        <select class="form-select" name="data_policy"><option value="cloud" {{ 'selected' if m.data_policy=='cloud' else '' }}>cloud</option><option value="local" {{ 'selected' if m.data_policy=='local' else '' }}>local</option></select>
+      </div>
+      <div class="col-md-3"><label class="form-label">temperature</label><input class="form-control" name="temperature" value="{{ m.temperature if m.temperature is not none else '' }}"></div>
+      <div class="col-md-3"><label class="form-label">top_p</label><input class="form-control" name="top_p" value="{{ m.top_p if m.top_p is not none else '' }}"></div>
+      <div class="col-md-3"><label class="form-label">extra_json 模板</label>
+        <select class="form-select" onchange="document.getElementById('edit{{ m.id }}-extra_json').value=this.value">
+          {% for t in EXTRA_JSON_TEMPLATES %}<option value="{{ t.value }}">{{ t.label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-6"><label class="form-label">extra_json</label><input class="form-control" name="extra_json" id="edit{{ m.id }}-extra_json" value="{{ m.extra_json }}"></div>
+      <div class="col-md-6"><label class="form-label">脱敏覆盖 (JSON)</label><input class="form-control" name="sanitize_overrides" value="{{ m.sanitize_overrides }}"></div>
+      <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if m.enabled else '' }}><label class="form-check-label">启用</label></div></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+  </form>
+</div></div></div>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+function applyPreset(sel, modalId) {
+  const opt = sel.selectedOptions[0];
+  if (!opt || !opt.value) return;
+  const modal = document.getElementById(modalId);
+  const q = (n) => modal.querySelector(`[name="${n}"]`);
+  if (q('base_url')) q('base_url').value = opt.dataset.url || '';
+  if (q('api_key_env')) q('api_key_env').value = opt.dataset.env || '';
+  if (q('extra_json')) q('extra_json').value = opt.dataset.extra || '';
+  if (q('temperature')) q('temperature').value = opt.dataset.temp || '';
+  if (q('top_p')) q('top_p').value = opt.dataset.topp || '';
+  if (q('provider')) q('provider').value = opt.value;
+}
+async function pullModels(modalId, btn) {
+  const modal = document.getElementById(modalId);
+  const q = (n) => { const el = modal.querySelector(`[name="${n}"]`); return el ? el.value : ''; };
+  const sel = document.getElementById(modalId + '-modelSelect');
+  const manual = document.getElementById(modalId + '-model_id');
+  const old = btn.textContent;
+  btn.disabled = true; btn.textContent = '拉取中…';
+  try {
+    const body = new URLSearchParams({
+      csrf_token: window.pypimeops.csrf(),
+      base_url: q('base_url'), api_key_env: q('api_key_env'), extra_json: q('extra_json'),
+    });
+    const d = await (await fetch('{{ url_for("models_list_ajax") }}', { method: 'POST', body })).json();
+    if (d.ok && d.models && d.models.length) {
+      sel.innerHTML = '<option value="">（选择模型）</option>';
+      d.models.forEach((id) => { const o = document.createElement('option'); o.value = id; o.textContent = id; sel.appendChild(o); });
+      if (manual.value && d.models.includes(manual.value)) sel.value = manual.value;
+    } else {
+      alert('拉取失败：' + (d.error || '未返回模型列表（可手动填写）'));
+    }
+  } catch (e) {
+    alert('拉取失败：' + e + '（可手动填写）');
+  }
+  btn.disabled = false; btn.textContent = old;
+}
+async function testModelForm(modalId, btn) {
+  const modal = document.getElementById(modalId);
+  const val = (n) => { const el = modal.querySelector(`[name="${n}"]`); return el ? el.value : ''; };
+  const body = new URLSearchParams({
+    csrf_token: window.pypimeops.csrf(),
+    base_url: val('base_url'), model_id: val('model_id'),
+    api_key_env: val('api_key_env'), extra_json: val('extra_json'),
+  });
+  const out = document.getElementById(modalId + '-result');
+  out.textContent = '测试中…'; out.className = 'small text-muted';
+  try {
+    const d = await (await fetch('{{ url_for("models_test_ajax") }}', { method: 'POST', body })).json();
+    out.textContent = (d.ok ? '✅ ' : '❌ ') + (d.message || '');
+    out.className = 'small ' + (d.ok ? 'text-success' : 'text-danger');
+    if (d.ok && d.models && d.models.length) {
+      const sel = document.getElementById(modalId + '-modelSelect');
+      sel.innerHTML = '<option value="">（选择模型）</option>';
+      d.models.forEach((id) => { const o = document.createElement('option'); o.value = id; o.textContent = id; sel.appendChild(o); });
+    }
+  } catch (e) {
+    out.textContent = '测试失败：' + e; out.className = 'small text-danger';
+  }
+}
+</script>
+{% endblock %}

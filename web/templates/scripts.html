@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, perpage %}
+{% block title %}脚本{% endblock %}
+{% block content %}
+<h4>巡检脚本</h4>
+<div class="alert alert-secondary small">
+  输出规范：精简、结构化（<code>key=value</code> 或表格），避免 dump 全量日志。<br>
+  Shell 脚本保存前 <code>bash -n</code> 校验；PromQL 脚本需头部元数据
+  <code># NAME / # MODE: instant|range / # WINDOW / # STEP / # THRESHOLD: &gt;90 / # UNIT</code>，
+  用 <code>$instance</code>（实例）与 <code>$guest</code>（虚拟机）占位符注入匹配器。
+</div>
+
+{% set params = {'name': name, 'kind': kind, 'desc': desc, 'sort': sort} %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <div class="pt-1">
+    <a class="btn btn-primary" href="{{ url_for('script_new') }}">新增脚本</a>
+    <span class="btn-group btn-group-sm ms-2" role="group">
+      <a class="btn btn-{{ 'secondary' if not kind else 'outline-secondary' }}" href="{{ url_for('scripts', name=name, desc=desc, sort=sort) }}">全部</a>
+      <a class="btn btn-{{ 'primary' if kind == 'shell' else 'outline-primary' }}" href="{{ url_for('scripts', name=name, kind='shell', desc=desc, sort=sort) }}">shell</a>
+      <a class="btn btn-{{ 'info' if kind == 'promql' else 'outline-info' }}" href="{{ url_for('scripts', name=name, kind='promql', desc=desc, sort=sort) }}">promql</a>
+    </span>
+  </div>
+  <form class="row g-2" method="get" action="{{ url_for('scripts') }}">
+    <div class="col-auto"><input class="form-control form-control-sm" name="name" value="{{ name }}" placeholder="名称"></div>
+    <div class="col-auto"><input class="form-control form-control-sm" name="desc" value="{{ desc }}" placeholder="说明关键词"></div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="kind">
+        <option value="">全部类型</option>
+        <option value="shell" {{ 'selected' if kind == 'shell' else '' }}>shell</option>
+        <option value="promql" {{ 'selected' if kind == 'promql' else '' }}>promql</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="sort">
+        <option value="updated_at" {{ 'selected' if sort == 'updated_at' else '' }}>按更新时间</option>
+        <option value="name" {{ 'selected' if sort == 'name' else '' }}>按名称</option>
+        <option value="id_desc" {{ 'selected' if sort == 'id_desc' else '' }}>按 ID 降序</option>
+        <option value="id_asc" {{ 'selected' if sort == 'id_asc' else '' }}>按 ID 升序</option>
+      </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts') }}">重置</a></div>
+  </form>
+</div>
+
+<table class="table table-sm table-hover">
+  <thead><tr><th>名称</th><th>类型</th><th>展示名</th><th>说明</th><th>更新时间</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for s in scripts %}
+    <tr>
+      <td><a href="{{ url_for('script_detail', sid=s.id) }}">{{ s.name }}</a></td>
+      <td><span class="badge bg-{{ 'primary' if s.kind=='shell' else 'info' }}">{{ s.kind }}</span></td>
+      <td>{{ s.filename }}</td>
+      <td class="small">{{ s.desc }}</td>
+      <td class="small">{{ s.updated_at|local }}</td>
+      <td class="text-nowrap">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('script_detail', sid=s.id) }}">编辑</a>
+        <form method="post" action="{{ url_for('scripts_clone', sid=s.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-secondary">复制</button>
+        </form>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=s.id) }}">历史</a>
+        <form method="post" action="{{ url_for('scripts_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('确认删除？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="text-muted">无匹配脚本{% if name or kind or desc %}（请调整查询条件）{% else %}（运行 init.py 可预置模板）{% endif %}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{{ pager('scripts', params, page, pages, total, per_page) }}
+{% endblock %}

@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, status_badge, quick_range %}
+{% block title %}报告{% endblock %}
+{% block content %}
+<h4>巡检报告</h4>
+
+<form id="reportFilter" class="row g-2 mb-2 align-items-end" method="get" action="{{ url_for('reports') }}">
+  <div class="col-auto">
+    <select class="form-select form-select-sm" name="status">
+      <option value="">全部状态</option>
+      {% for st in ['running','success','partial','error'] %}
+        <option value="{{ st }}" {{ 'selected' if status == st else '' }}>{{ st }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select class="form-select form-select-sm" name="trigger">
+      <option value="">全部触发</option>
+      <option value="manual" {{ 'selected' if trigger == 'manual' else '' }}>manual</option>
+      <option value="schedule" {{ 'selected' if trigger == 'schedule' else '' }}>schedule</option>
+    </select>
+  </div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="datetime-local" name="start" step="1" value="{{ start }}" title="开始时间"></div>
+  <div class="col-auto"><input class="form-control form-control-sm" type="datetime-local" name="end" step="1" value="{{ end }}" title="结束时间"></div>
+  <div class="col-auto">{{ quick_range('reportFilter') }}</div>
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">筛选</button></div>
+  <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">重置</a></div>
+</form>
+
+<div class="mb-2">
+  {% for st, cls in [('', 'secondary'), ('success','success'), ('partial','warning'), ('error','danger'), ('running','info')] %}
+    <a class="btn btn-sm btn-{{ 'secondary' if status == st else 'outline-' + cls }}" href="{{ url_for('reports', status=st, trigger=trigger, start=start, end=end) }}">{{ st or '全部' }}</a>
+  {% endfor %}
+</div>
+
+<table class="table table-sm table-hover">
+  <thead><tr><th>触发</th><th>模式</th><th>状态</th><th>服务器</th><th>耗时</th><th>开始</th><th>结束</th><th>异常/不确定</th><th>报告</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for r in reports %}
+    {% set sm = r.summary_obj %}
+    <tr class="{{ 'table-danger' if r.status == 'error' else ('table-warning' if r.status == 'partial' else '') }}">
+      <td>{{ r.trigger }}</td>
+      <td>{{ '模型分析' if r.mode != 'raw' else '仅原始结果' }}</td>
+      <td>{{ status_badge(r.status) }}</td>
+      <td>{{ sm.server_count or 0 }}</td>
+      <td class="small">{{ r.duration or '-' }}</td>
+      <td class="small">{{ r.started|local }}</td>
+      <td class="small">{{ r.finished|local }}</td>
+      <td>{{ sm.error_count or 0 }} / {{ sm.uncertain_count or 0 }}</td>
+      <td>{% if r.report_file %}<a href="{{ url_for('report_detail', rid=r.id) }}">查看</a>{% else %}-{% endif %}</td>
+      <td class="text-nowrap">
+        {% if r.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=r.id) }}">下载</a>{% endif %}
+        <form method="post" action="{{ url_for('report_delete', rid=r.id) }}" class="d-inline" onsubmit="return confirm('删除报告及运行记录？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="10" class="text-muted">暂无报告</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager('reports', {'status': status, 'trigger': trigger, 'start': start, 'end': end}, page, pages, total, per_page) }}
+{% endblock %}

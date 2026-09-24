@@ -1,0 +1,14 @@
+services:
+  pypimeops:
+    build: .
+    image: pypimeops:latest
+    container_name: pypimeops
+    restart: unless-stopped
+    # 端口由 config.yaml 决定；此处映射按自定义端口填写（示例 8080）
+    ports:
+      - "8080:8080"
+    volumes:
+      # 挂载数据目录，持久化数据库/凭据/报告/日志/配置
+      - ./:/app
+    working_dir: /app
+    command: ["python", "app.py"]

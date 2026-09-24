@@ -1,0 +1,141 @@
+body { font-size: 14px; }
+.report-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: .375rem;
+  padding: 1rem;
+  max-height: 70vh;
+  overflow: auto;
+  font-size: 12.5px;
+}
+.card-header { font-weight: 600; }
+.table td, .table th { vertical-align: middle; }
+
+/* 报告 Markdown 渲染 */
+.report-md h1, .report-md h2, .report-md h3 { margin-top: 1.1rem; margin-bottom: .5rem; }
+.report-md h1 { font-size: 1.5rem; }
+.report-md h2 { font-size: 1.25rem; }
+.report-md h3 { font-size: 1.1rem; }
+.report-md pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: .375rem;
+  padding: .75rem;
+  max-height: 60vh;
+  overflow: auto;
+  font-size: 12.5px;
+}
+.report-md code { font-size: 12.5px; color: #c7254e; background: #f7f7f9; padding: .1rem .3rem; border-radius: .2rem; }
+.report-md pre code { color: inherit; background: none; padding: 0; }
+.report-md table { border-collapse: collapse; margin: .5rem 0; width: auto; }
+.report-md table th, .report-md table td { border: 1px solid #dee2e6; padding: .35rem .6rem; }
+.report-md table th { background: #f1f3f5; }
+.report-md blockquote { color: #6c757d; border-left: 4px solid #dee2e6; padding-left: .75rem; margin: .5rem 0; }
+.report-md ul, .report-md ol { margin-bottom: .5rem; }
+
+/* 弹窗内容兜底：长文本（指纹/URL/JSON）不撑破弹窗 */
+.modal-body { word-break: break-word; }
+.fp { font-family: var(--bs-font-monospace); font-size: 12px; }
+.text-break-all { word-break: break-all; }
+
+/* JSON 展示组件（折叠/高亮/复制/下载） */
+.json-wrap { position: relative; }
+.json-actions { display: flex; gap: .35rem; margin-bottom: .25rem; }
+.json-view {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: .375rem;
+  padding: .6rem .75rem;
+  font-size: 12.5px;
+  margin: 0;
+  max-height: 60vh;
+  overflow: auto;
+}
+.json-view.folded { max-height: 10rem; overflow: hidden; }
+.json-view .j-key { color: #0b5ed7; }
+.json-view .j-str { color: #198754; }
+.json-view .j-num { color: #d63384; }
+.json-view .j-bool { color: #fd7e14; }
+.json-view .j-null { color: #6c757d; }
+
+/* diff（新增/删除/修改） */
+.diff-del { background: #f8d7da; }
+.diff-add { background: #d1e7dd; }
+.diff-chg { background: #fff3cd; }
+
+/* 折叠长文本 */
+.fold-wrap { position: relative; }
+.fold-wrap.folded { max-height: 12rem; overflow: hidden; }
+
+/* 脚本复选框面板 */
+.script-picker .sp-list {
+  max-height: 11rem;
+  overflow: auto;
+  border: 1px solid #e9ecef;
+  border-radius: .375rem;
+  padding: .35rem .5rem;
+  background: #fff;
+}
+.script-picker .sp-item { display: block; margin-bottom: .1rem; }
+.script-picker .sp-item .form-check-input { margin-top: .25rem; }
+
+/* 智能问答气泡 */
+.chat-messages { max-height: 60vh; overflow: auto; }
+.chat-row { display: flex; margin-bottom: .5rem; }
+.chat-user { justify-content: flex-end; }
+.chat-bot { justify-content: flex-start; }
+.chat-bubble {
+  max-width: 82%;
+  padding: .5rem .75rem;
+  border-radius: .5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.chat-user .chat-bubble { background: #0d6efd; color: #fff; }
+.chat-bot .chat-bubble { background: #f1f3f5; color: #212529; white-space: normal; }
+.chat-bot .chat-bubble p { margin-bottom: .35rem; }
+.chat-bot .chat-bubble p:last-child, .chat-bot .chat-bubble ul:last-child, .chat-bot .chat-bubble ol:last-child { margin-bottom: 0; }
+.chat-bot .chat-bubble pre { white-space: pre-wrap; word-break: break-word; background: #fff; border: 1px solid #e9ecef; border-radius: .35rem; padding: .4rem .5rem; font-size: 12.5px; }
+.chat-bot .chat-bubble code { background: #fff; padding: 0 .2rem; border-radius: .2rem; }
+.chat-bot .chat-bubble table { border-collapse: collapse; }
+.chat-bot .chat-bubble th, .chat-bot .chat-bubble td { border: 1px solid #dee2e6; padding: .2rem .4rem; }
+
+/* 脚本编辑器（原生增强） */
+.code-editor { display: flex; height: 62vh; background: #f8f9fa; }
+.editor-gutter {
+  margin: 0;
+  padding: .5rem .5rem;
+  text-align: right;
+  color: #adb5bd;
+  background: #f1f3f5;
+  border-right: 1px solid #e9ecef;
+  overflow: hidden;
+  user-select: none;
+  font-family: var(--bs-font-monospace);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: pre;
+  min-width: 3rem;
+}
+.editor-area {
+  flex: 1;
+  border: 0;
+  outline: 0;
+  resize: none;
+  padding: .5rem .75rem;
+  font-family: var(--bs-font-monospace);
+  font-size: 13px;
+  line-height: 1.45;
+  background: transparent;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
+}
+.editor-area.wrap { white-space: pre-wrap; word-break: break-word; }
+

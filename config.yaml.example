@@ -1,0 +1,30 @@
+# PyPiMeOps 启动配置模板（复制为 config.yaml 后按需修改）
+# config.yaml 仅存放启动参数；其余运行时可变项在 Web「设置」页（settings 表）配置。
+# 端口语义：此处 host/port 为唯一权威；app.py --host/--port 为可选覆盖。
+
+host: 0.0.0.0
+port: 8080
+
+paths:
+  scripts: ./scripts
+  reports: ./reports
+  vault:   ./vault
+  logs:    ./logs
+  known_hosts: ./vault/known_hosts
+  db: ./pypimeops.db
+  # vault_key: /etc/pypimeops/vault.key   # 可选：vault.key 外置（也可用环境变量 PYPIMEOPS_VAULT_KEY_PATH）
+
+secrets_env: ./secrets.env
+
+poll_interval: 15
+ssh_batch_size: 10
+
+# 部署时请替换为随机值：python3 -c "import secrets;print(secrets.token_hex(32))"
+flask_secret: "CHANGE_ME_RANDOM_FLASK_SECRET"
+
+# --- 环境参数示例---
+# 参数：APP_DIR / WEB_HOST / WEB_PORT / TEST_SSH_HOST / TEST_SSH_PORT / TEST_SSH_USER
+#       SSH_KEY_PATH / TEST_PROM_URL / TEST_PROM_AUTH / MODEL_API_KEY_ENV / MODEL_ID / BASE_URL
+# 拓扑：1 控制机 + N 台 SSH 目标 + 现有 Prometheus + 云端真实模型 + 通知仅日志落盘
+# 数据源：base_url=$TEST_PROM_URL, auth_type/secret_env 按 $TEST_PROM_AUTH, verify_tls, timeout
+# 模型：api_key_env=$MODEL_API_KEY_ENV, model_id=$MODEL_ID, base_url=$BASE_URL, data_policy=cloud

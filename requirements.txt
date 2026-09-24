@@ -1,0 +1,7 @@
+# PyPiMeOps Python 依赖（Python 3.12，venv 隔离安装，锁具体版本）
+Flask==3.0.3
+paramiko==3.4.0
+requests==2.32.3
+PyYAML==6.0.2
+cryptography==43.0.1
+markdown-it-py==3.0.0

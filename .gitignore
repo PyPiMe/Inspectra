@@ -1,0 +1,18 @@
+# 实际运行配置与凭据（不入 git）
+config.yaml
+secrets.env
+
+# 加密保险库与生成数据
+vault/
+reports/
+backups/
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# 方案文档（按项目约定不入库）
+Plan.md
+AGENTS.md

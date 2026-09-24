@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% from "_macros.html" import check_picker, script_picker %}
+{% block title %}立即执行{% endblock %}
+{% block content %}
+<h4>立即执行</h4>
+{% if running %}<div class="alert alert-warning">已有巡检正在执行，请等待完成。</div>{% endif %}
+
+<form id="runForm" method="post" action="{{ url_for('run_page') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+  <div class="card mb-3"><div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div>将执行：<span id="sumServers" class="badge bg-primary">0</span> 台服务器 ×
+      <span id="sumScripts" class="badge bg-primary">0</span> 个脚本（<span id="sumMode">模型分析</span>）</div>
+    <div class="text-muted small">不选脚本则按服务器绑定执行；受全局单 run 互斥约束</div>
+  </div></div>
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card"><div class="card-header">① 目标</div><div class="card-body">
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" name="target_all" id="target_all">
+          <label class="form-check-label" for="target_all"><strong>全部服务器</strong>（勾选后忽略下方服务器/分组选择）</label>
+        </div>
+
+        <label class="form-label">分组</label>
+        {{ check_picker('target_groups', groups, [], 'tpGroups') }}
+
+        <div class="d-flex justify-content-between align-items-center mt-2">
+          <label class="form-label mb-0">服务器</label>
+          <span class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-secondary" id="qAll">全部</button>
+            <button type="button" class="btn btn-outline-secondary" id="qNone">清空</button>
+            <button type="button" class="btn btn-outline-secondary" id="qIssue">最近异常</button>
+          </span>
+        </div>
+        {{ check_picker('target_servers', server_items, [], 'tpServers') }}
+
+        <label class="form-label mt-2">数据源（过滤）</label>
+        <div class="text-muted small mb-1">仅对 Prometheus 目标生效；不选=全部数据源</div>
+        {{ check_picker('target_datasources', datasources, [], 'tpDs') }}
+      </div></div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card mb-3"><div class="card-header">② 脚本（可覆盖绑定）</div><div class="card-body">
+        <div class="text-muted small mb-2">不选则按服务器绑定执行；选择后对所选目标强制运行。</div>
+        {{ script_picker('scripts', scripts, [], 'spRun') }}
+      </div></div>
+
+      <div class="card"><div class="card-header">③ 分析模式</div><div class="card-body">
+        <div class="form-check">
+          <input class="form-check-input" type="radio" name="mode" value="model" id="mode_model" checked>
+          <label class="form-check-label" for="mode_model"><strong>模型分析</strong><br><span class="text-muted small">采集 → 脱敏 → 模型分析 → 报告/告警（需配置默认模型）</span></label>
+        </div>
+        <div class="form-check mt-2">
+          <input class="form-check-input" type="radio" name="mode" value="raw" id="mode_raw">
+          <label class="form-check-label" for="mode_raw"><strong>仅原始结果</strong><br><span class="text-muted small">采集 → 直接生成报告（原始输出 + 阈值判定），不调用模型</span></label>
+        </div>
+      </div></div>
+
+      <div class="mt-3">
+        <button type="button" class="btn btn-primary" id="submitBtn" {{ 'disabled' if running else '' }}>提交后台执行</button>
+        <span class="text-muted small ms-2">提交后跳转进度页，完成后自动打开报告。</span>
+      </div>
+    </div>
+  </div>
+</form>
+
+<div class="modal fade" id="confirmRun"><div class="modal-dialog"><div class="modal-content">
+  <div class="modal-header"><h5 class="modal-title">确认执行</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-body">
+    <ul class="mb-0">
+      <li>目标服务器：<strong id="cfmServers">0</strong> 台</li>
+      <li>脚本：<strong id="cfmScripts">按绑定</strong></li>
+      <li>分析模式：<strong id="cfmMode">模型分析</strong></li>
+    </ul>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+    <button type="button" class="btn btn-primary" id="cfmGo">确认执行</button>
+  </div>
+</div></div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const groupServers = {{ group_servers | tojson }};
+const allServerIds = {{ all_server_ids | tojson }};
+const issueServerIds = {{ issue_server_ids | tojson }};
+const runForm = document.getElementById('runForm');
+
+function checkedIds(name) {
+  return Array.from(document.querySelectorAll(`input[name="${name}"]:checked`)).map((x) => parseInt(x.value, 10));
+}
+function modeLabel() {
+  const m = document.querySelector('input[name="mode"]:checked');
+  return (m && m.value === 'raw') ? '仅原始结果' : '模型分析';
+}
+function updateSummary() {
+  const all = document.getElementById('target_all').checked;
+  const ids = new Set();
+  if (all) {
+    allServerIds.forEach((i) => ids.add(i));
+  } else {
+    checkedIds('target_servers').forEach((i) => ids.add(i));
+    checkedIds('target_groups').forEach((g) => (groupServers[g] || []).forEach((i) => ids.add(i)));
+  }
+  const nScripts = checkedIds('scripts').length;
+  document.getElementById('sumServers').textContent = ids.size;
+  document.getElementById('sumScripts').textContent = nScripts;
+  document.getElementById('sumMode').textContent = modeLabel();
+  return { servers: ids.size, scripts: nScripts, mode: modeLabel() };
+}
+function setServerChecks(pred) {
+  document.querySelectorAll('#tpServers input[type=checkbox]').forEach((cb) => {
+    cb.checked = pred(parseInt(cb.value, 10));
+  });
+  updateSummary();
+}
+runForm.addEventListener('change', updateSummary);
+document.getElementById('qAll').addEventListener('click', () => setServerChecks(() => true));
+document.getElementById('qNone').addEventListener('click', () => setServerChecks(() => false));
+document.getElementById('qIssue').addEventListener('click', () => setServerChecks((id) => issueServerIds.includes(id)));
+
+document.getElementById('submitBtn').addEventListener('click', () => {
+  const s = updateSummary();
+  if (s.servers === 0) { alert('请至少选择一个分组或服务器，或勾选“全部服务器”。'); return; }
+  document.getElementById('cfmServers').textContent = s.servers;
+  document.getElementById('cfmScripts').textContent = s.scripts ? (s.scripts + ' 个') : '按绑定';
+  document.getElementById('cfmMode').textContent = s.mode;
+  new bootstrap.Modal(document.getElementById('confirmRun')).show();
+});
+document.getElementById('cfmGo').addEventListener('click', () => runForm.submit());
+
+updateSummary();
+</script>
+{% endblock %}

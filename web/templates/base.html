@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
+  <title>{% block title %}{{ site_title }}{% endblock %} - {{ site_title }}</title>
+  <link href="{{ url_for('static', filename='vendor/bootstrap.min.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="{{ url_for('chatbot_page') }}">{{ site_title }}</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="nav">
+      <ul class="navbar-nav me-auto">
+        {% set items = [
+          ('chatbot_page','智能巡检','/chatbot'), ('dashboard','仪表盘','/dashboard'),
+          ('groups','分组','/groups'), ('servers','服务器','/servers'),
+          ('datasources','数据源','/datasources'), ('credentials','凭据','/credentials'),
+          ('scripts','脚本','/scripts'), ('models_page','模型','/models'),
+          ('notifications','通知','/notifications'), ('schedules','定时任务','/schedules'),
+          ('run_page','立即执行','/run'), ('reports','报告','/reports'),
+          ('audit_logs','审计日志','/audit-logs'), ('backups','备份恢复','/backups'),
+          ('logs_page','应用日志','/logs'), ('settings_page','设置','/settings')
+        ] %}
+        {% for ep, label, href in items %}
+          <li class="nav-item"><a class="nav-link {{ 'active' if nav_active == ep else '' }}" href="{{ href }}">{{ label }}</a></li>
+        {% endfor %}
+      </ul>
+      <span class="navbar-text small">
+        {% if engine_running %}<span class="badge bg-warning text-dark me-2">巡检进行中</span>{% endif %}
+        {{ client_ip }}
+      </span>
+    </div>
+  </div>
+</nav>
+
+<div class="container-fluid py-3">
+  {% if whitelist_empty and not whitelist_ack %}
+  <div class="alert alert-warning d-flex justify-content-between align-items-center">
+    <div><strong>安全提示：</strong>应用层 IP 白名单为空。请由前端防火墙（ufw/iptables）完成访问控制。</div>
+    <form method="post" action="{{ url_for('whitelist_ack') }}" class="m-0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm btn-dark">我已知晓</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block content %}{% endblock %}
+</div>
+
+  <script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
