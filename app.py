@@ -1519,15 +1519,15 @@ def create_app() -> Flask:
         )
 
     # ---- 报告
-    @app.route("/reports")
-    def reports():
-        status = request.args.get("status") or ""
-        trigger = request.args.get("trigger") or ""
-        start = request.args.get("start") or ""
-        end = request.args.get("end") or ""
-        page, per_page = page_args()
+    def _report_filter(src) -> tuple[list[str], list]:
         where, params = [], []
-        if status:
+        status = (src.get("status") or "").strip()
+        trigger = (src.get("trigger") or "").strip()
+        start = (src.get("start") or "").strip()
+        end = (src.get("end") or "").strip()
+        if status == "need":
+            where.append("status IN ('error','partial')")
+        elif status:
             where.append("status=?")
             params.append(status)
         if trigger in ("manual", "schedule"):
@@ -1539,6 +1539,21 @@ def create_app() -> Flask:
         if local_input_to_utc(end):
             where.append("started<=?")
             params.append(local_input_to_utc(end))
+        return where, params
+
+    @app.route("/reports")
+    def reports():
+        if "status" in request.args:
+            status = request.args.get("status") or ""
+        else:
+            status = "need"
+        trigger = request.args.get("trigger") or ""
+        start = request.args.get("start") or ""
+        end = request.args.get("end") or ""
+        page, per_page = page_args()
+        fargs = dict(request.args)
+        fargs["status"] = status
+        where, params = _report_filter(fargs)
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         rows, total, page, pages = paginate(
             f"SELECT * FROM run_history{clause} ORDER BY id DESC",
@@ -1548,9 +1563,16 @@ def create_app() -> Flask:
         for r in rows:
             r["summary_obj"] = json_or(r.get("summary"), {})
             r["duration"] = _duration(r.get("started"), r.get("finished"))
+        total_all = (models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"] or 0)
+        counts = {row["status"]: row["c"] for row in models.query("SELECT status, COUNT(*) AS c FROM run_history GROUP BY status")}
+        need_count = counts.get("error", 0) + counts.get("partial", 0)
         return render_template(
             "reports.html", reports=rows, status=status, trigger=trigger, start=start, end=end,
-            page=page, pages=pages, total=total, per_page=per_page,
+            page=page, pages=pages, total=total, per_page=per_page, total_all=total_all,
+            counts=counts, need_count=need_count,
+            status_cn={"success": "成功", "partial": "部分失败", "error": "失败", "running": "运行中"},
+            status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
+            trigger_cn={"manual": "手动", "schedule": "定时"},
         )
 
     @app.route("/reports/<int:rid>/download")
@@ -1597,7 +1619,38 @@ def create_app() -> Flask:
                 models.delete(conn, "run_history", rid)
                 models.write_audit(conn, g.ip, "delete", "report", rid, row.get("report_file") or "", {"deleted": True})
         flash("报告已删除", "success")
-        return redirect(url_for("reports"))
+        back = (request.form.get("back") or "").strip()
+        return redirect(back if back.startswith("/") else url_for("reports"))
+
+    @app.route("/reports/batch_delete", methods=["POST"])
+    def reports_batch_delete():
+        scope = (request.form.get("scope") or "selected").strip()
+        if scope == "all":
+            rows = models.query("SELECT id, report_file FROM run_history")
+        elif scope == "filtered":
+            where, params = _report_filter(request.form)
+            clause = (" WHERE " + " AND ".join(where)) if where else ""
+            rows = models.query(f"SELECT id, report_file FROM run_history{clause}", tuple(params))
+        else:
+            ids = [i for i in (parse_int(x) for x in request.form.getlist("ids")) if i]
+            if not ids:
+                flash("未选择任何报告", "warning")
+                return redirect(url_for("reports"))
+            marks = ",".join("?" for _ in ids)
+            rows = models.query(f"SELECT id, report_file FROM run_history WHERE id IN ({marks})", tuple(ids))
+        count = 0
+        for row in rows:
+            _delete_report_file(row.get("report_file") or "")
+            with models.db() as conn:
+                models.delete(conn, "run_history", row["id"])
+                models.write_audit(
+                    conn, g.ip, "delete", "report", row["id"], row.get("report_file") or "",
+                    {"deleted": True, "batch_scope": scope},
+                )
+            count += 1
+        flash(f"已删除 {count} 份报告", "success")
+        back = (request.form.get("back") or "").strip()
+        return redirect(back if back.startswith("/") else url_for("reports"))
 
     def _delete_report_file(filename: str) -> None:
         if not filename:
