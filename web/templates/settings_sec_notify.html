@@ -1,0 +1,12 @@
+<div class="col-12">
+  <div class="form-check form-check-inline">
+    <input class="form-check-input" type="checkbox" name="warn_push_enabled" id="warn_push_enabled" {{ 'checked' if settings.warn_push_enabled == 'true' else '' }}>
+    <label class="form-check-label" for="warn_push_enabled">WARN 推送</label></div>
+  <div class="form-check form-check-inline">
+    <input class="form-check-input" type="checkbox" name="notify_oversize_enabled" id="notify_oversize_enabled" {{ 'checked' if settings.notify_oversize_enabled == 'true' else '' }}>
+    <label class="form-check-label" for="notify_oversize_enabled">超限通知</label></div>
+  <div class="form-check form-check-inline">
+    <input class="form-check-input" type="checkbox" name="notify_ambiguous_enabled" id="notify_ambiguous_enabled" {{ 'checked' if settings.notify_ambiguous_enabled == 'true' else '' }}>
+    <label class="form-check-label" for="notify_ambiguous_enabled">歧义通知</label></div>
+  <div class="form-text">分别对应：WARN 状态、输出超限、实例匹配歧义 的告警开关。</div>
+</div>

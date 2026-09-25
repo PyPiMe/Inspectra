@@ -44,6 +44,26 @@
 
   <div class="col-lg-4">
     <div class="card mb-3">
+      <div class="card-header">日志设置</div>
+      <div class="card-body">
+        <form method="post" action="{{ url_for('logs_settings') }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="mb-2"><label class="form-label">日志级别</label>
+            <select class="form-select" name="app_log_level">
+              {% for lv in ['DEBUG', 'INFO', 'WARNING', 'ERROR'] %}
+              <option value="{{ lv }}" {{ 'selected' if (log_level or 'INFO') == lv else '' }}>{{ lv }}</option>
+              {% endfor %}
+            </select>
+            <div class="form-text">控制 <code>pypimeops.*</code> 与日志文件级别，保存即时生效；默认 INFO。</div></div>
+          <div class="mb-2"><label class="form-label">保留天数</label>
+            <div class="input-group"><input class="form-control" type="number" min="1" name="app_log_retention_days" value="{{ retention_days }}"><span class="input-group-text">天</span></div>
+            <div class="form-text">按天数自动清理轮转文件。</div></div>
+          <button class="btn btn-primary w-100">保存设置</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card mb-3">
       <div class="card-header">手动清理</div>
       <div class="card-body">
         <form method="post" action="{{ url_for('logs_cleanup') }}" onsubmit="return confirm('确认清理日志？')">
@@ -55,7 +75,7 @@
           <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="truncate_current" id="truncate_current"><label class="form-check-label" for="truncate_current">清空当前日志（{{ active_log }}）</label></div>
           <button class="btn btn-outline-danger w-100">执行清理</button>
         </form>
-        <div class="text-muted small mt-2">自动保留：应用日志按 <code>app_log_retention_days={{ retention_days }}</code> 天清理轮转文件（在设置页可改）。</div>
+        <div class="text-muted small mt-2">自动保留：应用日志按 <code>app_log_retention_days={{ retention_days }}</code> 天清理轮转文件（在本页上方「日志设置」可改）。</div>
       </div>
     </div>
 

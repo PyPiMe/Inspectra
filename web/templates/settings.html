@@ -2,82 +2,55 @@
 {% block title %}设置{% endblock %}
 {% block content %}
 <h4>设置</h4>
+
+<ul class="nav nav-tabs flex-nowrap overflow-auto" id="settingsTabs" role="tablist">
+  {% for tid, label in [('t-basic','基本'),('t-model','模型与数据'),('t-collect','采集与数据保留')] %}
+  <li class="nav-item" role="presentation">
+    <button class="nav-link text-nowrap {{ 'active' if loop.first else '' }}" type="button" data-bs-toggle="tab" data-bs-target="#{{ tid }}">{{ label }}</button>
+  </li>
+  {% endfor %}
+</ul>
+
 <form method="post" action="{{ url_for('settings_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-  <div class="row g-3">
-    <div class="col-md-6">
-      <div class="card"><div class="card-header">访问与模型</div><div class="card-body row g-2">
-        <div class="col-12"><label class="form-label">站点标题（页面左上角显示）</label>
-          <input class="form-control" name="site_title" value="{{ settings.site_title or 'PyPiMeOps' }}" placeholder="PyPiMeOps"></div>
-        <div class="col-md-6"><label class="form-label">应用日志级别</label>
-          <select class="form-select" name="app_log_level">
-            {% for lv in ['DEBUG', 'INFO', 'WARNING', 'ERROR'] %}
-              <option value="{{ lv }}" {{ 'selected' if (settings.app_log_level or 'INFO') == lv else '' }}>{{ lv }}</option>
-            {% endfor %}
-          </select>
-          <div class="form-text">控制 <code>pypimeops.*</code> 与日志文件级别；HTTP 访问日志与第三方噪声不记录。默认 INFO。</div>
-        </div>
-        <div class="col-12"><label class="form-label">IP 白名单（逗号/换行分隔，支持 CIDR；留空=不限制）</label>
-          <textarea class="form-control" name="allowed_ips" rows="2">{{ settings.allowed_ips }}</textarea></div>
-        <div class="col-12"><label class="form-label">默认模型</label>
-          <select class="form-select" name="default_model"><option value="">-</option>
-            {% for m in models %}<option value="{{ m.id }}" {{ 'selected' if settings.default_model==m.id|string else '' }}>{{ m.label }} ({{ m.model_id }})</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-6"><label class="form-label">默认数据策略</label>
-          <select class="form-select" name="default_data_policy">
-            <option value="cloud" {{ 'selected' if settings.default_data_policy=='cloud' else '' }}>cloud</option>
-            <option value="local" {{ 'selected' if settings.default_data_policy=='local' else '' }}>local</option>
-          </select>
-        </div>
-        <div class="col-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="sanitize_enabled" {{ 'checked' if settings.sanitize_enabled=='true' else '' }}><label class="form-check-label">启用脱敏层</label></div></div>
-      </div></div>
+  <div class="tab-content border border-top-0 rounded-bottom p-3">
+    <div class="tab-pane fade show active" id="t-basic">
+      <h6 class="text-muted">常规</h6>
+      <div class="row g-2 mb-2">{% include "settings_sec_general.html" %}</div>
+      <hr>
+      <h6 class="text-muted">通知与推送</h6>
+      <div class="row g-2">{% include "settings_sec_notify.html" %}</div>
     </div>
-    <div class="col-md-6">
-      <div class="card"><div class="card-header">并发与超时</div><div class="card-body row g-2">
-        <div class="col-4"><label class="form-label">并发数(1-30)</label><input class="form-control" name="concurrency" value="{{ settings.concurrency }}"></div>
-        <div class="col-4"><label class="form-label">模型并发</label><input class="form-control" name="model_concurrency" value="{{ settings.model_concurrency }}"></div>
-        <div class="col-4"><label class="form-label">模型重试次数</label><input class="form-control" name="model_retry_times" value="{{ settings.model_retry_times }}"></div>
-        <div class="col-4"><label class="form-label">模型请求超时(s)</label><input class="form-control" name="model_request_timeout" value="{{ settings.model_request_timeout }}"></div>
-        <div class="col-4"><label class="form-label">SSH 连接超时(s)</label><input class="form-control" name="ssh_connect_timeout" value="{{ settings.ssh_connect_timeout }}"></div>
-        <div class="col-4"><label class="form-label">SSH 命令超时(s)</label><input class="form-control" name="ssh_command_timeout" value="{{ settings.ssh_command_timeout }}"></div>
-      </div></div>
+    <div class="tab-pane fade" id="t-model">
+      <div class="row g-2">{% include "settings_sec_model.html" %}</div>
     </div>
-    <div class="col-md-6">
-      <div class="card"><div class="card-header">保留天数</div><div class="card-body row g-2">
-        <div class="col-6"><label class="form-label">审计日志</label><input class="form-control" name="audit_retention_days" value="{{ settings.audit_retention_days }}"></div>
-        <div class="col-6"><label class="form-label">应用日志</label><input class="form-control" name="app_log_retention_days" value="{{ settings.app_log_retention_days }}"></div>
-        <div class="col-6"><label class="form-label">报告</label><input class="form-control" name="report_retention_days" value="{{ settings.report_retention_days }}"></div>
-        <div class="col-6"><label class="form-label">版本备份</label><input class="form-control" name="backup_retention_days" value="{{ settings.backup_retention_days }}"></div>
-      </div></div>
-    </div>
-    <div class="col-md-6">
-      <div class="card"><div class="card-header">输出预算与推送开关</div><div class="card-body row g-2">
-        <div class="col-6"><label class="form-label">单脚本预算(bytes)</label><input class="form-control" name="model_output_max_bytes" value="{{ settings.model_output_max_bytes }}"></div>
-        <div class="col-6"><label class="form-label">批次总预算(bytes)</label><input class="form-control" name="model_batch_max_bytes" value="{{ settings.model_batch_max_bytes }}"></div>
-        <div class="col-4"><div class="form-check"><input class="form-check-input" type="checkbox" name="warn_push_enabled" {{ 'checked' if settings.warn_push_enabled=='true' else '' }}><label class="form-check-label">WARN 推送</label></div></div>
-        <div class="col-4"><div class="form-check"><input class="form-check-input" type="checkbox" name="notify_oversize_enabled" {{ 'checked' if settings.notify_oversize_enabled=='true' else '' }}><label class="form-check-label">超限通知</label></div></div>
-        <div class="col-4"><div class="form-check"><input class="form-check-input" type="checkbox" name="notify_ambiguous_enabled" {{ 'checked' if settings.notify_ambiguous_enabled=='true' else '' }}><label class="form-check-label">歧义通知</label></div></div>
-      </div></div>
+    <div class="tab-pane fade" id="t-collect">
+      <h6 class="text-muted">采集与 SSH</h6>
+      <div class="row g-2 mb-2">{% include "settings_sec_collect.html" %}</div>
+      <hr>
+      <h6 class="text-muted">数据保留与清理</h6>
+      {% include "settings_sec_retention.html" %}
     </div>
   </div>
-  <button class="btn btn-primary mt-3">保存设置</button>
+  <div class="position-sticky bottom-0 bg-body border-top py-2 mt-3 d-flex align-items-center gap-2" style="z-index: 5;">
+    <button class="btn btn-primary" type="submit">保存更改</button>
+    <span class="small text-muted">当前页签内的设置修改后请保存</span>
+  </div>
 </form>
+{% endblock %}
 
-<div class="card mt-3"><div class="card-header">脱敏规则</div><div class="card-body">
-  <form method="post" action="{{ url_for('settings_sanitize') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <textarea class="form-control font-monospace" name="sanitize_rules" rows="12">{{ sanitize_rules | tojson(indent=2) }}</textarea>
-    <div class="mt-2">
-      <button class="btn btn-primary">保存规则</button>
-      <button class="btn btn-outline-secondary" formaction="{{ url_for('settings_sanitize_reset') }}">恢复内置</button>
-    </div>
-  </form>
-</div></div>
-
-<div class="card mt-3"><div class="card-header">手动清理</div><div class="card-body d-flex gap-2">
-  <form method="post" action="{{ url_for('settings_cleanup') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="audit"><button class="btn btn-outline-danger">清理审计日志</button></form>
-  <form method="post" action="{{ url_for('settings_cleanup') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="backups"><button class="btn btn-outline-danger">清理版本备份</button></form>
-  <form method="post" action="{{ url_for('settings_cleanup') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="kind" value="reports"><button class="btn btn-outline-danger">清理报告</button></form>
-</div></div>
+{% block scripts %}
+<script>
+(function () {
+  const tabs = [...document.querySelectorAll('#settingsTabs .nav-link')];
+  const byHash = (h) => tabs.find((t) => t.dataset.bsTarget === h);
+  if (location.hash) {
+    const t = byHash(location.hash);
+    if (t) bootstrap.Tab.getOrCreateInstance(t).show();
+  }
+  tabs.forEach((t) => t.addEventListener('shown.bs.tab', (e) => {
+    history.replaceState(null, '', e.target.dataset.bsTarget);
+  }));
+})();
+</script>
 {% endblock %}

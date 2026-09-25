@@ -1876,6 +1876,9 @@ def create_app() -> Flask:
             settings=models.get_settings(),
             models=models.fetch_all("models"),
             sanitize_rules=sanitize._parse_rules(models.get_setting("sanitize_rules", "")),
+            audit_count=models.query("SELECT COUNT(*) AS c FROM audit_log")[0]["c"],
+            backup_count=models.query("SELECT COUNT(*) AS c FROM backup_versions")[0]["c"],
+            report_count=models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"],
         )
 
     @app.route("/settings/save", methods=["POST"])
@@ -1991,6 +1994,7 @@ def create_app() -> Flask:
             offset=size,
             active_log=applog.active_log(),
             retention_days=models.get_setting("app_log_retention_days", "7"),
+            log_level=models.get_setting("app_log_level", "INFO"),
         )
 
     @app.route("/logs/data")
@@ -2028,6 +2032,18 @@ def create_app() -> Flask:
             msg += "，并清空当前日志"
         flash(msg, "success")
         return redirect(url_for("logs_page", file=request.form.get("file") or applog.active_log()))
+
+    @app.route("/logs/settings", methods=["POST"])
+    def logs_settings():
+        level = (request.form.get("app_log_level") or "").strip()
+        days = (request.form.get("app_log_retention_days") or "").strip()
+        if level in ("DEBUG", "INFO", "WARNING", "ERROR"):
+            set_setting_versioned("app_log_level", level, g.ip)
+            apply_log_level(level)
+        if days:
+            set_setting_versioned("app_log_retention_days", days, g.ip)
+        flash("日志设置已保存", "success")
+        return redirect(url_for("logs_page"))
 
     @app.route("/logs/delete", methods=["POST"])
     def logs_delete():
