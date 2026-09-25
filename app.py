@@ -164,6 +164,26 @@ def _audit_filters(args) -> tuple[list[str], list[Any]]:
     return where, params
 
 
+_AUDIT_ACTIONS = ["create", "update", "delete", "run", "restore", "rekey", "import", "export", "cleanup", "notify_failed", "model_extra_id"]
+_AUDIT_NEED_SQL = "(action IN ('delete','restore','rekey','import') OR status<>'ok' OR status IS NULL)"
+_AUDIT_ACTION_CN = {
+    "create": "新增", "update": "修改", "delete": "删除", "run": "执行", "restore": "恢复",
+    "rekey": "更换密钥", "import": "导入", "export": "导出", "cleanup": "清理",
+    "notify_failed": "告警失败", "model_extra_id": "模型异常ID",
+}
+_AUDIT_ACTION_COLOR = {
+    "create": "success", "update": "primary", "delete": "danger", "restore": "warning",
+    "rekey": "warning", "import": "info", "export": "secondary", "run": "dark",
+    "cleanup": "secondary", "notify_failed": "danger", "model_extra_id": "secondary",
+}
+_AUDIT_TTYPE_CN = {
+    "group": "分组", "server": "服务器", "script": "脚本", "datasource": "数据源", "model": "模型",
+    "notification": "通知", "schedule": "定时任务", "setting": "设置", "credential": "凭据",
+    "run": "运行", "report": "报告", "backup": "备份", "applog": "应用日志",
+    "server_datasource": "数据源绑定", "all": "全部",
+}
+
+
 def _duration(started: str | None, finished: str | None) -> str:
     if not started or not finished:
         return ""
@@ -1668,7 +1688,15 @@ def create_app() -> Flask:
     @app.route("/audit-logs")
     def audit_logs():
         page, per_page = page_args()
-        where, params = _audit_filters(request.args)
+        action = request.args.get("action")
+        action = "need" if action is None else (action or "")
+        args2 = {k: val for k, val in request.args.items() if k != "action"}
+        where, params = _audit_filters(args2)
+        if action == "need":
+            where.append(_AUDIT_NEED_SQL)
+        elif action:
+            where.append("action=?")
+            params.append(action)
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         total = models.query(f"SELECT COUNT(*) AS c FROM audit_log{clause}", params)[0]["c"]
         rows = models.query(
@@ -1677,15 +1705,17 @@ def create_app() -> Flask:
         )
         for r in rows:
             r["detail_obj"] = json_or(r.get("detail"), None)
-        high_risk = {"create", "update", "delete"}
+        action_counts = {row["action"]: row["c"] for row in models.query("SELECT action, COUNT(*) AS c FROM audit_log GROUP BY action")}
+        total_all = sum(action_counts.values())
+        need_count = models.query(f"SELECT COUNT(*) AS c FROM audit_log WHERE {_AUDIT_NEED_SQL}")[0]["c"]
         return render_template(
             "audit_logs.html",
-            logs=rows,
-            page=page,
-            per_page=per_page,
-            total=total,
+            logs=rows, page=page, per_page=per_page, total=total,
             pages=max(1, (total + per_page - 1) // per_page),
-            high_risk=high_risk,
+            action_counts=action_counts, need_count=need_count, total_all=total_all,
+            audit_actions=_AUDIT_ACTIONS,
+            action_cn=_AUDIT_ACTION_CN, action_color=_AUDIT_ACTION_COLOR, ttype_cn=_AUDIT_TTYPE_CN,
+            cur_action=action,
         )
 
     @app.route("/audit-logs/export")
