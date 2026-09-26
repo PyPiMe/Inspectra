@@ -296,15 +296,16 @@ def _run_promql(
 # ------------------------------------------------------------ 模型分析
 
 SYSTEM_PROMPT = (
-    "你是资深 Linux 运维专家。你会收到多台服务器的采集数据，请逐台分析并只返回一个 JSON 对象，"
-    "不要输出任何多余文字或 Markdown 代码块之外的解释。\n"
+    "你是资深 Linux 运维专家。你会收到若干服务器上「已越界」巡检项的原始数据"
+    "（含脚本名、指标名、实际值、单位、阈值与引擎判定）。请逐台给出解读，"
+    "只返回一个 JSON 对象，不要输出任何多余文字或 Markdown 代码块之外的解释。\n"
     "JSON 结构（键为 server_id 字符串）：\n"
-    '{"<server_id>": {"status": "OK|WARN|ERROR|UNKNOWN", "conclusion": "简明结论", '
-    '"confidence": 0.0-1.0, "uncertain": true|false}}\n'
+    '{"<server_id>": {"attention": "高|中|低", "conclusion": "简明结论", '
+    '"consequence": "可能后果", "suggestion": "处置建议"}}\n'
     "要求：\n"
-    "- status 取值仅限 OK/WARN/ERROR/UNKNOWN；不确定时用 UNKNOWN 且 uncertain=true。\n"
-    "- 若数据中已给出引擎硬事实判定（PASS/FAIL/ERROR），必须尊重该判定，不得改判为更轻级别。\n"
-    "- conclusion 简明扼要，指出关键指标与风险。\n"
+    "- 只解读提供的越界项，不得虚构未提供的数据。\n"
+    "- 不要输出 status/判定；是否告警以引擎硬事实为准。\n"
+    "- attention 表示关注度；conclusion 简明扼要；consequence 说明潜在后果；suggestion 给出可执行的处置建议。\n"
     "- 你必须覆盖输入中出现的每一台 server_id，不得遗漏。"
 )
 
@@ -314,6 +315,25 @@ DATA_PREFIX = (
     "==================== 数据开始 ====================\n"
 )
 DATA_SUFFIX = "\n==================== 数据结束 ====================\n"
+
+
+def _exceeding_text(r: collectors.CollectResult) -> str | None:
+    """提取单条采集结果中「越界」的条目文本（WARN/FAIL）；无越界但有错误时回退错误。"""
+    items = r.meta.get("items") or []
+    lines: list[str] = []
+    for it in items:
+        if it.get("status") not in ("WARN", "FAIL"):
+            continue
+        unit = (it.get("unit") or r.meta.get("UNIT") or "").strip()
+        lines.append(
+            f"- [{_ITEM_STATUS_CN.get(it.get('status'), it.get('status'))}] "
+            f"{r.script_name} / {it.get('name')}: "
+            f"实际 {it.get('value')}{(' ' + unit) if unit else ''}，"
+            f"阈值 {it.get('threshold') or it.get('warn') or '-'}"
+        )
+    if not lines and r.status in ("ERROR", "UNKNOWN") and r.error:
+        lines.append(f"- [{_ITEM_STATUS_CN.get(r.status, r.status)}] {r.script_name}: {r.error}")
+    return "\n".join(lines) if lines else None
 
 
 def _analyze_batch(
@@ -326,12 +346,9 @@ def _analyze_batch(
     batch_max = int(settings.get("model_batch_max_bytes", 32768))
     chunks: list[str] = []
     for item in batch:
-        out, truncated = preprocess_output(item["output"], max_bytes)
+        out, truncated = preprocess_output(item["text"], max_bytes)
         flag = " [truncated]" if truncated else ""
-        header = f"### server_id={item['server_id']} {item['server_name']} / {item['script_name']} ({item['source']}){flag}"
-        body = item["output"] if not item.get("sanitized") else item["sanitized_output"]
-        out, _ = preprocess_output(body, max_bytes)
-        chunks.append(f"{header}\n{out}")
+        chunks.append(f"### server_id={item['server_id']}{flag}\n{out}")
     data_text = "\n\n".join(chunks)
     if len(data_text.encode("utf-8", "replace")) > batch_max:
         data_text, _ = preprocess_output(data_text, batch_max)
@@ -379,8 +396,24 @@ def _fmt_human_value(item: str, val_str: str) -> str:
     return val_str
 
 
+def _excess_label(it: dict[str, Any]) -> str:
+    """超限幅度：绝对差 +（数值有意义时）百分比。"""
+    val = collectors._as_float(it.get("value"))
+    cond = collectors.parse_condition(it.get("threshold") or "") or collectors.parse_condition(it.get("warn") or "")
+    if val is None or not cond:
+        return ""
+    lim = collectors._as_float(cond[1])
+    if lim is None:
+        return ""
+    delta = abs(val - lim)
+    base = collectors._fmt_num(delta)
+    if lim:
+        return f"{base}（{delta / abs(lim) * 100:.1f}%）"
+    return base
+
+
 def _disp_value(it: dict[str, Any], default_unit: str = "") -> str:
-    """统一人话模板的「值」列：值+单位；越界时附超限幅度（绝对差）。"""
+    """统一人话模板的「值」列：值+单位；越界时附超限幅度。"""
     val = str(it.get("value", ""))
     unit = (it.get("unit") or default_unit or "").strip()
     if unit.lower() == "mixed":
@@ -392,12 +425,9 @@ def _disp_value(it: dict[str, Any], default_unit: str = "") -> str:
         except (ValueError, TypeError):
             shown = f"{val} {unit}".strip()
     if it.get("status") in ("WARN", "FAIL"):
-        cond = collectors.parse_condition(it.get("threshold") or "")
-        if cond:
-            try:
-                shown += f"（超出 {collectors._fmt_num(abs(float(val) - float(cond[1])))}）"
-            except (ValueError, TypeError):
-                pass
+        lab = _excess_label(it)
+        if lab:
+            shown += f"（超出 {lab}）"
     return shown
 
 
@@ -452,12 +482,14 @@ def _report_markdown(ctx: dict[str, Any]) -> str:
             lines.append("")
             lines.append(f"#### 服务器：{s['name']} — {_STATUS_CN.get(s['status'], s['status'])}")
             note = s.get("conclusion") or ""
-            if s.get("conflict"):
-                note = (note + "（模型与引擎判定分歧）").strip()
-            if s.get("uncertain"):
-                note = (note + "（模型不确定）").strip()
             if note:
                 lines.append(f"说明：{note}")
+            if s.get("consequence"):
+                lines.append(f"可能后果：{s['consequence']}")
+            if s.get("suggestion"):
+                lines.append(f"处置建议：{s['suggestion']}")
+            if s.get("attention"):
+                lines.append(f"> 模型关注度：{s['attention']}")
             if not s["results"] and not note:
                 lines.append("（未执行：无 Shell 脚本且无启用的 Prometheus 数据源绑定）" if s.get("skipped") else "（无结果）")
             for r in s["results"]:
@@ -708,23 +740,19 @@ def run(
         batch_size = max(5, min(10, int(settings.get("ssh_batch_size", 10))))
         batch_items: list[list[dict[str, Any]]] = []
         if mode == "model":
-            flat = [r for r in results]
+            use_local = (model.get("data_policy") or policy) == "local"
+            flat = []
+            for r in results:
+                text = _exceeding_text(r)
+                if not text:
+                    continue
+                if not use_local:
+                    text, _hits = sanitize.sanitize(
+                        text, rules_raw, model.get("sanitize_overrides"), enabled=sanitize_enabled
+                    )
+                flat.append({"server_id": r.server_id, "server_name": r.server_name, "text": text})
             for i in range(0, len(flat), batch_size):
-                chunk = flat[i : i + batch_size]
-                batch_items.append(
-                    [
-                        {
-                            "server_id": r.server_id,
-                            "server_name": r.server_name,
-                            "script_name": r.script_name,
-                            "source": r.source,
-                            "output": r.output,
-                            "sanitized": True,
-                            "sanitized_output": r.meta.get("sanitized_output", r.output),
-                        }
-                        for r in chunk
-                    ]
-                )
+                batch_items.append(flat[i : i + batch_size])
 
         model_results: dict[str, dict[str, Any]] = {}
         model_raw_chunks: list[str] = []
@@ -759,72 +787,85 @@ def run(
         servers_out: list[dict[str, Any]] = []
         issues: list[dict[str, Any]] = []
         error_count = 0
-        uncertain_count = 0
         skipped_count = 0
         for server in servers:
             sid = int(server["id"])
             rs = by_server.get(sid, [])
+            app_label = "、".join(server_apps.get(sid) or ["未归属"])
+            server_name = server.get("hostname") or server.get("ip") or f"server-{sid}"
             if not rs:
                 # 已选中但无可执行项（无 Shell 脚本、无启用的数据源绑定）
                 skipped_count += 1
                 servers_out.append(
                     {
                         "id": sid,
-                        "name": server.get("hostname") or server.get("ip") or f"server-{sid}",
+                        "name": server_name,
                         "status": "UNKNOWN",
                         "engine_status": "UNKNOWN",
-                        "model_status": "",
+                        "attention": "",
                         "conclusion": "未执行：无 Shell 脚本且无启用的 Prometheus 数据源绑定",
-                        "confidence": None,
-                        "uncertain": False,
-                        "conflict": False,
+                        "consequence": "",
+                        "suggestion": "",
                         "skipped": True,
                         "results": [],
                     }
                 )
                 continue
+            # 服务器状态 = 引擎硬事实（模型不决定状态）
             engine_status = collectors.aggregate_status([r.status for r in rs])
-            m = model_results.get(str(sid))
-            model_status = (m or {}).get("status", "").upper() if m else ""
-            final = collectors.aggregate_status([engine_status, model_status]) if model_status else engine_status
-            conflict = bool(model_status) and collectors.severity_rank(model_status) < collectors.severity_rank(engine_status)
-            uncertain = bool((m or {}).get("uncertain"))
-            if uncertain:
-                uncertain_count += 1
-            if collectors.severity_rank(final) >= collectors.severity_rank("FAIL"):
+            m = model_results.get(str(sid)) or {}
+            if collectors.severity_rank(engine_status) >= collectors.severity_rank("FAIL"):
                 error_count += 1
-                for r in rs:
-                    if collectors.severity_rank(r.status) >= collectors.severity_rank("FAIL") or r.error:
-                        issues.append(
-                            {
-                                "status": r.status,
-                                "app": "、".join(server_apps.get(sid) or ["未归属"]),
-                                "server": server.get("hostname") or server.get("ip"),
-                                "script": r.script_name,
-                                "message": r.error or (m or {}).get("conclusion", ""),
-                            }
-                        )
-            elif uncertain:
-                issues.append(
-                    {
-                        "status": "UNKNOWN",
-                        "app": "、".join(server_apps.get(sid) or ["未归属"]),
-                        "server": server.get("hostname") or server.get("ip"),
-                        "script": "模型判定",
-                        "message": (m or {}).get("conclusion", "模型不确定"),
-                    }
-                )
+            # 问题清单：逐条越界项（WARN/FAIL）或采集错误
+            for r in rs:
+                hit = False
+                for it in r.meta.get("items") or []:
+                    st = it.get("status")
+                    if st not in ("WARN", "FAIL"):
+                        continue
+                    hit = True
+                    unit = (it.get("unit") or r.meta.get("UNIT") or "").strip()
+                    issues.append(
+                        {
+                            "status": st,
+                            "app": app_label,
+                            "server": server_name,
+                            "script": r.script_name,
+                            "item": it.get("name") or "",
+                            "value": str(it.get("value", "")),
+                            "unit": unit,
+                            "threshold": it.get("threshold") or it.get("warn") or "",
+                            "excess": _excess_label(it),
+                            "message": "",
+                            "suggestion": m.get("suggestion") or "",
+                        }
+                    )
+                if not hit and r.status in ("ERROR", "UNKNOWN") and r.error:
+                    issues.append(
+                        {
+                            "status": r.status,
+                            "app": app_label,
+                            "server": server_name,
+                            "script": r.script_name,
+                            "item": "",
+                            "value": "",
+                            "unit": "",
+                            "threshold": "",
+                            "excess": "",
+                            "message": r.error,
+                            "suggestion": m.get("suggestion") or "",
+                        }
+                    )
             servers_out.append(
                 {
                     "id": sid,
-                    "name": server.get("hostname") or server.get("ip") or f"server-{sid}",
-                    "status": final,
+                    "name": server_name,
+                    "status": engine_status,
                     "engine_status": engine_status,
-                    "model_status": model_status,
-                    "conclusion": (m or {}).get("conclusion") or "",
-                    "confidence": (m or {}).get("confidence"),
-                    "uncertain": uncertain,
-                    "conflict": conflict,
+                    "attention": m.get("attention") or "",
+                    "conclusion": m.get("conclusion") or "",
+                    "consequence": m.get("consequence") or "",
+                    "suggestion": m.get("suggestion") or "",
                     "skipped": False,
                     "results": [
                         {
@@ -860,7 +901,7 @@ def run(
             "executed_count": len(servers_out) - skipped_count,
             "skipped_count": skipped_count,
             "error_count": error_count,
-            "uncertain_count": uncertain_count,
+            "uncertain_count": 0,
             "issues": issues,
             "model_errors": model_errors,
         }
@@ -895,9 +936,9 @@ def run(
         report_file = _write_report(run_id, report)
         _set_progress("report", "生成报告", 1, 1)
 
-        # 告警：ERROR/连接失败/命令异常/模型不确定/partial；WARN 受开关控制
+        # 告警：ERROR/连接失败/命令异常/partial；WARN 受开关控制
         should_notify = False
-        if error_count or uncertain_count or run_status == "partial":
+        if error_count or run_status == "partial":
             should_notify = True
         if statuses and all(s == "WARN" for s in statuses) and str(settings.get("warn_push_enabled", "true")).lower() in ("1", "true", "yes"):
             should_notify = True

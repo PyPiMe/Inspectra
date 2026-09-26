@@ -168,24 +168,42 @@ def build_alert(summary: dict[str, Any], targets_label: str = "") -> tuple[str, 
     status = summary.get("status") or "unknown"
     subject = f"[{_site_title()}] 巡检告警（{status}）" + (f" - {targets_label}" if targets_label else "")
     mode_label = "模型分析" if summary.get("mode") != "raw" else "仅原始结果"
+    issues = summary.get("issues") or []
     lines = [
         f"巡检状态：{status}",
         f"分析模式：{mode_label}",
         f"目标：{targets_label or '全部所选对象'}",
         f"开始：{models.local_str(summary.get('started'))}  结束：{models.local_str(summary.get('finished'))}",
-        f"服务器：{summary.get('server_count', 0)}  异常：{summary.get('error_count', 0)}  不确定：{summary.get('uncertain_count', 0)}",
-        "",
-        "异常清单：",
     ]
-    issues = summary.get("issues") or []
+    lines.append(f"服务器：{summary.get('server_count', 0)}  异常：{summary.get('error_count', 0)}  问题项：{len(issues)}")
+    lines.append("")
+    lines.append("异常清单：")
     if issues:
+        _STATUS_CN = {"OK": "正常", "WARN": "警告", "FAIL": "失败", "ERROR": "异常", "UNKNOWN": "未知", "INFO": "信息"}
         by_app: dict[str, list[dict[str, Any]]] = {}
         for it in issues[:200]:
             by_app.setdefault(it.get("app") or "未归属", []).append(it)
         for app, items in by_app.items():
             lines.append(f"【{app}】")
+            shown_sugg: set[str] = set()
             for it in items[:100]:
-                lines.append(f"- [{it.get('status')}] {it.get('server')} / {it.get('script')}: {it.get('message', '')}")
+                st = _STATUS_CN.get((it.get("status") or "").upper(), it.get("status") or "")
+                head = f"- [{st}] {it.get('server')} / {it.get('script')}"
+                if it.get("item"):
+                    unit = it.get("unit") or ""
+                    detail = f"项「{it['item']}」实际 {it.get('value') or ''}" + (f" {unit}" if unit else "")
+                    if it.get("threshold"):
+                        detail += f"，阈值 {it['threshold']}"
+                    if it.get("excess"):
+                        detail += f"，超限 {it['excess']}"
+                    lines.append(head)
+                    lines.append(f"    {detail}")
+                else:
+                    lines.append(f"{head}：{it.get('message', '')}")
+                sug = it.get("suggestion") or ""
+                if sug and it.get("server") not in shown_sugg:
+                    shown_sugg.add(it.get("server"))
+                    lines.append(f"    建议：{sug}")
     else:
         lines.append("- （无）")
     if summary.get("notify_failures"):

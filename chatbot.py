@@ -80,8 +80,17 @@ def build_context() -> str:
             f"{sm.get('error_count', 0)}/{sm.get('uncertain_count', 0)}"
         )
         for it in (sm.get("issues") or [])[:MAX_ISSUES_PER_RUN]:
+            if it.get("item"):
+                detail = (
+                    f"项「{it.get('item')}」实际 {it.get('value', '')}"
+                    + (f" {it['unit']}" if it.get("unit") else "")
+                    + (f"，阈值 {it['threshold']}" if it.get("threshold") else "")
+                    + (f"，超限 {it['excess']}" if it.get("excess") else "")
+                )
+            else:
+                detail = str(it.get("message", ""))[:120]
             lines.append(
-                f"    · [{it.get('status')}] {it.get('server')} / {it.get('script')}: {str(it.get('message', ''))[:120]}"
+                f"    · [{it.get('status')}] {it.get('server')} / {it.get('script')}: {detail}"
             )
 
     lines.append("")
