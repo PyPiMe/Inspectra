@@ -1762,12 +1762,17 @@ def create_app() -> Flask:
     # ---- 备份恢复
     @app.route("/backups")
     def backups():
+        tab = (request.args.get("tab") or "objects").lower()
+        if tab not in ("objects", "versions", "io"):
+            tab = "objects"
         obj_type = request.args.get("object_type") or ""
         object_id = request.args.get("object_id") or ""
         action = request.args.get("action") or ""
-        group = request.args.get("group") or ""
         page, per_page = page_args()
-        if group == "1" and not object_id:
+        grouped = None
+        versions: list[Any] = []
+        total, pages = 0, 1
+        if tab == "objects":
             where = ["id NOT IN (SELECT version_id FROM audit_log WHERE version_id IS NOT NULL)"]
             params: list[Any] = []
             if obj_type:
@@ -1780,20 +1785,41 @@ def create_app() -> Flask:
                 f" FROM backup_versions{clause} GROUP BY object_type, object_id ORDER BY last_id DESC LIMIT 500",
                 params,
             )
-            return render_template(
-                "backups.html", versions=[], grouped=grouped, object_type=obj_type, object_id=object_id,
-                action=action, group=group, page=1, pages=1, total=len(grouped), per_page=per_page,
+            last_ids = [g["last_id"] for g in grouped]
+            snapmap: dict[int, dict[str, Any]] = {}
+            if last_ids:
+                marks = ",".join("?" for _ in last_ids)
+                for r in models.query(f"SELECT id, action, snapshot_json FROM backup_versions WHERE id IN ({marks})", last_ids):
+                    snapmap[int(r["id"])] = r
+            for g in grouped:
+                r = snapmap.get(int(g["last_id"]), {})
+                g["display_name"] = _obj_display_name(g["object_type"], backup.parse_snapshot(r))
+                g["last_action"] = r.get("action", "")
+            total = len(grouped)
+        elif tab == "versions":
+            total = backup.count_versions(obj_type or None, object_id or None, action or None, exclude_audited=True)
+            pages = max(1, (total + per_page - 1) // per_page)
+            page = min(max(1, page), pages)
+            versions = backup.list_versions(
+                obj_type or None, object_id or None, action or None,
+                limit=per_page, offset=(page - 1) * per_page, exclude_audited=True,
             )
-        total = backup.count_versions(obj_type or None, object_id or None, action or None, exclude_audited=True)
-        pages = max(1, (total + per_page - 1) // per_page)
-        page = min(max(1, page), pages)
-        versions = backup.list_versions(
-            obj_type or None, object_id or None, action or None,
-            limit=per_page, offset=(page - 1) * per_page, exclude_audited=True,
-        )
+            for v in versions:
+                v["display_name"] = _obj_display_name(v["object_type"], backup.parse_snapshot(v))
+        obj_count = models.query(
+            "SELECT COUNT(*) AS c FROM (SELECT 1 FROM backup_versions"
+            " WHERE id NOT IN (SELECT version_id FROM audit_log WHERE version_id IS NOT NULL)"
+            " GROUP BY object_type, object_id)"
+        )[0]["c"]
+        ver_count = backup.count_versions(exclude_audited=True)
         return render_template(
-            "backups.html", versions=versions, grouped=None, object_type=obj_type, object_id=object_id,
-            action=action, group=group, page=page, pages=pages, total=total, per_page=per_page,
+            "backups.html", tab=tab, grouped=grouped, versions=versions,
+            object_type=obj_type, object_id=object_id, action=action,
+            page=page, pages=pages, total=total, per_page=per_page,
+            obj_count=obj_count, ver_count=ver_count,
+            objtypes=["script", "server", "group", "datasource", "model", "notification", "schedule", "setting"],
+            actions=["create", "update", "delete", "restore"],
+            action_cn=_AUDIT_ACTION_CN, action_color=_AUDIT_ACTION_COLOR, ttype_cn=_AUDIT_TTYPE_CN,
         )
 
     @app.route("/backups/<int:vid>")
