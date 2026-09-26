@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager, check_picker %}
+{% block title %}{{ t('nav.applications') }}{% endblock %}
+{% block content %}
+<h4>{{ t('applications.title') }}</h4>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createApp">{{ t('applications.new') }}</button>
+  <form class="row g-2" method="get" action="{{ url_for('applications') }}">
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('applications.query_ph') }}"></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('applications') }}">{{ t('common.reset') }}</a></div>
+  </form>
+</div>
+
+<table class="table table-sm table-hover align-middle">
+  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('common.desc') }}</th><th>{{ t('applications.members') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
+  <tbody>
+  {% for a in applications %}
+    {% set mem = members.get(a.id, {'servers': [], 'groups': []}) %}
+    <tr>
+      <td>{{ a.name }}</td>
+      <td class="small">{{ a.desc }}</td>
+      <td class="small">{{ t('applications.member_summary', s=(mem.servers|length), g=(mem.groups|length)) }}</td>
+      <td>{{ t('common.yes') if a.enabled else t('common.no') }}</td>
+      <td class="text-nowrap">
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ a.id }}">{{ t('common.edit') }}</button>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('applications_history', aid=a.id) }}">{{ t('common.history') }}</a>
+        <form method="post" action="{{ url_for('applications_delete', aid=a.id) }}" class="d-inline" onsubmit="return confirm('{{ t('common.confirm_delete') }}')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="text-muted">{{ t('applications.empty') }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{{ pager('applications', {'q': q}, page, pages, total, per_page) }}
+
+{% macro app_form(a=None) %}
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+{% if a %}<input type="hidden" name="id" value="{{ a.id }}">{% endif %}
+<div class="row g-2">
+  <div class="col-md-6"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ a.name if a else '' }}" required></div>
+  <div class="col-md-6"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ a.desc if a else '' }}"></div>
+  <div class="col-md-6"><label class="form-label">{{ t('applications.servers') }}</label>
+    {% set sels = members.get(a.id, {'servers': []}).servers if a else [] %}
+    {{ check_picker('member_servers', server_items, sels, 'apSrv' ~ (a.id if a else 'new')) }}
+  </div>
+  <div class="col-md-6"><label class="form-label">{{ t('applications.groups') }}</label>
+    {% set gsels = members.get(a.id, {'groups': []}).groups if a else [] %}
+    {{ check_picker('member_groups', group_items, gsels, 'apGrp' ~ (a.id if a else 'new')) }}
+  </div>
+  <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if (not a or a.enabled) else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
+</div>
+{% endmacro %}
+
+<div class="modal fade" id="createApp"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <form method="post" action="{{ url_for('applications_save') }}">
+    <div class="modal-header"><h5 class="modal-title">{{ t('applications.new') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">{{ app_form(None) }}</div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
+  </form>
+</div></div></div>
+
+{% for a in applications %}
+<div class="modal fade" id="edit{{ a.id }}"><div class="modal-dialog modal-lg"><div class="modal-content">
+  <form method="post" action="{{ url_for('applications_save') }}">
+    <div class="modal-header"><h5 class="modal-title">{{ t('applications.edit_title', name=a.name) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">{{ app_form(a) }}</div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
+  </form>
+</div></div></div>
+{% endfor %}
+{% endblock %}

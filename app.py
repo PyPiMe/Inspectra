@@ -266,6 +266,7 @@ def save_object(
     detail: Any = None,
     script_content: str | None = None,
     note: str = "",
+    after_write=None,
 ) -> int:
     table = models.CONFIG_TABLES[obj_type]
     with models.db() as conn:
@@ -276,6 +277,8 @@ def save_object(
             data.setdefault("created_at", models.utcnow())
             obj_id = models.insert(conn, table, data)
             action = "create"
+        if after_write is not None:
+            after_write(conn, int(obj_id))
         snapshot = backup.snapshot_object(conn, obj_type, obj_id)
         if script_content is not None:
             snapshot = snapshot or {}
@@ -292,6 +295,8 @@ def delete_object(obj_type: str, obj_id: int, ip: str, name: str = "") -> None:
     snapshot = None
     with models.db() as conn:
         snapshot = backup.snapshot_object(conn, obj_type, obj_id)
+        if obj_type == "application":
+            conn.execute("DELETE FROM application_members WHERE application_id=?", (obj_id,))
         models.delete(conn, table, obj_id)
         vid = backup.record(conn, obj_type, obj_id, "delete", snapshot, ip)
         models.write_audit(conn, ip, "delete", obj_type, obj_id, name or str(obj_id), {"deleted": True}, version_id=vid)
@@ -317,6 +322,12 @@ def references_to(obj_type: str, obj_id: int) -> list[str]:
     if obj_type == "group":
         n = models.query("SELECT id, hostname FROM servers WHERE group_id=?", (obj_id,))
         refs += [f"服务器 {r['hostname']}" for r in n]
+        for a in models.query(
+            "SELECT a.name AS name FROM applications a JOIN application_members m ON m.application_id=a.id"
+            " WHERE m.member_type='group' AND m.member_id=?",
+            (obj_id,),
+        ):
+            refs.append(f"应用 {a['name']}")
     elif obj_type == "datasource":
         n = models.query("SELECT id FROM server_datasources WHERE datasource_id=?", (obj_id,))
         if n:
@@ -335,6 +346,12 @@ def references_to(obj_type: str, obj_id: int) -> list[str]:
         n = models.query("SELECT id FROM server_datasources WHERE server_id=?", (obj_id,))
         if n:
             refs.append(f"数据源绑定 {len(n)} 处")
+        for a in models.query(
+            "SELECT a.name AS name FROM applications a JOIN application_members m ON m.application_id=a.id"
+            " WHERE m.member_type='server' AND m.member_id=?",
+            (obj_id,),
+        ):
+            refs.append(f"应用 {a['name']}")
     elif obj_type == "credential":
         n = models.query("SELECT id, hostname FROM servers WHERE vault_key=?", (str(obj_id),))
         refs += [f"服务器 {r['hostname']}" for r in n]
@@ -553,6 +570,82 @@ def create_app() -> Flask:
     @app.route("/groups/<int:gid>/history")
     def groups_history(gid: int):
         return _history_view("group", gid, "group_detail.html", "分组")
+
+    # ---- 应用
+    def _application_members(app_id: int) -> dict[str, list[int]]:
+        out: dict[str, list[int]] = {"servers": [], "groups": []}
+        for m in models.query(
+            "SELECT member_type, member_id FROM application_members WHERE application_id=? ORDER BY id", (app_id,)
+        ):
+            if m["member_type"] == "server":
+                out["servers"].append(int(m["member_id"]))
+            elif m["member_type"] == "group":
+                out["groups"].append(int(m["member_id"]))
+        return out
+
+    @app.route("/applications")
+    def applications():
+        q = (request.args.get("q") or "").strip()
+        page, per_page = page_args()
+        where, params = [], []
+        if q:
+            where.append("(name LIKE ? OR desc LIKE ?)")
+            params.extend([f"%{q}%", f"%{q}%"])
+        clause = (" WHERE " + " AND ".join(where)) if where else ""
+        rows, total, page, pages = paginate(
+            f"SELECT * FROM applications{clause} ORDER BY id DESC",
+            f"SELECT COUNT(*) AS c FROM applications{clause}",
+            params, page, per_page,
+        )
+        members = {int(r["id"]): _application_members(int(r["id"])) for r in rows}
+        return render_template(
+            "applications.html", applications=rows, members=members, q=q,
+            server_items=[{"id": s["id"], "name": s["hostname"]} for s in models.fetch_all("servers")],
+            group_items=[{"id": g["id"], "name": g["name"]} for g in models.fetch_all("groups")],
+            page=page, pages=pages, total=total, per_page=per_page,
+        )
+
+    @app.route("/applications/save", methods=["POST"])
+    def applications_save():
+        aid = parse_int(request.form.get("id")) or None
+        name = (request.form.get("name") or "").strip()
+        if not name:
+            flash("应用名称必填", "danger")
+            return redirect(url_for("applications"))
+        server_ids = parse_ids(request.form.getlist("member_servers"))
+        group_ids = parse_ids(request.form.getlist("member_groups"))
+        data = {
+            "name": name,
+            "desc": (request.form.get("desc") or "").strip(),
+            "enabled": 1 if request.form.get("enabled") is not None else 0,
+            "updated_at": models.utcnow(),
+        }
+
+        def _write_members(conn, obj_id: int) -> None:
+            conn.execute("DELETE FROM application_members WHERE application_id=?", (obj_id,))
+            for mt, mid in [("server", i) for i in server_ids] + [("group", i) for i in group_ids]:
+                conn.execute(
+                    "INSERT OR IGNORE INTO application_members (application_id, member_type, member_id) VALUES (?,?,?)",
+                    (obj_id, mt, mid),
+                )
+
+        save_object(
+            "application", aid, data, g.ip, name,
+            detail={"name": name, "servers": server_ids, "groups": group_ids},
+            after_write=_write_members,
+        )
+        flash("应用已保存", "success")
+        return redirect(url_for("applications"))
+
+    @app.route("/applications/<int:aid>/delete", methods=["POST"])
+    def applications_delete(aid: int):
+        delete_object("application", aid, g.ip)
+        flash("应用已删除", "success")
+        return redirect(url_for("applications"))
+
+    @app.route("/applications/<int:aid>/history")
+    def applications_history(aid: int):
+        return _history_view("application", aid, "group_detail.html", "应用")
 
     # ---- 服务器
     @app.route("/servers")

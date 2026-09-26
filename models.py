@@ -27,6 +27,23 @@ CREATE TABLE IF NOT EXISTS groups (
     updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS applications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    desc TEXT DEFAULT '',
+    enabled INTEGER DEFAULT 1,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS application_members (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    application_id INTEGER NOT NULL,
+    member_type TEXT NOT NULL,
+    member_id INTEGER NOT NULL,
+    UNIQUE(application_id, member_type, member_id)
+);
+
 CREATE TABLE IF NOT EXISTS servers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     group_id INTEGER,
@@ -182,6 +199,7 @@ CONFIG_TABLES = {
     "script": "scripts",
     "server": "servers",
     "group": "groups",
+    "application": "applications",
     "datasource": "datasources",
     "model": "models",
     "notification": "notifications",
@@ -191,6 +209,8 @@ CONFIG_TABLES = {
 
 TABLE_COLUMNS: dict[str, list[str]] = {
     "groups": ["name", "desc", "prom_labels_json", "created_at", "updated_at"],
+    "applications": ["name", "desc", "enabled", "created_at", "updated_at"],
+    "application_members": ["application_id", "member_type", "member_id"],
     "servers": ["group_id", "hostname", "ip", "port", "user", "vault_key", "scripts_json", "vm_ident", "enabled", "created_at", "updated_at"],
     "scripts": ["name", "filename", "kind", "desc", "created_at", "updated_at"],
     "datasources": ["name", "base_url", "auth_type", "secret_env", "verify_tls", "timeout", "labels_json", "enabled", "created_at"],

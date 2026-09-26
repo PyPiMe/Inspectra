@@ -14,7 +14,7 @@ import models
 import vault as vault_mod
 from config import get_config
 
-CONFIG_ORDER = ["group", "datasource", "model", "notification", "script", "server", "schedule"]
+CONFIG_ORDER = ["group", "datasource", "model", "notification", "script", "server", "application", "schedule"]
 
 
 # ------------------------------------------------------------ 脚本正文文件
@@ -70,6 +70,14 @@ def snapshot_object(conn, object_type: str, object_id: Any) -> dict[str, Any] | 
     data = dict(row)
     if object_type == "script":
         data["content"] = read_script(data)
+    elif object_type == "application":
+        data["members"] = [
+            {"member_type": r["member_type"], "member_id": r["member_id"]}
+            for r in conn.execute(
+                "SELECT member_type, member_id FROM application_members WHERE application_id=? ORDER BY id",
+                (object_id,),
+            ).fetchall()
+        ]
     return data
 
 
@@ -182,6 +190,14 @@ def check_references(conn, object_type: str, snapshot: dict[str, Any]) -> list[s
         for sid in _parse_ids(snapshot.get("scripts_json")):
             if not _exists("scripts", sid):
                 missing.append(f"脚本 #{sid}")
+    elif object_type == "application":
+        for m in snapshot.get("members") or []:
+            mt = m.get("member_type")
+            mid = m.get("member_id")
+            if mt == "server" and not _exists("servers", mid):
+                missing.append(f"服务器 #{mid}")
+            elif mt == "group" and not _exists("groups", mid):
+                missing.append(f"分组 #{mid}")
     elif object_type == "schedule":
         targets = snapshot.get("targets_json")
         try:
@@ -249,6 +265,14 @@ def restore(version_id: int, operator_ip: str = "") -> tuple[bool, str]:
 
         if object_type == "script":
             write_script(snapshot, snapshot.get("content", ""))
+        elif object_type == "application":
+            conn.execute("DELETE FROM application_members WHERE application_id=?", (object_id,))
+            for m in snapshot.get("members") or []:
+                if m.get("member_type") in ("server", "group") and m.get("member_id"):
+                    conn.execute(
+                        "INSERT OR IGNORE INTO application_members (application_id, member_type, member_id) VALUES (?,?,?)",
+                        (object_id, m["member_type"], m["member_id"]),
+                    )
 
         vid = record(conn, object_type, object_id, action, snapshot, operator_ip, note=f"恢复版本 {row['version']}")
         models.write_audit(
@@ -295,6 +319,9 @@ def export_all() -> dict[str, Any]:
         data["objects"]["server_datasources"] = [
             dict(r) for r in conn.execute("SELECT * FROM server_datasources ORDER BY id ASC").fetchall()
         ]
+        data["objects"]["application_members"] = [
+            dict(r) for r in conn.execute("SELECT * FROM application_members ORDER BY id ASC").fetchall()
+        ]
         for row in conn.execute("SELECT * FROM backup_versions ORDER BY id ASC").fetchall():
             data["versions"].append(dict(row))
         for row in conn.execute("SELECT key, enc_blob, name, note, created_at FROM vault_entries").fetchall():
@@ -338,6 +365,7 @@ def _import_migrate(data: dict[str, Any], operator_ip: str) -> tuple[bool, str]:
                 continue
             conn.execute(f"DELETE FROM {table}")
         conn.execute("DELETE FROM server_datasources")
+        conn.execute("DELETE FROM application_members")
         conn.execute("DELETE FROM backup_versions")
         conn.execute("DELETE FROM vault_entries")
         conn.execute("DELETE FROM settings")
@@ -374,6 +402,14 @@ def _import_migrate(data: dict[str, Any], operator_ip: str) -> tuple[bool, str]:
             placeholders = ",".join("?" for _ in cols)
             conn.execute(
                 f"INSERT INTO server_datasources ({','.join(cols)}) VALUES ({placeholders})",
+                [item.get(c) for c in cols],
+            )
+        for item in data.get("objects", {}).get("application_members", []):
+            item = dict(item)
+            cols = ["id"] + [c for c in models.TABLE_COLUMNS["application_members"] if c in item]
+            placeholders = ",".join("?" for _ in cols)
+            conn.execute(
+                f"INSERT INTO application_members ({','.join(cols)}) VALUES ({placeholders})",
                 [item.get(c) for c in cols],
             )
         for row in data.get("versions") or []:
@@ -450,6 +486,21 @@ def _import_daily(objects: dict[str, Any], operator_ip: str) -> tuple[bool, str]
             placeholders = ",".join("?" for _ in cols)
             conn.execute(
                 f"INSERT INTO server_datasources ({','.join(cols)}) VALUES ({placeholders})",
+                [item.get(c) for c in cols],
+            )
+
+        # 应用成员（新增式：重映射 application_id / member_id）
+        for item in objects.get("application_members", []):
+            item = dict(item)
+            item.pop("id", None)
+            item["application_id"] = id_maps["application"].get(item.get("application_id"), item.get("application_id"))
+            mt = item.get("member_type")
+            if mt in ("server", "group"):
+                item["member_id"] = id_maps.get(mt, {}).get(item.get("member_id"), item.get("member_id"))
+            cols = [c for c in models.TABLE_COLUMNS["application_members"] if c in item]
+            placeholders = ",".join("?" for _ in cols)
+            conn.execute(
+                f"INSERT OR IGNORE INTO application_members ({','.join(cols)}) VALUES ({placeholders})",
                 [item.get(c) for c in cols],
             )
         models.write_audit(conn, operator_ip, "import", "all", "", "daily", {"mode": "daily"})
