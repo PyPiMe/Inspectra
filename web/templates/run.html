@@ -43,7 +43,9 @@
     <div class="col-lg-5">
       <div class="card mb-3"><div class="card-header">{{ t('run.scripts_override') }}</div><div class="card-body">
         <div class="text-muted small mb-2">{{ t('run.scripts_hint') }}</div>
+        <div class="text-muted small mb-2">{{ t('run.scripts_relevant_hint') }}</div>
         {{ script_picker('scripts', scripts, [], 'spRun') }}
+        <div class="alert alert-warning small py-1 px-2 mt-2 d-none" id="scriptWarn"></div>
       </div></div>
 
       <div class="card"><div class="card-header">{{ t('run.mode') }}</div><div class="card-body">
@@ -71,6 +73,7 @@
     <ul class="mb-0">
       <li>{{ t('run.cfm_targets') }}<strong id="cfmServers">0</strong></li>
       <li>{{ t('run.cfm_scripts') }}<strong id="cfmScripts">{{ t('run.by_binding') }}</strong></li>
+      <li class="text-warning d-none" id="cfmWarnLi">{{ t('run.cfm_unbound') }}<strong id="cfmUnbound">0</strong></li>
       <li>{{ t('run.cfm_mode') }}<strong id="cfmMode">{{ t('reports.analysis_model') }}</strong></li>
     </ul>
   </div>
@@ -86,6 +89,7 @@
 const groupServers = {{ group_servers | tojson }};
 const allServerIds = {{ all_server_ids | tojson }};
 const issueServerIds = {{ issue_server_ids | tojson }};
+const scriptTargets = {{ script_targets | tojson }};
 const runForm = document.getElementById('runForm');
 
 function checkedIds(name) {
@@ -95,6 +99,46 @@ function modeLabel() {
   const m = document.querySelector('input[name="mode"]:checked');
   return (m && m.value === 'raw') ? __t('js.run_raw') : __t('js.run_model');
 }
+function targetsOf(sid) {
+  return scriptTargets[String(sid)] || scriptTargets[sid] || [];
+}
+function updateScriptRelevance(ids) {
+  const sp = document.getElementById('spRun');
+  if (!sp) return;
+  const filtered = ids.size > 0;
+  sp.querySelectorAll('.sp-item').forEach((it) => {
+    const sid = parseInt(it.querySelector('input').value, 10);
+    let relevant = true;
+    if (filtered) relevant = targetsOf(sid).some((x) => ids.has(x));
+    it.dataset.relevant = relevant ? '' : '0';
+    if (!relevant) it.querySelector('input').checked = false;
+  });
+  updateUnboundWarning(ids);
+  if (sp.spRefresh) sp.spRefresh();
+}
+function updateUnboundWarning(ids) {
+  const box = document.getElementById('scriptWarn');
+  if (!box) return;
+  const checked = checkedIds('scripts');
+  const problems = [];
+  if (ids.size > 0 && checked.length) {
+    checked.forEach((sid) => {
+      const t = new Set(targetsOf(sid));
+      let miss = 0;
+      ids.forEach((x) => { if (!t.has(x)) miss++; });
+      if (miss) problems.push({ sid, miss });
+    });
+  }
+  if (problems.length) {
+    const labels = {};
+    document.querySelectorAll('#spRun .sp-item').forEach((it) => {
+      labels[parseInt(it.querySelector('input').value, 10)] = it.querySelector('.form-check-label').textContent.trim();
+    });
+    box.textContent = __t('js.run_unbound_prefix') + problems.map((p) => `${labels[p.sid] || ('#' + p.sid)}（${p.miss}）`).join('、');
+    box.classList.remove('d-none');
+  } else { box.classList.add('d-none'); box.textContent = ''; }
+  window.__unboundScripts = problems.length;
+}
 function updateSummary() {
   const all = document.getElementById('target_all').checked;
   const ids = new Set();
@@ -103,6 +147,7 @@ function updateSummary() {
     checkedIds('target_servers').forEach((i) => ids.add(i));
     checkedIds('target_groups').forEach((g) => (groupServers[g] || []).forEach((i) => ids.add(i)));
   }
+  updateScriptRelevance(ids);
   const nScripts = checkedIds('scripts').length;
   document.getElementById('sumServers').textContent = ids.size;
   document.getElementById('sumScripts').textContent = nScripts;
@@ -124,6 +169,9 @@ document.getElementById('submitBtn').addEventListener('click', () => {
   document.getElementById('cfmServers').textContent = s.servers;
   document.getElementById('cfmScripts').textContent = s.scripts ? (s.scripts + __t('js.run_scripts_unit')) : __t('js.run_by_binding');
   document.getElementById('cfmMode').textContent = s.mode;
+  const unbound = window.__unboundScripts || 0;
+  document.getElementById('cfmUnbound').textContent = unbound;
+  document.getElementById('cfmWarnLi').classList.toggle('d-none', !unbound);
   new bootstrap.Modal(document.getElementById('confirmRun')).show();
 });
 document.getElementById('cfmGo').addEventListener('click', () => runForm.submit());

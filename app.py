@@ -1600,6 +1600,22 @@ def create_app() -> Flask:
             if not targets.get("all") and not targets["groups"] and not targets["servers"]:
                 flash("请至少选择分组/服务器，或勾选全部", "danger")
                 return redirect(url_for("run_page"))
+            # 显式勾选 = 覆盖：对未绑定该脚本的所选目标给出警告（不阻断）
+            if scripts:
+                maps = engine._load_maps()
+                chosen = engine._resolve_servers(targets, maps)
+                binds = engine.script_server_bindings(maps)
+                for sc_id in scripts:
+                    sc = maps["scripts"].get(int(sc_id))
+                    if not sc:
+                        continue
+                    bset = set(binds.get(int(sc_id), []))
+                    missing = [s for s in chosen if int(s["id"]) not in bset]
+                    if missing:
+                        names = "、".join((s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in missing[:5])
+                        more = f" 等 {len(missing)} 台" if len(missing) > 5 else ""
+                        action = "将在这些目标上覆盖运行" if (sc.get("kind") or "shell") == "shell" else "在这些目标上无绑定，将跳过"
+                        flash(f"脚本「{sc.get('name')}」未绑定到 {names}{more}，{action}", "warning")
             mode = request.form.get("mode") or "model"
             if mode not in ("model", "raw"):
                 mode = "model"
@@ -1644,6 +1660,7 @@ def create_app() -> Flask:
             groups=groups,
             datasources=models.fetch_all("datasources"),
             scripts=models.fetch_all("scripts"),
+            script_targets=engine.script_server_bindings(),
             group_servers=group_servers,
             all_server_ids=all_server_ids,
             issue_server_ids=issue_server_ids,

@@ -160,6 +160,25 @@ def _parse_ids(raw: Any) -> list[int]:
         return []
 
 
+def script_server_bindings(maps: dict[str, dict[int, dict[str, Any]]] | None = None) -> dict[int, list[int]]:
+    """脚本 → 绑定服务器 id 列表（Shell：服务器 scripts_json；PromQL：启用绑定的 scripts_json）。
+
+    Shell scripts → bound servers (server.scripts_json); PromQL scripts → servers of enabled bindings.
+    """
+    maps = maps or _load_maps()
+    out: dict[int, set[int]] = {}
+    for s in maps["servers"].values():
+        sid = int(s["id"])
+        for i in _parse_ids(s.get("scripts_json")):
+            out.setdefault(i, set()).add(sid)
+    for b in models.fetch_all("server_datasources"):
+        if not b.get("enabled", 1):
+            continue
+        for i in _parse_ids(b.get("scripts_json")):
+            out.setdefault(i, set()).add(int(b["server_id"]))
+    return {k: sorted(v) for k, v in out.items()}
+
+
 def _ip_instance_regex(ip: str) -> str:
     """由服务器 IP 推导 instance 正则：`192[.]168[.]4[.]34(:[0-9]+)?`（避免 PromQL 反斜杠转义）。"""
     ip = (ip or "").strip()

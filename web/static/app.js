@@ -124,7 +124,8 @@ function initScriptPickers(root) {
     const filter = () => {
       const q = (search.value || '').toLowerCase();
       p.querySelectorAll('.sp-item').forEach((it) => {
-        it.style.display = (!q || it.dataset.name.includes(q)) ? '' : 'none';
+        const hidden = it.dataset.relevant === '0';
+        it.style.display = (!hidden && (!q || it.dataset.name.includes(q))) ? '' : 'none';
       });
     };
     if (search) search.addEventListener('input', filter);
@@ -141,6 +142,7 @@ function initScriptPickers(root) {
       update();
     });
     if (list) list.addEventListener('change', update);
+    p.spRefresh = () => { filter(); update(); };
     update();
   });
 }
