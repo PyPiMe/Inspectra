@@ -16,3 +16,6 @@ venv/
 # 方案文档（按项目约定不入库）
 Plan.md
 AGENTS.md
+
+# 用户自定义语言包（运行时，不入 git）
+locales/custom/

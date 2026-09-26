@@ -3,7 +3,7 @@
   {% for k, v in params.items() %}{% if v not in ('', none) %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
   <select class="form-select form-select-sm d-inline-block w-auto" name="per_page" onchange="this.form.submit()">
     {% for n in [20, 50, 100] %}
-      <option value="{{ n }}" {{ 'selected' if per_page == n else '' }}>{{ n }} 条/页</option>
+      <option value="{{ n }}" {{ 'selected' if per_page == n else '' }}>{{ t('common.per_page', n=n) }}</option>
     {% endfor %}
   </select>
 </form>
@@ -11,7 +11,7 @@
 
 {% macro pager(endpoint, params, page, pages, total, per_page) %}
 <div class="d-flex align-items-center gap-3 flex-wrap mt-1">
-  <span class="text-muted small">共 {{ total }} 条{% if pages > 1 %}，第 {{ page }}/{{ pages }} 页{% endif %}</span>
+  <span class="text-muted small">{{ t('common.total_count', total=total) }}{% if pages > 1 %}{{ t('common.page_of', page=page, pages=pages) }}{% endif %}</span>
   {{ perpage(endpoint, params, per_page) }}
   {% if pages > 1 %}
   {% set start = [1, page - 2] | max %}
@@ -19,7 +19,7 @@
   <nav>
     <ul class="pagination pagination-sm mb-0">
       <li class="page-item {{ 'disabled' if page <= 1 else '' }}">
-        <a class="page-link" href="{{ url_for(endpoint, page=page - 1, **params) }}">上一页</a>
+        <a class="page-link" href="{{ url_for(endpoint, page=page - 1, **params) }}">{{ t('common.prev') }}</a>
       </li>
       {% if start > 1 %}
         <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, page=1, **params) }}">1</a></li>
@@ -35,7 +35,7 @@
         <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, page=pages, **params) }}">{{ pages }}</a></li>
       {% endif %}
       <li class="page-item {{ 'disabled' if page >= pages else '' }}">
-        <a class="page-link" href="{{ url_for(endpoint, page=page + 1, **params) }}">下一页</a>
+        <a class="page-link" href="{{ url_for(endpoint, page=page + 1, **params) }}">{{ t('common.next') }}</a>
       </li>
     </ul>
   </nav>
@@ -47,7 +47,7 @@
 {% if ct == 'SSH' %}<span class="badge bg-primary">SSH</span>
 {% elif ct == 'Prometheus' %}<span class="badge bg-info text-dark">Prometheus</span>
 {% elif ct == 'SSH + Prometheus' %}<span class="badge bg-success">SSH + Prometheus</span>
-{% else %}<span class="badge bg-secondary">未配置</span>{% endif %}
+{% else %}<span class="badge bg-secondary">{{ t('common.none') }}</span>{% endif %}
 {% endmacro %}
 
 {% macro status_badge(s) %}
@@ -62,9 +62,9 @@
 {% macro json_view(obj, ident) %}
 <div class="json-wrap">
   <div class="json-actions">
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('{{ ident }}').textContent, this)">复制</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadText('{{ ident }}.json', document.getElementById('{{ ident }}').textContent)">下载</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleFold('{{ ident }}', this)">折叠</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('{{ ident }}').textContent, this)">{{ t('common.copy') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="downloadText('{{ ident }}.json', document.getElementById('{{ ident }}').textContent)">{{ t('common.download') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleFold('{{ ident }}', this)">{{ t('common.collapse') }}</button>
   </div>
   <pre class="json-view" id="{{ ident }}">{{ obj | tojson(indent=2) }}</pre>
 </div>
@@ -72,9 +72,9 @@
 
 {% macro quick_range(form_id) %}
 <span class="btn-group btn-group-sm">
-  <button type="button" class="btn btn-outline-secondary" onclick="setRange(0, '{{ form_id }}')">今天</button>
-  <button type="button" class="btn btn-outline-secondary" onclick="setRange(7, '{{ form_id }}')">近7天</button>
-  <button type="button" class="btn btn-outline-secondary" onclick="setRange(30, '{{ form_id }}')">近30天</button>
+  <button type="button" class="btn btn-outline-secondary" onclick="setRange(0, '{{ form_id }}')">{{ t('range.today') }}</button>
+  <button type="button" class="btn btn-outline-secondary" onclick="setRange(7, '{{ form_id }}')">{{ t('range.7d') }}</button>
+  <button type="button" class="btn btn-outline-secondary" onclick="setRange(30, '{{ form_id }}')">{{ t('range.30d') }}</button>
 </span>
 {% endmacro %}
 
@@ -82,10 +82,10 @@
 {% set sel = selected or [] %}
 <div class="script-picker" id="{{ picker_id }}">
   <div class="d-flex gap-1 mb-1 flex-wrap align-items-center">
-    <input class="form-control form-control-sm sp-search" style="max-width: 14rem;" placeholder="搜索…">
-    <button type="button" class="btn btn-sm btn-outline-secondary sp-all">全选</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary sp-none">清空</button>
-    <span class="badge bg-secondary sp-count">已选 0</span>
+    <input class="form-control form-control-sm sp-search" style="max-width: 14rem;" placeholder="{{ t('picker.search') }}">
+    <button type="button" class="btn btn-sm btn-outline-secondary sp-all">{{ t('picker.all') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary sp-none">{{ t('picker.none') }}</button>
+    <span class="badge bg-secondary sp-count">{{ t('picker.selected', n=0) }}</span>
   </div>
   <div class="sp-list">
     {% for it in items %}
@@ -94,7 +94,7 @@
         <span class="form-check-label">{{ it.name }}{% if it.kind %} <span class="text-muted small">({{ it.kind }})</span>{% endif %}</span>
       </label>
     {% else %}
-      <div class="text-muted small">暂无可选项</div>
+      <div class="text-muted small">{{ t('picker.empty') }}</div>
     {% endfor %}
   </div>
 </div>
@@ -103,4 +103,3 @@
 {% macro script_picker(name, items, selected, picker_id) %}
 {{ check_picker(name, items, selected, picker_id) }}
 {% endmacro %}
-

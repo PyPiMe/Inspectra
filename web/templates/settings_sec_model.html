@@ -1,38 +1,38 @@
-<div class="col-md-6"><label class="form-label">默认模型</label>
+<div class="col-md-6"><label class="form-label">{{ t('settings.default_model') }}</label>
   <select class="form-select" name="default_model"><option value="">-</option>
     {% for m in models %}<option value="{{ m.id }}" {{ 'selected' if settings.default_model == m.id|string else '' }}>{{ m.label }} ({{ m.model_id }})</option>{% endfor %}
   </select>
-  <div class="form-text">模型分析与智能问答使用；未配置时巡检需选「仅原始结果」。</div></div>
-<div class="col-md-3"><label class="form-label">默认数据策略</label>
+  <div class="form-text">{{ t('settings.default_model_hint') }}</div></div>
+<div class="col-md-3"><label class="form-label">{{ t('settings.data_policy') }}</label>
   <select class="form-select" name="default_data_policy">
     <option value="cloud" {{ 'selected' if settings.default_data_policy == 'cloud' else '' }}>cloud</option>
     <option value="local" {{ 'selected' if settings.default_data_policy == 'local' else '' }}>local</option>
   </select>
-  <div class="form-text">cloud 强制脱敏外发；local 零外传。</div></div>
+  <div class="form-text">{{ t('settings.data_policy_hint') }}</div></div>
 <div class="col-md-3 d-flex align-items-end"><div class="form-check mb-2">
   <input class="form-check-input" type="checkbox" name="sanitize_enabled" id="sanitize_enabled" {{ 'checked' if settings.sanitize_enabled == 'true' else '' }}>
-  <label class="form-check-label" for="sanitize_enabled">启用脱敏层</label></div></div>
-<div class="col-md-4"><label class="form-label">模型并发</label>
+  <label class="form-check-label" for="sanitize_enabled">{{ t('settings.sanitize_enabled') }}</label></div></div>
+<div class="col-md-4"><label class="form-label">{{ t('settings.model_concurrency') }}</label>
   <input class="form-control" name="model_concurrency" value="{{ settings.model_concurrency }}">
-  <div class="form-text">模型请求并行度。</div></div>
-<div class="col-md-4"><label class="form-label">模型重试次数</label>
+  <div class="form-text">{{ t('settings.model_concurrency_hint') }}</div></div>
+<div class="col-md-4"><label class="form-label">{{ t('settings.model_retries') }}</label>
   <input class="form-control" name="model_retry_times" value="{{ settings.model_retry_times }}">
-  <div class="form-text">请求失败重试次数。</div></div>
-<div class="col-md-4"><label class="form-label">模型请求超时</label>
-  <div class="input-group"><input class="form-control" name="model_request_timeout" value="{{ settings.model_request_timeout }}"><span class="input-group-text">秒</span></div></div>
-<div class="col-md-6"><label class="form-label">单脚本输出预算</label>
-  <div class="input-group"><input class="form-control" name="model_output_max_bytes" value="{{ settings.model_output_max_bytes }}"><span class="input-group-text">字节</span></div>
-  <div class="form-text">送模型前单脚本上限，超出截断（报告归档不截断）。</div></div>
-<div class="col-md-6"><label class="form-label">批次总预算</label>
-  <div class="input-group"><input class="form-control" name="model_batch_max_bytes" value="{{ settings.model_batch_max_bytes }}"><span class="input-group-text">字节</span></div>
-  <div class="form-text">一批（5~10 台）合并后的总量上限。</div></div>
+  <div class="form-text">{{ t('settings.model_retries_hint') }}</div></div>
+<div class="col-md-4"><label class="form-label">{{ t('settings.model_timeout') }}</label>
+  <div class="input-group"><input class="form-control" name="model_request_timeout" value="{{ settings.model_request_timeout }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></div>
+<div class="col-md-6"><label class="form-label">{{ t('settings.output_budget') }}</label>
+  <div class="input-group"><input class="form-control" name="model_output_max_bytes" value="{{ settings.model_output_max_bytes }}"><span class="input-group-text">{{ t('common.bytes') }}</span></div>
+  <div class="form-text">{{ t('settings.output_budget_hint') }}</div></div>
+<div class="col-md-6"><label class="form-label">{{ t('settings.batch_budget') }}</label>
+  <div class="input-group"><input class="form-control" name="model_batch_max_bytes" value="{{ settings.model_batch_max_bytes }}"><span class="input-group-text">{{ t('common.bytes') }}</span></div>
+  <div class="form-text">{{ t('settings.batch_budget_hint') }}</div></div>
 <div class="col-12">
-  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#sanitizeBody">显示 / 隐藏脱敏规则 JSON</button>
+  <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#sanitizeBody">{{ t('settings.sanitize_show') }}</button>
   <div class="collapse mt-2" id="sanitizeBody">
     <textarea class="form-control font-monospace" name="sanitize_rules" rows="12">{{ sanitize_rules | tojson(indent=2) }}</textarea>
     <div class="mt-2">
-      <button class="btn btn-primary" type="submit" formaction="{{ url_for('settings_sanitize') }}" formmethod="post">保存脱敏规则</button>
-      <button class="btn btn-outline-secondary" type="submit" formaction="{{ url_for('settings_sanitize_reset') }}" formmethod="post" onclick="return confirm('恢复内置脱敏规则？')">恢复内置</button>
+      <button class="btn btn-primary" type="submit" formaction="{{ url_for('settings_sanitize') }}" formmethod="post">{{ t('settings.save_sanitize') }}</button>
+      <button class="btn btn-outline-secondary" type="submit" formaction="{{ url_for('settings_sanitize_reset') }}" formmethod="post" onclick="return confirm('{{ t('settings.reset_sanitize_confirm') }}')">{{ t('settings.reset_sanitize') }}</button>
     </div>
   </div>
 </div>

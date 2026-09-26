@@ -1,4 +1,8 @@
 // PyPiMeOps 前端辅助：为 fetch 自动附带 CSRF token
+function __t(key, fallback) {
+  const d = window.__I18N || {};
+  return (key in d) ? d[key] : (fallback !== undefined ? fallback : key);
+}
 window.pypimeops = {
   csrf() {
     const meta = document.querySelector('meta[name="csrf-token"]');
@@ -16,7 +20,7 @@ function copyText(text, btn) {
   const done = () => {
     if (!btn) return;
     const old = btn.textContent;
-    btn.textContent = '已复制';
+    btn.textContent = __t('js.copied', '已复制');
     setTimeout(() => { btn.textContent = old; }, 1000);
   };
   const fallback = () => {
@@ -54,7 +58,7 @@ function toggleFold(id, btn) {
   const el = document.getElementById(id);
   if (!el) return;
   el.classList.toggle('folded');
-  if (btn) btn.textContent = el.classList.contains('folded') ? '展开' : '折叠';
+  if (btn) btn.textContent = el.classList.contains('folded') ? __t('js.expand', '展开') : __t('js.collapse', '折叠');
 }
 
 // 快捷时间范围：填入表单的 start/end（本地时间），0=今天
@@ -115,7 +119,7 @@ function initScriptPickers(root) {
     const count = p.querySelector('.sp-count');
     const update = () => {
       const n = p.querySelectorAll('input[type=checkbox]:checked').length;
-      if (count) count.textContent = '已选 ' + n;
+      if (count) count.textContent = __t('js.selected_prefix', '已选 ') + n;
     };
     const filter = () => {
       const q = (search.value || '').toLowerCase();

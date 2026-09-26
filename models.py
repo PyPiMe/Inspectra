@@ -206,6 +206,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
 
 DEFAULT_SETTINGS: dict[str, str] = {
     "site_title": "PyPiMeOps",
+    "default_language": "zh-CN",
     "app_log_level": "INFO",
     "allowed_ips": "",
     "default_model": "",

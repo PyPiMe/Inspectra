@@ -35,6 +35,7 @@ import applog
 import chatbot
 import collectors
 import engine
+import i18n
 import model_client
 import models
 import notify
@@ -353,6 +354,30 @@ def create_app() -> Flask:
     app.secret_key = cfg.flask_secret
     app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 
+    _basedir = os.path.dirname(os.path.abspath(__file__))
+    i18n.init(os.path.join(_basedir, "locales"), os.path.join(_basedir, "locales", "custom"))
+    i18n.set_fallback(models.get_setting("default_language", "zh-CN") or "zh-CN")
+
+    def _pick_lang() -> str:
+        code = (request.cookies.get("lang") or "").strip()
+        if code and i18n.has(code):
+            return code
+        code = (models.get_setting("default_language", "zh-CN") or "zh-CN").strip()
+        if code and i18n.has(code):
+            return code
+        avail = {x["code"] for x in i18n.languages()}
+        for part in (request.headers.get("Accept-Language") or "").split(","):
+            cand = part.split(";")[0].strip()
+            if not cand:
+                continue
+            if cand in avail:
+                return cand
+            short = cand.split("-")[0]
+            for a in avail:
+                if a.split("-")[0] == short:
+                    return a
+        return "zh-CN"
+
     # ---- IP 白名单 + CSRF
     def allowed(ip: str, allowed_ips: str) -> bool:
         if not allowed_ips.strip():
@@ -382,6 +407,7 @@ def create_app() -> Flask:
     @app.before_request
     def _guard():
         g.ip = client_ip()
+        i18n.set_current(_pick_lang())
         allowed_ips = models.get_setting("allowed_ips", "")
         if not allowed(g.ip, allowed_ips):
             return "403 Forbidden", 403
@@ -408,7 +434,12 @@ def create_app() -> Flask:
             "EXTRA_JSON_TEMPLATES": model_client.EXTRA_JSON_TEMPLATES,
             "json_or": json_or,
             "now_local_str": now_local_str,
+            "languages": i18n.languages(),
+            "current_lang": i18n.current(),
+            "js_i18n": i18n.js_dict(),
         }
+
+    app.jinja_env.globals["t"] = i18n.t
 
     @app.template_filter("local")
     def _local(ts: str) -> str:
@@ -427,6 +458,19 @@ def create_app() -> Flask:
         if len(parts) <= 8:
             return fp
         return ":".join(parts[:4]) + " … " + ":".join(parts[-4:])
+
+    # ---- 语言切换
+    @app.route("/lang/<code>")
+    def set_language(code: str):
+        from flask import make_response
+
+        nxt = request.args.get("next") or request.referrer or url_for("index")
+        if not str(nxt).startswith("/"):
+            nxt = url_for("index")
+        resp = make_response(redirect(nxt))
+        if i18n.has(code):
+            resp.set_cookie("lang", code, max_age=365 * 86400, samesite="Lax")
+        return resp
 
     # ---- 首页：默认进入「智能巡检」
     @app.route("/")
@@ -1912,6 +1956,7 @@ def create_app() -> Flask:
     def settings_save():
         keys = [
             "site_title",
+            "default_language",
             "app_log_level",
             "allowed_ips",
             "default_model",
@@ -1935,8 +1980,28 @@ def create_app() -> Flask:
         for key in ("sanitize_enabled", "warn_push_enabled", "notify_oversize_enabled", "notify_ambiguous_enabled"):
             set_setting_versioned(key, "true" if request.form.get(key) else "false", g.ip)
         apply_log_level(models.get_setting("app_log_level", "INFO"))
+        i18n.set_fallback(models.get_setting("default_language", "zh-CN") or "zh-CN")
         flash("设置已保存", "success")
         return redirect(url_for("settings_page"))
+
+    @app.route("/settings/reload_locales", methods=["POST"])
+    def settings_reload_locales():
+        i18n.reload()
+        i18n.set_fallback(models.get_setting("default_language", "zh-CN") or "zh-CN")
+        with models.db() as conn:
+            models.write_audit(conn, g.ip, "update", "setting", "default_language", "reload_locales", {"loaded": [x["code"] for x in i18n.languages()]})
+        flash("语言包已重新加载", "success")
+        return redirect(url_for("settings_page"))
+
+    @app.route("/settings/locale_template")
+    def settings_locale_template():
+        from flask import Response
+
+        payload = json.dumps(i18n.template_dict(), ensure_ascii=False, indent=2, sort_keys=True)
+        return Response(
+            payload, mimetype="application/json",
+            headers={"Content-Disposition": "attachment; filename=locale_template.json"},
+        )
 
     @app.route("/settings/sanitize", methods=["POST"])
     def settings_sanitize():

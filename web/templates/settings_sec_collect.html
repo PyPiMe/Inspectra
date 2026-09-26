@@ -1,7 +1,7 @@
-<div class="col-md-4"><label class="form-label">采集并发数</label>
+<div class="col-md-4"><label class="form-label">{{ t('settings.concurrency') }}</label>
   <input class="form-control" name="concurrency" value="{{ settings.concurrency }}">
-  <div class="form-text">1–30，SSH 与 Prometheus 采集共用的线程池大小。</div></div>
-<div class="col-md-4"><label class="form-label">SSH 连接超时</label>
-  <div class="input-group"><input class="form-control" name="ssh_connect_timeout" value="{{ settings.ssh_connect_timeout }}"><span class="input-group-text">秒</span></div></div>
-<div class="col-md-4"><label class="form-label">SSH 命令超时</label>
-  <div class="input-group"><input class="form-control" name="ssh_command_timeout" value="{{ settings.ssh_command_timeout }}"><span class="input-group-text">秒</span></div></div>
+  <div class="form-text">{{ t('settings.concurrency_hint') }}</div></div>
+<div class="col-md-4"><label class="form-label">{{ t('settings.ssh_connect_timeout') }}</label>
+  <div class="input-group"><input class="form-control" name="ssh_connect_timeout" value="{{ settings.ssh_connect_timeout }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></div>
+<div class="col-md-4"><label class="form-label">{{ t('settings.ssh_command_timeout') }}</label>
+  <div class="input-group"><input class="form-control" name="ssh_command_timeout" value="{{ settings.ssh_command_timeout }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></div>

@@ -1,6 +1,11 @@
-<div class="col-md-8"><label class="form-label">站点标题</label>
+<div class="col-md-6"><label class="form-label">{{ t('settings.site_title') }}</label>
   <input class="form-control" name="site_title" value="{{ settings.site_title or 'PyPiMeOps' }}" placeholder="PyPiMeOps">
-  <div class="form-text">显示在页面左上角与浏览器标题。</div></div>
-<div class="col-12"><label class="form-label">IP 白名单</label>
+  <div class="form-text">{{ t('settings.site_title_hint') }}</div></div>
+<div class="col-md-6"><label class="form-label">{{ t('settings.default_language') }}</label>
+  <select class="form-select" name="default_language">
+    {% for l in languages %}<option value="{{ l.code }}" {{ 'selected' if settings.default_language == l.code else '' }}>{{ l.name }}</option>{% endfor %}
+  </select>
+  <div class="form-text">{{ t('settings.default_language_hint') }}</div></div>
+<div class="col-12"><label class="form-label">{{ t('settings.whitelist') }}</label>
   <textarea class="form-control" name="allowed_ips" rows="2">{{ settings.allowed_ips }}</textarea>
-  <div class="form-text">逗号/换行分隔，支持 CIDR；留空=不限制（由前端防火墙兜底）。</div></div>
+  <div class="form-text">{{ t('settings.whitelist_hint') }}</div></div>

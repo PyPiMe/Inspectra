@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="{{ current_lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,21 +18,31 @@
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
         {% set items = [
-          ('chatbot_page','智能巡检','/chatbot'), ('dashboard','仪表盘','/dashboard'),
-          ('groups','分组','/groups'), ('servers','服务器','/servers'),
-          ('datasources','数据源','/datasources'), ('credentials','凭据','/credentials'),
-          ('scripts','脚本','/scripts'), ('models_page','模型','/models'),
-          ('notifications','通知','/notifications'), ('schedules','定时任务','/schedules'),
-          ('run_page','立即执行','/run'), ('reports','报告','/reports'),
-          ('audit_logs','审计日志','/audit-logs'), ('backups','备份恢复','/backups'),
-          ('logs_page','应用日志','/logs'), ('settings_page','设置','/settings')
+          ('chatbot_page','nav.chatbot','/chatbot'), ('dashboard','nav.dashboard','/dashboard'),
+          ('groups','nav.groups','/groups'), ('servers','nav.servers','/servers'),
+          ('datasources','nav.datasources','/datasources'), ('credentials','nav.credentials','/credentials'),
+          ('scripts','nav.scripts','/scripts'), ('models_page','nav.models','/models'),
+          ('notifications','nav.notifications','/notifications'), ('schedules','nav.schedules','/schedules'),
+          ('run_page','nav.run','/run'), ('reports','nav.reports','/reports'),
+          ('audit_logs','nav.audit','/audit-logs'), ('backups','nav.backups','/backups'),
+          ('logs_page','nav.logs','/logs'), ('settings_page','nav.settings','/settings')
         ] %}
-        {% for ep, label, href in items %}
-          <li class="nav-item"><a class="nav-link {{ 'active' if nav_active == ep else '' }}" href="{{ href }}">{{ label }}</a></li>
+        {% for ep, key, href in items %}
+          <li class="nav-item"><a class="nav-link {{ 'active' if nav_active == ep else '' }}" href="{{ href }}">{{ t(key) }}</a></li>
         {% endfor %}
       </ul>
-      <span class="navbar-text small">
-        {% if engine_running %}<span class="badge bg-warning text-dark me-2">巡检进行中</span>{% endif %}
+      <ul class="navbar-nav">
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">{{ t('common.language') }}</a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            {% for l in languages %}
+            <li><a class="dropdown-item {{ 'active' if l.code == current_lang else '' }}" href="{{ url_for('set_language', code=l.code, next=request.path) }}">{{ l.name }}{% if l.code == current_lang %} ✓{% endif %}</a></li>
+            {% endfor %}
+          </ul>
+        </li>
+      </ul>
+      <span class="navbar-text small ms-2">
+        {% if engine_running %}<span class="badge bg-warning text-dark me-2">{{ t('banner.running') }}</span>{% endif %}
         {{ client_ip }}
       </span>
     </div>
@@ -42,10 +52,10 @@
 <div class="container-fluid py-3">
   {% if whitelist_empty and not whitelist_ack %}
   <div class="alert alert-warning d-flex justify-content-between align-items-center">
-    <div><strong>安全提示：</strong>应用层 IP 白名单为空。请由前端防火墙（ufw/iptables）完成访问控制。</div>
+    <div><strong>{{ t('banner.whitelist_title') }}</strong>{{ t('banner.whitelist_body') }}</div>
     <form method="post" action="{{ url_for('whitelist_ack') }}" class="m-0">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-sm btn-dark">我已知晓</button>
+      <button class="btn btn-sm btn-dark">{{ t('banner.ack') }}</button>
     </form>
   </div>
   {% endif %}
@@ -61,6 +71,7 @@
   {% block content %}{% endblock %}
 </div>
 
+  <script>window.__I18N = {{ js_i18n | tojson }}; window.__LANG = {{ current_lang | tojson }};</script>
   <script src="{{ url_for('static', filename='vendor/bootstrap.bundle.min.js') }}"></script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 {% block scripts %}{% endblock %}

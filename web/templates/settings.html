@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}设置{% endblock %}
+{% block title %}{{ t('settings.title') }}{% endblock %}
 {% block content %}
-<h4>设置</h4>
+<h4>{{ t('settings.title') }}</h4>
 
 <ul class="nav nav-tabs flex-nowrap overflow-auto" id="settingsTabs" role="tablist">
-  {% for tid, label in [('t-basic','基本'),('t-model','模型与数据'),('t-collect','采集与数据保留')] %}
+  {% for tid, key in [('t-basic','settings.tab_basic'),('t-model','settings.tab_model'),('t-collect','settings.tab_collect')] %}
   <li class="nav-item" role="presentation">
-    <button class="nav-link text-nowrap {{ 'active' if loop.first else '' }}" type="button" data-bs-toggle="tab" data-bs-target="#{{ tid }}">{{ label }}</button>
+    <button class="nav-link text-nowrap {{ 'active' if loop.first else '' }}" type="button" data-bs-toggle="tab" data-bs-target="#{{ tid }}">{{ t(key) }}</button>
   </li>
   {% endfor %}
 </ul>
@@ -15,28 +15,35 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <div class="tab-content border border-top-0 rounded-bottom p-3">
     <div class="tab-pane fade show active" id="t-basic">
-      <h6 class="text-muted">常规</h6>
+      <h6 class="text-muted">{{ t('settings.section_general') }}</h6>
       <div class="row g-2 mb-2">{% include "settings_sec_general.html" %}</div>
       <hr>
-      <h6 class="text-muted">通知与推送</h6>
+      <h6 class="text-muted">{{ t('settings.section_notify') }}</h6>
       <div class="row g-2">{% include "settings_sec_notify.html" %}</div>
     </div>
     <div class="tab-pane fade" id="t-model">
       <div class="row g-2">{% include "settings_sec_model.html" %}</div>
     </div>
     <div class="tab-pane fade" id="t-collect">
-      <h6 class="text-muted">采集与 SSH</h6>
+      <h6 class="text-muted">{{ t('settings.section_collect') }}</h6>
       <div class="row g-2 mb-2">{% include "settings_sec_collect.html" %}</div>
       <hr>
-      <h6 class="text-muted">数据保留与清理</h6>
+      <h6 class="text-muted">{{ t('settings.section_retention') }}</h6>
       {% include "settings_sec_retention.html" %}
     </div>
   </div>
-  <div class="position-sticky bottom-0 bg-body border-top py-2 mt-3 d-flex align-items-center gap-2" style="z-index: 5;">
-    <button class="btn btn-primary" type="submit">保存更改</button>
-    <span class="small text-muted">当前页签内的设置修改后请保存</span>
+  <div class="position-sticky bottom-0 bg-body border-top py-2 mt-3 d-flex align-items-center gap-2 flex-wrap" style="z-index: 5;">
+    <button class="btn btn-primary" type="submit">{{ t('common.save_changes') }}</button>
   </div>
 </form>
+
+<div class="mt-2 d-flex align-items-center gap-2 flex-wrap">
+  <form method="post" action="{{ url_for('settings_reload_locales') }}" class="d-inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button class="btn btn-outline-secondary btn-sm">{{ t('settings.reload_locales') }}</button>
+  </form>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('settings_locale_template') }}">{{ t('settings.download_template') }}</a>
+</div>
 {% endblock %}
 
 {% block scripts %}
