@@ -353,26 +353,11 @@ def _analyze_batch(
 
 # ------------------------------------------------------------ 报告
 
-_META_PAREN_RE = re.compile(r"\(([^)]*)\)\s*$")
-_META_KV_RE = re.compile(r"\b(MODE|UNIT|WINDOW|STEP|THRESHOLD)\s*=\s*([^,\)]+)")
-
-_STATUS_CN = {"OK": "正常", "WARN": "警告", "FAIL": "失败", "ERROR": "异常", "UNKNOWN": "未知"}
+_STATUS_CN = {"OK": "正常", "WARN": "警告", "FAIL": "失败", "ERROR": "异常", "UNKNOWN": "未知", "INFO": "信息"}
 _SOURCE_CN = {"prometheus": "Prometheus", "ssh": "SSH"}
 _MODE_CN = {"instant": "即时", "range": "区间"}
-
-
-def _split_meta(output: str) -> tuple[list[str], dict[str, str]]:
-    """拆分采集输出：首行 `# 名称 (MODE=..,UNIT=..)` 为元数据，其余为数据行。"""
-    lines = (output or "").splitlines()
-    meta: dict[str, str] = {}
-    data = lines
-    if lines and lines[0].lstrip().startswith("#"):
-        m = _META_PAREN_RE.search(lines[0])
-        if m:
-            for k, v in _META_KV_RE.findall(m.group(1)):
-                meta[k] = v.strip()
-        data = lines[1:]
-    return data, meta
+_ITEM_STATUS_CN = {"OK": "正常", "INFO": "信息", "WARN": "警告", "FAIL": "失败"}
+_META_KEYS = ("NAME", "MODE", "WINDOW", "STEP", "THRESHOLD", "WARN", "UNIT", "DISPLAY")
 
 
 def _fmt_human_value(item: str, val_str: str) -> str:
@@ -394,71 +379,37 @@ def _fmt_human_value(item: str, val_str: str) -> str:
     return val_str
 
 
-def _kv_table(data_lines: list[str]) -> list[str] | None:
-    """若所有非空数据行都是 `... = 值` 形式，则渲染为 Markdown 表格；否则返回 None。"""
-    rows: list[tuple[str, str, str]] = []
-    for line in data_lines:
-        if not line.strip():
-            continue
-        left, sep, val = line.rpartition(" = ")
-        if not sep or not val.strip():
-            return None
-        toks = left.split()
-        inst = toks[0] if (toks and "=" not in toks[0]) else ""
-        extras = [t.split("=", 1)[1] for t in toks if "=" in t]
-        item = " ".join(extras) if extras else "-"
-        rows.append((inst, item, _fmt_human_value(item, val.strip())))
-    if not rows:
-        return None
-    out: list[str] = ["| 项 | 值 |", "|----|----|"]
-    out += [f"| {item} | {val} |" for _, item, val in rows]
-    return out
-
-
-def _auto_summary(data_lines: list[str]) -> str | None:
-    """对已知概览类输出生成确定性“人话摘要”（当前支持 Nginx 概览）。"""
-    kv: dict[str, str] = {}
-    for line in data_lines:
-        if not line.strip():
-            continue
-        left, sep, val = line.rpartition(" = ")
-        if not sep:
-            continue
-        for t in left.split():
-            if "=" in t:
-                k, _, v = t.partition("=")
-                kv[v] = val.strip()
-
-    def fv(v: str) -> str:
+def _disp_value(it: dict[str, Any], default_unit: str = "") -> str:
+    """统一人话模板的「值」列：值+单位；越界时附超限幅度（绝对差）。"""
+    val = str(it.get("value", ""))
+    unit = (it.get("unit") or default_unit or "").strip()
+    if unit.lower() == "mixed":
+        unit = ""
+    shown = _fmt_human_value(it.get("name", ""), val)
+    if unit:
         try:
-            f = float(v)
+            shown = f"{collectors._fmt_num(float(val))} {unit}"
         except (ValueError, TypeError):
-            return v
-        if f == int(f):
-            return f"{int(f):,}" if abs(f) >= 10000 else str(int(f))
-        return f"{round(f, 2)}"
+            shown = f"{val} {unit}".strip()
+    if it.get("status") in ("WARN", "FAIL"):
+        cond = collectors.parse_condition(it.get("threshold") or "")
+        if cond:
+            try:
+                shown += f"（超出 {collectors._fmt_num(abs(float(val) - float(cond[1])))}）"
+            except (ValueError, TypeError):
+                pass
+    return shown
 
-    if "存活(1=正常)" in kv and "活跃连接" in kv:
-        up = kv.get("存活(1=正常)", "")
-        alive = "正常" if up in ("1", "1.0") else "异常"
-        parts = [f"存活 {fv(up)}（{alive}）"]
-        seg = f"活跃连接 {fv(kv['活跃连接'])}"
-        extra = []
-        if "写入中连接" in kv:
-            extra.append(f"写入 {fv(kv['写入中连接'])}")
-        if "等待连接" in kv:
-            extra.append(f"等待 {fv(kv['等待连接'])}")
-        if extra:
-            seg += "（" + "、".join(extra) + "）"
-        parts.append(seg)
-        if "QPS(请求/秒)" in kv:
-            parts.append(f"QPS≈{fv(kv['QPS(请求/秒)'])}/秒")
-        if "新建连接/秒" in kv:
-            parts.append(f"新建连接≈{fv(kv['新建连接/秒'])}/秒")
-        if "累计请求数" in kv:
-            parts.append(f"累计请求 {fv(kv['累计请求数'])}")
-        return "；".join(parts) + "。"
-    return None
+
+def _items_table(items: list[dict[str, Any]], default_unit: str = "") -> list[str]:
+    out = ["| 项 | 值 | 阈值 | 判定 |", "|----|----|------|------|"]
+    for it in items:
+        thr = it.get("threshold") or it.get("warn") or ""
+        out.append(
+            f"| {it.get('name', '-')} | {_disp_value(it, default_unit)} | {thr or '-'} | "
+            f"{_ITEM_STATUS_CN.get(it.get('status'), it.get('status'))} |"
+        )
+    return out
 
 
 def _report_markdown(ctx: dict[str, Any]) -> str:
@@ -485,59 +436,64 @@ def _report_markdown(ctx: dict[str, Any]) -> str:
             line += f"，跳过 {ctx['skipped_count']} 台（未配置可执行项）"
         lines.append(line)
     lines.append("")
-    lines.append("## 服务器汇总")
+    lines.append("## 应用汇总")
     lines.append("")
-    lines.append("| 服务器 | 状态 | 说明 |")
-    lines.append("|--------|------|------|")
-    for s in ctx["servers"]:
-        note = s.get("conclusion") or ""
-        if s.get("conflict"):
-            note = (note + "（模型与引擎判定分歧）").strip()
-        if s.get("uncertain"):
-            note = (note + "（模型不确定）").strip()
-        lines.append(f"| {s['name']} | {s['status']} | {(note or '—').replace('|', '/')} |")
+    lines.append("| 应用 | 状态 | 说明 |")
+    lines.append("|------|------|------|")
+    app_groups = ctx.get("app_groups") or []
+    for a in app_groups:
+        lines.append(f"| {a['name']} | {_STATUS_CN.get(a['status'], a['status'])} | — |")
     lines.append("")
     lines.append("## 明细")
-    for s in ctx["servers"]:
+    for a in app_groups:
         lines.append("")
-        lines.append(f"### {s['name']} — {s['status']}")
-        if s.get("conclusion"):
-            lines.append(f"说明：{s['conclusion']}")
-        for r in s["results"]:
-            raw = r.get("output") or ""
-            data_lines, meta = _split_meta(raw)
+        lines.append(f"### 应用：{a['name']} — {_STATUS_CN.get(a['status'], a['status'])}")
+        for s in a["servers"]:
             lines.append("")
-            lines.append(f"#### {r['script_name']}")
-            bits = [
-                f"状态 {_STATUS_CN.get(r['status'], r['status'])}",
-                f"来源 {_SOURCE_CN.get(r['source'], r['source'])}",
-            ]
-            mode = (meta.get("MODE") or "").lower()
-            if mode:
-                bits.append(f"查询 {_MODE_CN.get(mode, meta.get('MODE'))}")
-            unit = (meta.get("UNIT") or "").strip()
-            if unit and unit.lower() != "mixed":
-                bits.append(f"单位 {unit}")
-            if meta.get("THRESHOLD"):
-                bits.append(f"阈值 {meta['THRESHOLD']}")
-            lines.append("> " + " ｜ ".join(bits))
-            if r.get("error"):
-                lines.append(f"错误：{r['error']}")
-            hits = r.get("sanitize_hits") or ""
-            if hits and hits != "未命中":
-                lines.append(f"脱敏：{hits}")
-            table = _kv_table(data_lines)
-            lines.append("")
-            if table:
-                lines.extend(table)
-                summ = _auto_summary(data_lines)
-                if summ:
-                    lines.append("")
-                    lines.append(f"> **摘要**：{summ}")
-            else:
-                lines.append("```text")
-                lines.append(raw.rstrip("\n"))
-                lines.append("```")
+            lines.append(f"#### 服务器：{s['name']} — {_STATUS_CN.get(s['status'], s['status'])}")
+            note = s.get("conclusion") or ""
+            if s.get("conflict"):
+                note = (note + "（模型与引擎判定分歧）").strip()
+            if s.get("uncertain"):
+                note = (note + "（模型不确定）").strip()
+            if note:
+                lines.append(f"说明：{note}")
+            if not s["results"] and not note:
+                lines.append("（未执行：无 Shell 脚本且无启用的 Prometheus 数据源绑定）" if s.get("skipped") else "（无结果）")
+            for r in s["results"]:
+                raw = r.get("output") or ""
+                meta = r.get("meta") or {}
+                lines.append("")
+                lines.append(f"##### {r['script_name']}")
+                bits = [
+                    f"状态 {_STATUS_CN.get(r['status'], r['status'])}",
+                    f"来源 {_SOURCE_CN.get(r['source'], r['source'])}",
+                ]
+                mode = (meta.get("MODE") or "").lower()
+                if mode:
+                    bits.append(f"查询 {_MODE_CN.get(mode, meta.get('MODE'))}")
+                unit = (meta.get("UNIT") or "").strip()
+                if unit and unit.lower() != "mixed":
+                    bits.append(f"单位 {unit}")
+                if meta.get("THRESHOLD"):
+                    bits.append(f"阈值 {meta['THRESHOLD']}")
+                lines.append("> " + " ｜ ".join(bits))
+                if r.get("error"):
+                    lines.append(f"错误：{r['error']}")
+                hits = r.get("sanitize_hits") or ""
+                if hits and hits != "未命中":
+                    lines.append(f"脱敏：{hits}")
+                lines.append("")
+                items = r.get("items") or []
+                if items:
+                    lines.extend(_items_table(items, unit))
+                    if not any(it.get("threshold") or it.get("warn") for it in items):
+                        lines.append("")
+                        lines.append("> 未设阈值（仅展示）")
+                else:
+                    lines.append("```text")
+                    lines.append(raw.rstrip("\n"))
+                    lines.append("```")
     if ctx.get("notify_failures"):
         lines.append("")
         lines.append(f"> 告警发送失败：{ctx['notify_failures']}")
@@ -599,6 +555,24 @@ def run(
         settings = models.get_settings()
         secrets = get_config().load_secrets()
         maps = _load_maps()
+
+        # 应用映射：成员可含服务器或分组；一台服务器可归属多个应用；无归属进「未归属」
+        _apps = {int(a["id"]): a for a in models.fetch_all("applications") if a.get("enabled", 1)}
+        _group_servers: dict[int, set[int]] = {}
+        for _s in maps["servers"].values():
+            _gid = int(_s.get("group_id") or 0)
+            if _gid:
+                _group_servers.setdefault(_gid, set()).add(int(_s["id"]))
+        server_apps: dict[int, list[str]] = {}
+        for _m in models.fetch_all("application_members"):
+            _app = _apps.get(int(_m["application_id"]))
+            if not _app:
+                continue
+            if _m["member_type"] == "server":
+                server_apps.setdefault(int(_m["member_id"]), []).append(_app["name"])
+            elif _m["member_type"] == "group":
+                for _sid in _group_servers.get(int(_m["member_id"]), set()):
+                    server_apps.setdefault(_sid, []).append(_app["name"])
 
         # 模型分析模式必须有可用模型；仅原始结果模式不需要
         model = None
@@ -824,6 +798,7 @@ def run(
                         issues.append(
                             {
                                 "status": r.status,
+                                "app": "、".join(server_apps.get(sid) or ["未归属"]),
                                 "server": server.get("hostname") or server.get("ip"),
                                 "script": r.script_name,
                                 "message": r.error or (m or {}).get("conclusion", ""),
@@ -833,6 +808,7 @@ def run(
                 issues.append(
                     {
                         "status": "UNKNOWN",
+                        "app": "、".join(server_apps.get(sid) or ["未归属"]),
                         "server": server.get("hostname") or server.get("ip"),
                         "script": "模型判定",
                         "message": (m or {}).get("conclusion", "模型不确定"),
@@ -858,6 +834,8 @@ def run(
                             "error": r.error,
                             "output": r.meta.get("output", r.output),
                             "sanitize_hits": sanitize.summarize_hits(r.meta.get("sanitize_hits", [])),
+                            "items": r.meta.get("items") or [],
+                            "meta": {k: r.meta.get(k) for k in _META_KEYS},
                         }
                         for r in rs
                     ],
@@ -886,6 +864,18 @@ def run(
             "issues": issues,
             "model_errors": model_errors,
         }
+        _app_buckets: dict[str, list[dict[str, Any]]] = {}
+        for s in servers_out:
+            for nm in (server_apps.get(int(s["id"])) or ["未归属"]):
+                _app_buckets.setdefault(nm, []).append(s)
+        app_groups = [
+            {
+                "name": nm,
+                "servers": _app_buckets[nm],
+                "status": collectors.aggregate_status([x["status"] for x in _app_buckets[nm]]),
+            }
+            for nm in sorted(_app_buckets, key=lambda x: (x == "未归属", x))
+        ]
         ctx = {
             "run_id": run_id,
             "trigger": trigger,
@@ -895,6 +885,7 @@ def run(
             "policy": policy,
             "targets_label": targets_label,
             "servers": servers_out,
+            "app_groups": app_groups,
             "selected_count": len(servers),
             "executed_count": len(servers_out) - skipped_count,
             "skipped_count": skipped_count,

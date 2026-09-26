@@ -43,7 +43,7 @@
   <tbody>
   {% for s in scripts %}
     <tr>
-      <td><a href="{{ url_for('script_detail', sid=s.id) }}">{{ s.name }}</a></td>
+      <td><a href="{{ url_for('script_detail', sid=s.id) }}">{{ s.name }}</a>{% if s.meta_warn %} <span class="badge bg-warning text-dark" title="{{ t('scripts.meta_warning') }}">!</span>{% endif %}</td>
       <td><span class="badge bg-{{ 'primary' if s.kind=='shell' else 'info' }}">{{ s.kind }}</span></td>
       <td>{{ s.filename }}</td>
       <td class="small">{{ s.desc }}</td>

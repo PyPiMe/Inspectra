@@ -179,8 +179,13 @@ def build_alert(summary: dict[str, Any], targets_label: str = "") -> tuple[str, 
     ]
     issues = summary.get("issues") or []
     if issues:
-        for it in issues[:100]:
-            lines.append(f"- [{it.get('status')}] {it.get('server')} / {it.get('script')}: {it.get('message', '')}")
+        by_app: dict[str, list[dict[str, Any]]] = {}
+        for it in issues[:200]:
+            by_app.setdefault(it.get("app") or "未归属", []).append(it)
+        for app, items in by_app.items():
+            lines.append(f"【{app}】")
+            for it in items[:100]:
+                lines.append(f"- [{it.get('status')}] {it.get('server')} / {it.get('script')}: {it.get('message', '')}")
     else:
         lines.append("- （无）")
     if summary.get("notify_failures"):

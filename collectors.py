@@ -72,7 +72,10 @@ def parse_duration(text: str) -> int | None:
 
 
 def parse_script_meta(content: str) -> dict[str, Any]:
-    meta: dict[str, Any] = {"NAME": "", "MODE": "instant", "WINDOW": "", "STEP": "1m", "THRESHOLD": "", "UNIT": ""}
+    meta: dict[str, Any] = {
+        "NAME": "", "MODE": "instant", "WINDOW": "", "STEP": "1m",
+        "THRESHOLD": "", "WARN": "", "UNIT": "", "DISPLAY": "",
+    }
     for line in (content or "").splitlines():
         s = line.strip()
         if not s.startswith("#"):
@@ -87,30 +90,162 @@ def parse_script_meta(content: str) -> dict[str, Any]:
     return meta
 
 
-_THRESHOLD_RE = re.compile(r"^\s*(>=|<=|==|!=|>|<)\s*(-?\d+(?:\.\d+)?)\s*$")
+_NUM_CMP_RE = re.compile(r"^\s*(>=|<=|==|!=|>|<)\s*(-?\d+(?:\.\d+)?)\s*$")
+_STR_CMP_RE = re.compile(r"^\s*(==|!=)\s*(\S+)\s*$")
+_ITEM_MODS = ("threshold", "warn", "unit")
+
+
+def parse_condition(text: str) -> tuple[str, str] | None:
+    """解析阈值条件：数值比较（>90）或字符串比较（!=active）。"""
+    m = _NUM_CMP_RE.match(text or "")
+    if m:
+        return m.group(1), m.group(2)
+    m = _STR_CMP_RE.match(text or "")
+    if m:
+        return m.group(1), m.group(2)
+    return None
 
 
 def parse_threshold(text: str) -> tuple[str, float] | None:
-    m = _THRESHOLD_RE.match(text or "")
+    """兼容旧接口：仅数值阈值。"""
+    m = _NUM_CMP_RE.match(text or "")
     if not m:
         return None
     return m.group(1), float(m.group(2))
 
 
-def eval_threshold(op: str, limit: float, value: float) -> bool:
-    if op == ">":
-        return value > limit
-    if op == ">=":
-        return value >= limit
-    if op == "<":
-        return value < limit
-    if op == "<=":
-        return value <= limit
+def _as_float(v: Any) -> float | None:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def eval_condition(op: str, limit: str, value: str) -> bool:
+    """判断 value 是否越界（True=越界）。数值优先，否则字符串相等/不等。"""
+    lf, vf = _as_float(limit), _as_float(value)
+    if lf is not None and vf is not None:
+        return {
+            ">": vf > lf, ">=": vf >= lf, "<": vf < lf,
+            "<=": vf <= lf, "==": vf == lf, "!=": vf != lf,
+        }.get(op, False)
     if op == "==":
-        return value == limit
+        return str(value) == str(limit)
     if op == "!=":
-        return value != limit
+        return str(value) != str(limit)
     return False
+
+
+def eval_threshold(op: str, limit: float, value: float) -> bool:
+    """兼容旧接口：数值阈值判定。"""
+    return eval_condition(op, str(limit), str(value))
+
+
+def condition_label(op: str, limit: str) -> str:
+    return f"{op}{limit}"
+
+
+def is_display(meta: dict[str, Any]) -> bool:
+    """`# DISPLAY: true` 表示仅展示、不判定。"""
+    return str((meta or {}).get("DISPLAY") or "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def parse_items(output: str) -> list[dict[str, Any]]:
+    """把结构化输出解析为条目。
+
+    - PromQL：`<instance> item=<名> threshold=>90 = <值>`（修饰符从标签提取，`item` 作名称）
+    - Shell：`key=value [threshold=>90] [warn=>80] [unit=%]`，一行可含多对
+    """
+    items: list[dict[str, Any]] = []
+    for line in (output or "").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        # PromQL 风格：`... = <值>`（等号两侧有空格；label 可为空）
+        m = re.match(r"^\s*(?P<left>.*?)\s+=\s+(?P<val>\S+)\s*$", line)
+        if m:
+            mods: dict[str, str] = {}
+            item_name = ""
+            inst = ""
+            others: list[str] = []
+            for t in m.group("left").split():
+                if "=" in t:
+                    k, _, v = t.partition("=")
+                    if k in _ITEM_MODS:
+                        mods[k] = v
+                    elif k == "item":
+                        item_name = v
+                    else:
+                        others.append(v)
+                else:
+                    inst = t
+            name = item_name or " ".join(others) or inst or "-"
+            items.append({"name": name, "value": m.group("val"), **mods})
+            continue
+        s = line.strip()
+        mods = {}
+        pairs: list[tuple[str, str]] = []
+        for tok in s.split():
+            if "=" not in tok:
+                continue
+            k, _, v = tok.partition("=")
+            if k in _ITEM_MODS:
+                mods[k] = v
+            else:
+                pairs.append((k, v))
+        for k, v in pairs:
+            items.append({"name": k, "value": v, **mods})
+    return items
+
+
+def evaluate(output: str, meta: dict[str, Any]) -> tuple[str, list[dict[str, Any]]]:
+    """通用求值：解析条目并按 CRIT/WARN 阈值判定，返回 (整体状态, 条目列表)。
+
+    - `DISPLAY: true` → 仅展示（条目 INFO、整体 OK）
+    - 每条目可用行内 `threshold=`/`warn=` 覆盖头部
+    - 整体状态 = 各条目最高严重级（FAIL > WARN > OK）
+    """
+    meta = meta or {}
+    display = is_display(meta)
+    items = parse_items(output)
+    if not items:
+        return ("OK" if display else "UNKNOWN"), []
+    crit = parse_condition(meta.get("THRESHOLD") or "")
+    warn = parse_condition(meta.get("WARN") or "")
+    overall = "OK"
+    for it in items:
+        if display:
+            it["status"] = "INFO"
+            continue
+        t = parse_condition(it.get("threshold") or "") or crit
+        w = parse_condition(it.get("warn") or "") or warn
+        if t:
+            it["threshold"] = condition_label(*t)
+        if w:
+            it["warn"] = condition_label(*w)
+        if t and eval_condition(t[0], t[1], it["value"]):
+            it["status"] = "FAIL"
+        elif w and eval_condition(w[0], w[1], it["value"]):
+            it["status"] = "WARN"
+        else:
+            it["status"] = "OK"
+        if severity_rank(it["status"]) > severity_rank(overall):
+            overall = it["status"]
+    return overall, items
+
+
+def meta_warnings(content: str, kind: str = "promql") -> list[str]:
+    """元数据警告（不阻断保存）：NAME 必填；THRESHOLD 建议；纯信息类用 DISPLAY 豁免。"""
+    meta = parse_script_meta(content)
+    if is_display(meta):
+        return []
+    warns: list[str] = []
+    if not meta.get("NAME"):
+        warns.append("缺少 `# NAME`")
+    if not meta.get("THRESHOLD"):
+        warns.append("缺少 `# THRESHOLD`（纯信息类请加 `# DISPLAY: true`）")
+    if not meta.get("UNIT"):
+        warns.append("建议补充 `# UNIT`")
+    return warns
 
 
 def validate_promql(content: str) -> list[str]:
@@ -127,8 +262,9 @@ def validate_promql(content: str) -> list[str]:
             errors.append("`MODE=range` 需要合法 `# WINDOW`（如 5m）")
         if meta["STEP"] and parse_duration(meta["STEP"]) is None:
             errors.append("`# STEP` 需为合法时长（如 1m）")
-    if meta["THRESHOLD"] and parse_threshold(meta["THRESHOLD"]) is None:
-        errors.append("`# THRESHOLD` 格式应为 `>90` / `<=1` 等单条件")
+    for key in ("THRESHOLD", "WARN"):
+        if meta.get(key) and parse_condition(meta[key]) is None:
+            errors.append(f"`# {key}` 格式应为 `>90` / `<=1` / `!=active` 等单条件")
     return errors
 
 
@@ -262,6 +398,12 @@ class SSHCollector:
                 base.status = "OK"
                 if err.strip():
                     base.output = out + ("\n" if out and not out.endswith("\n") else "") + f"[stderr]\n{err}"
+                base.meta = parse_script_meta(command)
+                status, items = evaluate(base.output, base.meta)
+                if items:
+                    base.status = status
+                    base.hard_fact = status == "FAIL"
+                    base.meta["items"] = items
         except paramiko.BadHostKeyException:
             base.status = "ERROR"
             base.hard_fact = True
@@ -496,20 +638,18 @@ class PrometheusCollector:
             return base
 
         lines = [f"{label} = {_fmt_num(value)}" for label, value in series_values]
-        threshold = parse_threshold(meta.get("THRESHOLD") or "")
-        if threshold:
-            op, limit = threshold
-            breached = [(lbl, v) for lbl, v in series_values if eval_threshold(op, limit, v)]
-            if breached:
-                base.status = "FAIL"
-                base.hard_fact = True
-                detail = "、".join(f"{lbl}={_fmt_num(v)}" for lbl, v in breached)
-                base.error = f"阈值越界（{op}{limit}）：{detail}"
-            else:
-                base.status = "OK"
-        else:
-            base.status = "OK"
         unit = meta.get("UNIT") or ""
         header = f"# {meta.get('NAME') or script.get('name') or 'query'} (MODE={mode}{', UNIT=' + unit if unit else ''})"
         base.output = header + "\n" + "\n".join(lines)
+        status, items = evaluate(base.output, meta)
+        base.status = status
+        base.hard_fact = status == "FAIL"
+        base.meta["items"] = items
+        if status == "FAIL":
+            breached = [it for it in items if it.get("status") == "FAIL"]
+            detail = "、".join(
+                f"{it['name']}={_fmt_num(_as_float(it['value'])) if _as_float(it['value']) is not None else it['value']}"
+                for it in breached
+            )
+            base.error = f"阈值越界：{detail}"
         return base

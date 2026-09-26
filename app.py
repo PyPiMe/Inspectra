@@ -1135,6 +1135,11 @@ def create_app() -> Flask:
             f"SELECT COUNT(*) AS c FROM scripts{clause}",
             params, page, per_page,
         )
+        for r in rows:
+            try:
+                r["meta_warn"] = bool(collectors.meta_warnings(backup.read_script(r), r.get("kind") or "shell"))
+            except Exception:  # noqa: BLE001
+                r["meta_warn"] = False
         return render_template(
             "scripts.html",
             scripts=rows, name=name, kind=kind, desc=desc, sort=sort,
@@ -1172,7 +1177,13 @@ def create_app() -> Flask:
         script = models.fetch_one("scripts", sid)
         if not script:
             abort(404)
-        return render_template("script_detail.html", script=script, content=backup.read_script(script))
+        content = backup.read_script(script)
+        return render_template(
+            "script_detail.html",
+            script=script,
+            content=content,
+            meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell"),
+        )
 
     @app.route("/scripts/save", methods=["POST"])
     def scripts_save():
@@ -1202,6 +1213,9 @@ def create_app() -> Flask:
             if errors:
                 flash("PromQL 校验失败：" + "；".join(errors), "danger")
                 return redirect(url_for("scripts"))
+        warns = collectors.meta_warnings(content, kind)
+        if warns:
+            flash("元数据不完整（已保存）：" + "；".join(warns), "warning")
         data = {
             "name": name,
             "filename": (request.form.get("filename") or "").strip(),
@@ -1229,7 +1243,7 @@ def create_app() -> Flask:
         kind = request.form.get("kind") or "shell"
         if kind == "promql":
             errors = collectors.validate_promql(content)
-            return jsonify({"ok": not errors, "errors": errors})
+            return jsonify({"ok": not errors, "errors": errors, "warnings": collectors.meta_warnings(content, kind)})
         import subprocess
         import tempfile
 
@@ -1238,7 +1252,11 @@ def create_app() -> Flask:
             tmp = fh.name
         try:
             proc = subprocess.run(["bash", "-n", tmp], capture_output=True, text=True)
-            return jsonify({"ok": proc.returncode == 0, "errors": [proc.stderr.strip()] if proc.returncode else []})
+            return jsonify({
+                "ok": proc.returncode == 0,
+                "errors": [proc.stderr.strip()] if proc.returncode else [],
+                "warnings": collectors.meta_warnings(content, kind) if proc.returncode == 0 else [],
+            })
         finally:
             os.unlink(tmp)
 

@@ -11,6 +11,11 @@
   <span id="specShell">{{ t('script_detail.shell_spec') | safe }}</span>
   <span id="specPromql" class="d-none">{{ t('script_detail.promql_spec') | safe }}</span>
 </div>
+{% if meta_warnings %}
+<div class="alert alert-warning small mb-2">
+  <strong>{{ t('scripts.meta_warning') }}</strong>：{{ meta_warnings | join('；') }}
+</div>
+{% endif %}
 
 <form id="scriptForm" method="post" action="{{ url_for('scripts_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
