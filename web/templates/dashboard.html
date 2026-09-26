@@ -4,6 +4,7 @@
 <div class="row g-3 mb-3">
   <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ servers|length }}</div><div class="text-muted small">{{ t('nav.servers') }}</div></div></div></div>
   <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ group_count }}</div><div class="text-muted small">{{ t('nav.groups') }}</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ application_count }}</div><div class="text-muted small">{{ t('nav.applications') }}</div></div></div></div>
   <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ script_count }}</div><div class="text-muted small">{{ t('nav.scripts') }}</div></div></div></div>
   <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ datasource_count }}</div><div class="text-muted small">{{ t('nav.datasources') }}</div></div></div></div>
   <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ model_count }}</div><div class="text-muted small">{{ t('nav.models') }}</div></div></div></div>
@@ -26,6 +27,22 @@
   </div>
 </div>
 {% endif %}
+
+<h5>{{ t('dashboard.app_health') }}</h5>
+<table class="table table-sm table-hover mb-4">
+  <thead><tr><th>{{ t('nav.applications') }}</th><th>{{ t('dashboard.server_count') }}</th><th>{{ t('common.status') }}</th></tr></thead>
+  <tbody>
+  {% for a in apps_health %}
+    <tr>
+      <td>{{ a.name }}</td>
+      <td>{{ a.server_count }}</td>
+      <td><span class="badge bg-{{ 'success' if a.status in ('OK', '正常') else ('warning' if a.status in ('WARN', '警告') else ('danger' if a.status in ('FAIL', '失败', 'ERROR', '异常') else 'secondary')) }}">{{ a.status }}</span></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="text-muted">{{ t('dashboard.no_apps') }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
 
 <h5>{{ t('dashboard.recent') }}</h5>
 <table class="table table-sm table-hover">

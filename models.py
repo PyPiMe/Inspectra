@@ -242,6 +242,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "sanitize_enabled": "true",
     "sanitize_rules": "",
     "warn_push_enabled": "true",
+    "require_script_metadata": "warn",
     "notify_oversize_enabled": "true",
     "notify_ambiguous_enabled": "true",
     "model_output_max_bytes": "8192",

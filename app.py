@@ -501,6 +501,14 @@ def create_app() -> Flask:
         servers = models.fetch_all("servers")
         latest = runs[0] if runs else None
         summary = json_or((latest or {}).get("summary"), {})
+        applications = [a for a in models.fetch_all("applications") if a.get("enabled", 1)]
+        apps_health = summary.get("apps") or []
+        if not apps_health:
+            amap = engine.application_servers()
+            apps_health = [
+                {"name": a["name"], "status": "-", "server_count": len(amap.get(int(a["id"]), []))}
+                for a in applications
+            ]
         status_counts: dict[str, int] = {}
         for s in servers:
             pass
@@ -511,7 +519,9 @@ def create_app() -> Flask:
             latest=latest,
             summary=summary,
             status_counts=status_counts,
+            apps_health=apps_health,
             group_count=len(models.fetch_all("groups")),
+            application_count=len(applications),
             script_count=len(models.fetch_all("scripts")),
             datasource_count=len(models.fetch_all("datasources")),
             model_count=len(models.fetch_all("models")),
@@ -1214,7 +1224,11 @@ def create_app() -> Flask:
                 flash("PromQL 校验失败：" + "；".join(errors), "danger")
                 return redirect(url_for("scripts"))
         warns = collectors.meta_warnings(content, kind)
-        if warns:
+        meta_level = models.get_setting("require_script_metadata", "warn")
+        if warns and meta_level == "enforce":
+            flash("元数据不完整，已阻止保存（强制模式）：" + "；".join(warns), "danger")
+            return redirect(url_for("script_detail", sid=sid) if sid else url_for("scripts"))
+        if warns and meta_level != "off":
             flash("元数据不完整（已保存）：" + "；".join(warns), "warning")
         data = {
             "name": name,
@@ -1524,6 +1538,8 @@ def create_app() -> Flask:
             groups=models.fetch_all("groups"),
             datasources=models.fetch_all("datasources"),
             scripts=models.fetch_all("scripts"),
+            applications=[a for a in models.fetch_all("applications") if a.get("enabled", 1)],
+            app_servers=engine.application_servers(),
             enabled_count=sum(1 for s in all_rows if s.get("enabled")),
             total_all=len(all_rows),
             q=q, enabled=enabled, page=page, pages=pages, total=total, per_page=per_page,
@@ -1560,6 +1576,7 @@ def create_app() -> Flask:
         targets = {
             "groups": parse_ids(request.form.getlist("target_groups")),
             "servers": parse_ids(request.form.getlist("target_servers")),
+            "applications": parse_ids(request.form.getlist("target_applications")),
             "datasources": parse_ids(request.form.getlist("target_datasources")),
             "all": bool(request.form.get("target_all")),
         }
@@ -1593,12 +1610,13 @@ def create_app() -> Flask:
             targets = {
                 "groups": parse_ids(request.form.getlist("target_groups")),
                 "servers": parse_ids(request.form.getlist("target_servers")),
+                "applications": parse_ids(request.form.getlist("target_applications")),
                 "datasources": parse_ids(request.form.getlist("target_datasources")),
                 "all": bool(request.form.get("target_all")),
             }
             scripts = parse_ids(request.form.getlist("scripts"))
-            if not targets.get("all") and not targets["groups"] and not targets["servers"]:
-                flash("请至少选择分组/服务器，或勾选全部", "danger")
+            if not targets.get("all") and not targets["groups"] and not targets["servers"] and not targets["applications"]:
+                flash("请至少选择应用/分组/服务器，或勾选全部", "danger")
                 return redirect(url_for("run_page"))
             # 显式勾选 = 覆盖：对未绑定该脚本的所选目标给出警告（不阻断）
             if scripts:
@@ -1661,6 +1679,8 @@ def create_app() -> Flask:
             datasources=models.fetch_all("datasources"),
             scripts=models.fetch_all("scripts"),
             script_targets=engine.script_server_bindings(),
+            applications=[a for a in models.fetch_all("applications") if a.get("enabled", 1)],
+            app_servers=engine.application_servers(),
             group_servers=group_servers,
             all_server_ids=all_server_ids,
             issue_server_ids=issue_server_ids,
@@ -2097,6 +2117,7 @@ def create_app() -> Flask:
             "report_retention_days",
             "backup_retention_days",
             "default_data_policy",
+            "require_script_metadata",
             "model_output_max_bytes",
             "model_batch_max_bytes",
             "ssh_connect_timeout",

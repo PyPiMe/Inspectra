@@ -70,6 +70,12 @@
     </select>
   </div>
   <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if (not s or s.enabled) else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
+  <div class="col-12"><label class="form-label">{{ t('schedules.target_applications') }}</label>
+    <select class="form-select" name="target_applications" multiple size="3">
+      {% set ta = json_or(s.targets_json, {}).get('applications', []) if s else [] %}
+      {% for ap in applications %}<option value="{{ ap.id }}" {{ 'selected' if ap.id in ta else '' }}>{{ ap.name }}</option>{% endfor %}
+    </select>
+  </div>
   <div class="col-12"><label class="form-label">{{ t('schedules.target_groups') }}</label>
     <select class="form-select" name="target_groups" multiple size="3">
       {% set tg = json_or(s.targets_json, {}).get('groups', []) if s else [] %}

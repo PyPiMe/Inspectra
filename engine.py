@@ -148,8 +148,36 @@ def _resolve_servers(targets: dict[str, Any], maps: dict[str, dict[int, dict[str
             for s in servers.values():
                 if int(s.get("group_id") or 0) == int(gid):
                     ids.add(int(s["id"]))
+        app_ids = [int(x) for x in (targets.get("applications") or [])]
+        if app_ids:
+            amap = application_servers(maps)
+            for aid in app_ids:
+                ids.update(amap.get(aid, []))
         chosen = [servers[i] for i in ids if i in servers and servers[i].get("enabled", 1)]
     return sorted(chosen, key=lambda s: int(s["id"]))
+
+
+def application_servers(maps: dict[str, dict[int, dict[str, Any]]] | None = None) -> dict[int, list[int]]:
+    """应用 → 成员展开后的服务器 id 列表（服务器成员 + 分组成员展开）。
+
+    Application id -> expanded member server ids (direct servers + group members).
+    """
+    maps = maps or _load_maps()
+    servers = maps["servers"]
+    grp: dict[int, list[int]] = {}
+    for s in servers.values():
+        gid = int(s.get("group_id") or 0)
+        if gid:
+            grp.setdefault(gid, []).append(int(s["id"]))
+    out: dict[int, set[int]] = {}
+    for m in models.fetch_all("application_members"):
+        aid = int(m["application_id"])
+        if m["member_type"] == "server":
+            out.setdefault(aid, set()).add(int(m["member_id"]))
+        elif m["member_type"] == "group":
+            for sid in grp.get(int(m["member_id"]), []):
+                out.setdefault(aid, set()).add(sid)
+    return {k: sorted(v) for k, v in out.items()}
 
 
 def _parse_ids(raw: Any) -> list[int]:
@@ -910,6 +938,18 @@ def run(
             run_status = "success"
 
         targets_label = "、".join(s["name"] for s in servers_out[:5]) + ("…" if len(servers_out) > 5 else "")
+        _app_buckets: dict[str, list[dict[str, Any]]] = {}
+        for s in servers_out:
+            for nm in (server_apps.get(int(s["id"])) or ["未归属"]):
+                _app_buckets.setdefault(nm, []).append(s)
+        app_groups = [
+            {
+                "name": nm,
+                "servers": _app_buckets[nm],
+                "status": collectors.aggregate_status([x["status"] for x in _app_buckets[nm]]),
+            }
+            for nm in sorted(_app_buckets, key=lambda x: (x == "未归属", x))
+        ]
         summary = {
             "status": run_status,
             "mode": mode,
@@ -923,19 +963,11 @@ def run(
             "uncertain_count": 0,
             "issues": issues,
             "model_errors": model_errors,
+            "apps": [
+                {"name": a["name"], "status": a["status"], "server_count": len(a["servers"])}
+                for a in app_groups
+            ],
         }
-        _app_buckets: dict[str, list[dict[str, Any]]] = {}
-        for s in servers_out:
-            for nm in (server_apps.get(int(s["id"])) or ["未归属"]):
-                _app_buckets.setdefault(nm, []).append(s)
-        app_groups = [
-            {
-                "name": nm,
-                "servers": _app_buckets[nm],
-                "status": collectors.aggregate_status([x["status"] for x in _app_buckets[nm]]),
-            }
-            for nm in sorted(_app_buckets, key=lambda x: (x == "未归属", x))
-        ]
         ctx = {
             "run_id": run_id,
             "trigger": trigger,

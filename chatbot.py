@@ -49,13 +49,15 @@ def build_context() -> str:
     settings = models.get_settings()
     servers = models.fetch_all("servers")
     groups = {int(g["id"]): g["name"] for g in models.fetch_all("groups")}
+    apps = models.fetch_all("applications")
+    app_members = models.fetch_all("application_members")
     bound = {int(r["server_id"]) for r in models.query("SELECT DISTINCT server_id FROM server_datasources")}
     runs = models.fetch_all("run_history", order="id DESC")[:MAX_RUNS]
 
     lines: list[str] = []
     lines.append("【资源统计】")
     lines.append(
-        f"服务器 {len(servers)}，分组 {len(groups)}，脚本 {len(models.fetch_all('scripts'))}，"
+        f"服务器 {len(servers)}，分组 {len(groups)}，应用 {len(apps)}，脚本 {len(models.fetch_all('scripts'))}，"
         f"数据源 {len(models.fetch_all('datasources'))}，模型 {len(models.fetch_all('models'))}，"
         f"通知 {len(models.fetch_all('notifications'))}"
     )
@@ -69,6 +71,30 @@ def build_context() -> str:
         )
     if len(servers) > MAX_SERVERS:
         lines.append(f"（其余 {len(servers) - MAX_SERVERS} 台略）")
+
+    grp_servers: dict[int, int] = {}
+    for s in servers:
+        gid = int(s.get("group_id") or 0)
+        if gid:
+            grp_servers[gid] = grp_servers.get(gid, 0) + 1
+    latest_app_status: dict[str, str] = {}
+    if runs:
+        sm0 = json.loads(runs[0].get("summary") or "{}")
+        for a in sm0.get("apps") or []:
+            latest_app_status[a.get("name")] = a.get("status", "-")
+    app_member_count: dict[int, int] = {}
+    for m in app_members:
+        aid = int(m["application_id"])
+        if m["member_type"] == "server":
+            app_member_count[aid] = app_member_count.get(aid, 0) + 1
+        elif m["member_type"] == "group":
+            app_member_count[aid] = app_member_count.get(aid, 0) + grp_servers.get(int(m["member_id"]), 0)
+    lines.append("")
+    lines.append("【应用】(名称 | 成员服务器数 | 最近状态)")
+    for a in apps[:50]:
+        lines.append(f"- {a['name']} | {app_member_count.get(int(a['id']), 0)} | {latest_app_status.get(a['name'], '-')}")
+    if len(apps) > 50:
+        lines.append(f"（其余 {len(apps) - 50} 个略）")
 
     lines.append("")
     lines.append("【最近巡检】(ID | 触发 | 模式 | 状态 | 开始 | 服务器数 | 异常/不确定)")

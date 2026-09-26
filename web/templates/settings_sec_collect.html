@@ -5,3 +5,10 @@
   <div class="input-group"><input class="form-control" name="ssh_connect_timeout" value="{{ settings.ssh_connect_timeout }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></div>
 <div class="col-md-4"><label class="form-label">{{ t('settings.ssh_command_timeout') }}</label>
   <div class="input-group"><input class="form-control" name="ssh_command_timeout" value="{{ settings.ssh_command_timeout }}"><span class="input-group-text">{{ t('common.seconds') }}</span></div></div>
+<div class="col-md-4"><label class="form-label">{{ t('settings.require_script_metadata') }}</label>
+  <select class="form-select" name="require_script_metadata">
+    <option value="warn" {{ 'selected' if settings.require_script_metadata == 'warn' else '' }}>{{ t('settings.meta_warn') }}</option>
+    <option value="off" {{ 'selected' if settings.require_script_metadata == 'off' else '' }}>{{ t('settings.meta_off') }}</option>
+    <option value="enforce" {{ 'selected' if settings.require_script_metadata == 'enforce' else '' }}>{{ t('settings.meta_enforce') }}</option>
+  </select>
+  <div class="form-text">{{ t('settings.meta_hint') }}</div></div>

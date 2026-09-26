@@ -21,7 +21,10 @@
           <label class="form-check-label" for="target_all"><strong>{{ t('run.all_servers') }}</strong>{{ t('run.all_servers_hint') }}</label>
         </div>
 
-        <label class="form-label">{{ t('run.groups') }}</label>
+        <label class="form-label">{{ t('run.applications') }}</label>
+        {{ check_picker('target_applications', applications, [], 'tpApps') }}
+
+        <label class="form-label mt-2">{{ t('run.groups') }}</label>
         {{ check_picker('target_groups', groups, [], 'tpGroups') }}
 
         <div class="d-flex justify-content-between align-items-center mt-2">
@@ -87,6 +90,7 @@
 {% block scripts %}
 <script>
 const groupServers = {{ group_servers | tojson }};
+const appServers = {{ app_servers | tojson }};
 const allServerIds = {{ all_server_ids | tojson }};
 const issueServerIds = {{ issue_server_ids | tojson }};
 const scriptTargets = {{ script_targets | tojson }};
@@ -146,6 +150,7 @@ function updateSummary() {
   else {
     checkedIds('target_servers').forEach((i) => ids.add(i));
     checkedIds('target_groups').forEach((g) => (groupServers[g] || []).forEach((i) => ids.add(i)));
+    checkedIds('target_applications').forEach((a) => ((appServers[String(a)] || appServers[a]) || []).forEach((i) => ids.add(i)));
   }
   updateScriptRelevance(ids);
   const nScripts = checkedIds('scripts').length;
