@@ -1,57 +1,57 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager, script_picker %}
-{% block title %}定时任务{% endblock %}
+{% block title %}{{ t('nav.schedules') }}{% endblock %}
 {% block content %}
-<h4>定时任务</h4>
-<div class="alert alert-secondary small">简化 cron：分钟/小时/星期（0-6，0=周一），支持 <code>*</code>、<code>a,b</code>、<code>a-b</code>、<code>*/n</code>。按本机本地时区触发，同分钟仅触发一次。</div>
+<h4>{{ t('schedules.title') }}</h4>
+<div class="alert alert-secondary small">{{ t('schedules.alert') | safe }}</div>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
   <div class="pt-1 d-flex align-items-center gap-2 flex-wrap">
-    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSchedule">新增定时任务</button>
-    <span class="badge bg-{{ 'success' if enabled_count else 'secondary' }}">已启用 {{ enabled_count }} / {{ total_all }}</span>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSchedule">{{ t('schedules.new') }}</button>
+    <span class="badge bg-{{ 'success' if enabled_count else 'secondary' }}">{{ t('notifications.enabled_of', n=enabled_count, total=total_all) }}</span>
     <form method="post" action="{{ url_for('schedules_toggle_all') }}" class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="enable" value="1">
-      <button class="btn btn-sm btn-outline-success" {{ 'disabled' if enabled_count == total_all else '' }}>全部启用</button>
+      <button class="btn btn-sm btn-outline-success" {{ 'disabled' if enabled_count == total_all else '' }}>{{ t('notifications.enable_all') }}</button>
     </form>
     <form method="post" action="{{ url_for('schedules_toggle_all') }}" class="d-inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-sm btn-outline-warning" {{ 'disabled' if not enabled_count else '' }}>全部停用</button>
+      <button class="btn btn-sm btn-outline-warning" {{ 'disabled' if not enabled_count else '' }}>{{ t('notifications.disable_all') }}</button>
     </form>
   </div>
   <form class="row g-2" method="get" action="{{ url_for('schedules') }}">
-    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="任务名称"></div>
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('schedules.query_ph') }}"></div>
     <div class="col-auto">
       <select class="form-select form-select-sm" name="enabled">
-        <option value="">全部状态</option>
-        <option value="1" {{ 'selected' if enabled == '1' else '' }}>启用</option>
-        <option value="0" {{ 'selected' if enabled == '0' else '' }}>停用</option>
+        <option value="">{{ t('servers.all_status') }}</option>
+        <option value="1" {{ 'selected' if enabled == '1' else '' }}>{{ t('common.enabled') }}</option>
+        <option value="0" {{ 'selected' if enabled == '0' else '' }}>{{ t('common.disabled') }}</option>
       </select>
     </div>
-    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
-    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('schedules') }}">重置</a></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('schedules') }}">{{ t('common.reset') }}</a></div>
   </form>
 </div>
 <table class="table table-sm">
-  <thead><tr><th>名称</th><th>分钟</th><th>小时</th><th>星期</th><th>模式</th><th>上次触发</th><th>启用</th><th>操作</th></tr></thead>
+  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('schedules.min') }}</th><th>{{ t('schedules.hour') }}</th><th>{{ t('schedules.dow') }}</th><th>{{ t('reports.mode') }}</th><th>{{ t('schedules.last_fired') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for s in schedules %}
     <tr>
       <td>{{ s.name }}</td><td>{{ s.cron_min }}</td><td>{{ s.cron_hour }}</td><td>{{ s.cron_dow }}</td>
-      <td>{{ '模型分析' if s.mode != 'raw' else '仅原始结果' }}</td>
-      <td class="small">{{ s.last_fired_at|local }}</td><td>{{ '是' if s.enabled else '否' }}</td>
+      <td>{{ t('reports.analysis_model') if s.mode != 'raw' else t('reports.analysis_raw') }}</td>
+      <td class="small">{{ s.last_fired_at|local }}</td><td>{{ t('common.yes') if s.enabled else t('common.no') }}</td>
       <td class="text-nowrap">
         <form method="post" action="{{ url_for('schedules_toggle', sid=s.id) }}" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="btn btn-sm {{ 'btn-outline-warning' if s.enabled else 'btn-outline-success' }}">{{ '停用' if s.enabled else '启用' }}</button>
+          <button class="btn btn-sm {{ 'btn-outline-warning' if s.enabled else 'btn-outline-success' }}">{{ t('common.disable') if s.enabled else t('common.enable') }}</button>
         </form>
-        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ s.id }}">编辑</button>
-        <form method="post" action="{{ url_for('schedules_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('确认删除？')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ s.id }}">{{ t('common.edit') }}</button>
+        <form method="post" action="{{ url_for('schedules_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('common.confirm_delete') }}')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
         </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="text-muted">暂无定时任务</td></tr>
+    <tr><td colspan="8" class="text-muted">{{ t('schedules.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -59,49 +59,49 @@
 
 {% macro schedule_form(s=None) %}
 <div class="row g-2">
-  <div class="col-md-3"><label class="form-label">名称</label><input class="form-control" name="name" value="{{ s.name if s else '' }}" required></div>
-  <div class="col-md-2"><label class="form-label">分钟</label><input class="form-control" name="cron_min" value="{{ s.cron_min if s else '*/30' }}"></div>
-  <div class="col-md-2"><label class="form-label">小时</label><input class="form-control" name="cron_hour" value="{{ s.cron_hour if s else '*' }}"></div>
-  <div class="col-md-2"><label class="form-label">星期(0-6)</label><input class="form-control" name="cron_dow" value="{{ s.cron_dow if s else '*' }}"></div>
-  <div class="col-md-2"><label class="form-label">分析模式</label>
+  <div class="col-md-3"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ s.name if s else '' }}" required></div>
+  <div class="col-md-2"><label class="form-label">{{ t('schedules.min') }}</label><input class="form-control" name="cron_min" value="{{ s.cron_min if s else '*/30' }}"></div>
+  <div class="col-md-2"><label class="form-label">{{ t('schedules.hour') }}</label><input class="form-control" name="cron_hour" value="{{ s.cron_hour if s else '*' }}"></div>
+  <div class="col-md-2"><label class="form-label">{{ t('schedules.dow_0_6') }}</label><input class="form-control" name="cron_dow" value="{{ s.cron_dow if s else '*' }}"></div>
+  <div class="col-md-2"><label class="form-label">{{ t('reports.analysis') }}</label>
     <select class="form-select" name="mode">
-      <option value="model" {{ 'selected' if (not s or s.mode != 'raw') else '' }}>模型分析</option>
-      <option value="raw" {{ 'selected' if (s and s.mode == 'raw') else '' }}>仅原始结果</option>
+      <option value="model" {{ 'selected' if (not s or s.mode != 'raw') else '' }}>{{ t('reports.analysis_model') }}</option>
+      <option value="raw" {{ 'selected' if (s and s.mode == 'raw') else '' }}>{{ t('reports.analysis_raw') }}</option>
     </select>
   </div>
-  <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if (not s or s.enabled) else '' }}><label class="form-check-label">启用</label></div></div>
-  <div class="col-12"><label class="form-label">目标分组</label>
+  <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if (not s or s.enabled) else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
+  <div class="col-12"><label class="form-label">{{ t('schedules.target_groups') }}</label>
     <select class="form-select" name="target_groups" multiple size="3">
       {% set tg = json_or(s.targets_json, {}).get('groups', []) if s else [] %}
       {% for gp in groups %}<option value="{{ gp.id }}" {{ 'selected' if gp.id in tg else '' }}>{{ gp.name }}</option>{% endfor %}
     </select>
   </div>
-  <div class="col-12"><label class="form-label">目标服务器</label>
+  <div class="col-12"><label class="form-label">{{ t('schedules.target_servers') }}</label>
     <select class="form-select" name="target_servers" multiple size="3">
       {% set ts = json_or(s.targets_json, {}).get('servers', []) if s else [] %}
       {% for sv in servers %}<option value="{{ sv.id }}" {{ 'selected' if sv.id in ts else '' }}>{{ sv.hostname }}</option>{% endfor %}
     </select>
   </div>
-  <div class="col-12"><label class="form-label">目标数据源</label>
+  <div class="col-12"><label class="form-label">{{ t('schedules.target_datasources') }}</label>
     <select class="form-select" name="target_datasources" multiple size="2">
       {% set td = json_or(s.targets_json, {}).get('datasources', []) if s else [] %}
       {% for ds in datasources %}<option value="{{ ds.id }}" {{ 'selected' if ds.id in td else '' }}>{{ ds.name }}</option>{% endfor %}
     </select>
   </div>
-  <div class="col-12"><label class="form-label">脚本（可覆盖绑定）</label>
+  <div class="col-12"><label class="form-label">{{ t('schedules.scripts_override') }}</label>
     {% set ss = json_or(s.scripts_json, []) if s else [] %}
     {{ script_picker('scripts', scripts, ss, 'spSch' ~ (s.id if s else 'new')) }}
   </div>
-  <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="target_all" {{ 'checked' if (s and json_or(s.targets_json, {}).get('all')) else '' }}><label class="form-check-label">全部服务器</label></div></div>
+  <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="target_all" {{ 'checked' if (s and json_or(s.targets_json, {}).get('all')) else '' }}><label class="form-check-label">{{ t('schedules.all_servers') }}</label></div></div>
 </div>
 {% endmacro %}
 
 <div class="modal fade" id="createSchedule"><div class="modal-dialog modal-lg"><div class="modal-content">
   <form method="post" action="{{ url_for('schedules_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="modal-header"><h5 class="modal-title">新增定时任务</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('schedules.new') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">{{ schedule_form(None) }}</div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 
@@ -109,9 +109,9 @@
 <div class="modal fade" id="edit{{ s.id }}"><div class="modal-dialog modal-lg"><div class="modal-content">
   <form method="post" action="{{ url_for('schedules_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="id" value="{{ s.id }}">
-    <div class="modal-header"><h5 class="modal-title">编辑任务 #{{ s.id }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('schedules.edit_title', id=s.id) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">{{ schedule_form(s) }}</div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 {% endfor %}

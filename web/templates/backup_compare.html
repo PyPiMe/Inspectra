@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% from "_macros.html" import json_view %}
-{% block title %}版本对比{% endblock %}
+{% block title %}{{ t('backup_compare.title') }}{% endblock %}
 {% block content %}
 <h4 class="d-flex align-items-center gap-2 flex-wrap">
-  <span>版本对比</span>
+  <span>{{ t('backup_compare.title') }}</span>
   <span class="text-muted">A：{{ name_a }} <span class="small">v{{ va.version }}</span></span>
   <span class="text-muted">↔</span>
   <span class="text-muted">B：{{ name_b }} <span class="small">v{{ vb.version }}</span></span>
@@ -12,18 +12,18 @@
 
 <div class="row g-3">
   <div class="col-lg-6">
-    <div class="card"><div class="card-header">A · {{ name_a }} · v{{ va.version }} · {{ va.action }} · {{ va.created_at|local }}</div>
+    <div class="card"><div class="card-header">A · {{ name_a }} · v{{ va.version }} · {{ t('audit.' ~ va.action) }} · {{ va.created_at|local }}</div>
       <div class="card-body">{{ json_view(sa, 'snapA') }}</div></div>
   </div>
   <div class="col-lg-6">
-    <div class="card"><div class="card-header">B · {{ name_b }} · v{{ vb.version }} · {{ vb.action }} · {{ vb.created_at|local }}</div>
+    <div class="card"><div class="card-header">B · {{ name_b }} · v{{ vb.version }} · {{ t('audit.' ~ vb.action) }} · {{ vb.created_at|local }}</div>
       <div class="card-body">{{ json_view(sb, 'snapB') }}</div></div>
   </div>
 </div>
 
-<div class="card mt-3"><div class="card-header">差异（A → B）</div><div class="card-body">
+<div class="card mt-3"><div class="card-header">{{ t('backup_compare.diff') }}</div><div class="card-body">
   <table class="table table-sm">
-    <thead><tr><th>字段</th><th>A</th><th>B</th></tr></thead>
+    <thead><tr><th>{{ t('backup_detail.field') }}</th><th>A</th><th>B</th></tr></thead>
     <tbody>
     {% for d in diff %}
       {% set cls = 'diff-add' if d.old is none else ('diff-del' if d.new is none else 'diff-chg') %}
@@ -33,10 +33,10 @@
         <td class="small text-break-all">{{ d.new }}</td>
       </tr>
     {% else %}
-      <tr><td colspan="3" class="text-muted">无差异</td></tr>
+      <tr><td colspan="3" class="text-muted">{{ t('backup_detail.no_diff') }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div></div>
-<a class="btn btn-outline-secondary mt-2" href="{{ url_for('backups') }}">返回</a>
+<a class="btn btn-outline-secondary mt-2" href="{{ url_for('backups') }}">{{ t('common.back') }}</a>
 {% endblock %}

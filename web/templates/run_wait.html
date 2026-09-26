@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% block title %}巡检执行中{% endblock %}
+{% block title %}{{ t('run_wait.title') }}{% endblock %}
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-lg-8">
     <div class="card">
-      <div class="card-header">巡检执行中</div>
+      <div class="card-header">{{ t('run_wait.title') }}</div>
       <div class="card-body">
-        <p class="mb-2" id="phase">已提交，等待后台启动…</p>
+        <p class="mb-2" id="phase">{{ t('run_wait.pending') }}</p>
         <div class="progress" style="height: 24px;">
           <div id="bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width: 100%"></div>
         </div>
         <div class="d-flex justify-content-between mt-2 text-muted small">
-          <span id="info">状态：运行中</span>
-          <span>已用时 <span id="elapsed">0s</span></span>
+          <span id="info">{{ t('run_wait.status_running') }}</span>
+          <span>{{ t('run_wait.elapsed') }} <span id="elapsed">0s</span></span>
         </div>
-        <div class="mt-3 text-muted small">完成后将自动跳转到本次执行报告；也可手动前往
-          <a href="{{ url_for('reports') }}">报告列表</a> 或
-          <a href="{{ url_for('run_page') }}">返回立即执行</a>。
+        <div class="mt-3 text-muted small">{{ t('run_wait.done_hint') }}
+          <a href="{{ url_for('reports') }}">{{ t('run_wait.reports_link') }}</a> {{ t('run_wait.done_hint2') }}
+          <a href="{{ url_for('run_page') }}">{{ t('run_wait.run_link') }}</a>。
         </div>
       </div>
     </div>
@@ -58,20 +58,20 @@
       if (d.found) {
         setProgress(d.progress);
         if (d.running) {
-          info.textContent = '状态：运行中';
+          info.textContent = __t('js.rw_running');
         } else {
-          label.textContent = (d.status === 'success' ? '巡检完成' : ('巡检结束（' + d.status + '）'));
+          label.textContent = (d.status === 'success' ? __t('js.rw_done') : __t('js.rw_ended').replace('{status}', d.status));
           bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
           bar.style.width = '100%';
           bar.textContent = '100%';
-          info.textContent = '正在打开报告…';
+          info.textContent = __t('js.rw_opening');
           setTimeout(() => { window.location = d.report_url; }, 700);
           return;
         }
       } else {
-        label.textContent = d.running ? '初始化中…' : '等待后台启动…';
+        label.textContent = d.running ? __t('js.rw_init') : __t('js.rw_waiting');
       }
-    } catch (e) { /* 网络抖动，继续轮询 */ }
+    } catch (e) { /* ignore */ }
     setTimeout(poll, 1000);
   }
   poll();

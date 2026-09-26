@@ -1,20 +1,15 @@
 {% extends "base.html" %}
-{% block title %}{{ script.name or '新增脚本' }}{% endblock %}
+{% block title %}{{ script.name or t('scripts.new') }}{% endblock %}
 {% block content %}
 <h4 class="d-flex align-items-center gap-2 flex-wrap">
-  <span>{{ script.name or '新增脚本' }}</span>
+  <span>{{ script.name or t('scripts.new') }}</span>
   <span class="badge bg-secondary" id="kindBadge">{{ script.kind or 'shell' }}</span>
   {% if script.id %}<span class="text-muted small ms-auto">#{{ script.id }}</span>{% endif %}
 </h4>
 
 <div class="alert alert-secondary small mb-2">
-  <span id="specShell">
-    <strong>Shell 输出规范</strong>：精简、结构化（<code>key=value</code> 或表格），避免 dump 全量日志；异常用 <code>ERROR:</code> 前缀。
-  </span>
-  <span id="specPromql" class="d-none">
-    <strong>PromQL 头部元数据</strong>：<code># NAME / # MODE: instant|range / # WINDOW / # STEP / # THRESHOLD / # UNIT</code>；
-    用 <code>$instance</code>（实例）与 <code>$guest</code>（虚拟机）占位符注入匹配器。
-  </span>
+  <span id="specShell">{{ t('script_detail.shell_spec') | safe }}</span>
+  <span id="specPromql" class="d-none">{{ t('script_detail.promql_spec') | safe }}</span>
 </div>
 
 <form id="scriptForm" method="post" action="{{ url_for('scripts_save') }}">
@@ -25,13 +20,13 @@
     <div class="col-lg-8">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <span>内容</span>
+          <span>{{ t('script_detail.content') }}</span>
           <span class="btn-group btn-group-sm">
-            <button type="button" class="btn btn-outline-secondary" id="fontDec" title="缩小字号">A-</button>
-            <button type="button" class="btn btn-outline-secondary" id="fontInc" title="放大字号">A+</button>
-            <button type="button" class="btn btn-outline-secondary" id="wrapToggle">换行:关</button>
-            <button type="button" class="btn btn-outline-secondary" id="insertTpl">插入示例</button>
-            <button type="button" class="btn btn-outline-primary" id="validateBtn">校验</button>
+            <button type="button" class="btn btn-outline-secondary" id="fontDec" title="{{ t('script_detail.font_dec_title') }}">A-</button>
+            <button type="button" class="btn btn-outline-secondary" id="fontInc" title="{{ t('script_detail.font_inc_title') }}">A+</button>
+            <button type="button" class="btn btn-outline-secondary" id="wrapToggle">{{ t('js.wrap_off') }}</button>
+            <button type="button" class="btn btn-outline-secondary" id="insertTpl">{{ t('script_detail.insert_tpl') }}</button>
+            <button type="button" class="btn btn-outline-primary" id="validateBtn">{{ t('script_detail.validate') }}</button>
           </span>
         </div>
         <div class="card-body p-0">
@@ -40,49 +35,49 @@
             <textarea class="editor-area" name="content" id="content" spellcheck="false" wrap="off">{{ content }}</textarea>
           </div>
         </div>
-        <div class="card-footer py-1"><span id="validateResult" class="small text-muted">Ctrl+S 保存 · Ctrl+Enter 校验 · Tab 缩进</span></div>
+        <div class="card-footer py-1"><span id="validateResult" class="small text-muted">{{ t('script_detail.editor_hint') }}</span></div>
       </div>
     </div>
 
     <div class="col-lg-4">
-      <div class="card mb-3"><div class="card-header">基本信息</div><div class="card-body row g-2">
-        <div class="col-12"><label class="form-label">名称</label><input class="form-control" name="name" value="{{ script.name }}" required></div>
-        <div class="col-6"><label class="form-label">类型</label>
+      <div class="card mb-3"><div class="card-header">{{ t('script_detail.basic') }}</div><div class="card-body row g-2">
+        <div class="col-12"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ script.name }}" required></div>
+        <div class="col-6"><label class="form-label">{{ t('common.type') }}</label>
           <select class="form-select" name="kind" id="kind">
             <option value="shell" {{ 'selected' if script.kind=='shell' else '' }}>shell</option>
             <option value="promql" {{ 'selected' if script.kind=='promql' else '' }}>promql</option>
           </select>
         </div>
-        <div class="col-6"><label class="form-label">展示名</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
-        <div class="col-12"><label class="form-label">说明</label><input class="form-control" name="desc" value="{{ script.desc }}"></div>
+        <div class="col-6"><label class="form-label">{{ t('scripts.filename') }}</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
+        <div class="col-12"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ script.desc }}"></div>
       </div></div>
 
-      <div class="card mb-3 d-none" id="metaCard"><div class="card-header">PromQL 元数据（自动生成头部注释）</div><div class="card-body row g-2">
+      <div class="card mb-3 d-none" id="metaCard"><div class="card-header">{{ t('script_detail.meta_card') }}</div><div class="card-body row g-2">
         <div class="col-12"><label class="form-label">NAME</label><input class="form-control form-control-sm" id="metaName"></div>
         <div class="col-6"><label class="form-label">MODE</label>
           <select class="form-select form-select-sm" id="metaMode"><option value="instant">instant</option><option value="range">range</option></select>
         </div>
-        <div class="col-6"><label class="form-label">UNIT</label><input class="form-control form-control-sm" id="metaUnit" placeholder="如 % / s"></div>
+        <div class="col-6"><label class="form-label">UNIT</label><input class="form-control form-control-sm" id="metaUnit" placeholder="{{ t('script_detail.unit_ph') }}"></div>
         <div class="col-6 meta-range"><label class="form-label">WINDOW</label><input class="form-control form-control-sm" id="metaWindow" placeholder="5m"></div>
         <div class="col-6 meta-range"><label class="form-label">STEP</label><input class="form-control form-control-sm" id="metaStep" placeholder="1m"></div>
-        <div class="col-12"><label class="form-label">THRESHOLD</label><input class="form-control form-control-sm" id="metaThreshold" placeholder=">90 / &lt;1 / ==0"></div>
-        <div class="col-12"><button type="button" class="btn btn-sm btn-outline-secondary w-100" id="syncHeaderBtn">同步头部到内容</button></div>
+        <div class="col-12"><label class="form-label">THRESHOLD</label><input class="form-control form-control-sm" id="metaThreshold" placeholder="{{ t('script_detail.threshold_ph') }}"></div>
+        <div class="col-12"><button type="button" class="btn btn-sm btn-outline-secondary w-100" id="syncHeaderBtn">{{ t('script_detail.sync_header') }}</button></div>
       </div></div>
     </div>
   </div>
 
   <div class="mt-3">
-    <button class="btn btn-primary">保存</button>
-    <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">返回列表</a>
+    <button class="btn btn-primary">{{ t('common.save') }}</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
   </div>
 </form>
 
 {% if script.id %}
 <div class="mt-2">
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">历史</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">{{ t('common.history') }}</a>
   <form method="post" action="{{ url_for('scripts_clone', sid=script.id) }}" class="d-inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-sm btn-outline-secondary">复制</button>
+    <button class="btn btn-sm btn-outline-secondary">{{ t('scripts.clone') }}</button>
   </form>
 </div>
 {% endif %}
@@ -101,11 +96,11 @@ let fontSize = 13;
 let wrapOn = false;
 
 const SHELL_TPL = `#!/usr/bin/env bash
-# 输出规范：精简、结构化（key=value 或表格），避免 dump 全量日志
+# ${__t('js.tpl_comment')}
 set -u
 echo "example_key=value"
 `;
-const PROMQL_TPL = `# NAME: 示例指标
+const PROMQL_TPL = `# NAME: example_metric
 # MODE: instant
 # THRESHOLD: >90
 # UNIT: %
@@ -122,24 +117,19 @@ function updateGutter() {
 area.addEventListener('input', () => { updateGutter(); scheduleValidate(); });
 area.addEventListener('scroll', () => { gutter.scrollTop = area.scrollTop; });
 
-// Tab / Shift+Tab 缩进
 area.addEventListener('keydown', (e) => {
   if (e.key === 'Tab') {
     e.preventDefault();
     const s = area.selectionStart, en = area.selectionEnd;
-    if (!e.shiftKey) {
-      area.setRangeText('  ', s, en, 'end');
-    } else {
+    if (!e.shiftKey) { area.setRangeText('  ', s, en, 'end'); }
+    else {
       const before = area.value.lastIndexOf('\n', s - 1) + 1;
-      if (area.value.slice(before, before + 2) === '  ') {
-        area.setRangeText('', before, before + 2, 'preserve');
-      }
+      if (area.value.slice(before, before + 2) === '  ') { area.setRangeText('', before, before + 2, 'preserve'); }
     }
     updateGutter();
   }
 });
 
-// 字号 / 换行
 function applyFont() {
   area.style.fontSize = fontSize + 'px';
   gutter.style.fontSize = fontSize + 'px';
@@ -151,33 +141,29 @@ document.getElementById('wrapToggle').addEventListener('click', (e) => {
   area.classList.toggle('wrap', wrapOn);
   area.setAttribute('wrap', wrapOn ? 'soft' : 'off');
   gutter.classList.toggle('d-none', wrapOn);
-  e.target.textContent = '换行:' + (wrapOn ? '开' : '关');
+  e.target.textContent = wrapOn ? __t('js.wrap_on') : __t('js.wrap_off');
   updateGutter();
 });
 
-// 插入示例
 document.getElementById('insertTpl').addEventListener('click', () => {
   const tpl = kindSel.value === 'promql' ? PROMQL_TPL : SHELL_TPL;
-  if (area.value.trim() && !confirm('内容非空，确认插入示例模板？')) return;
+  if (area.value.trim() && !confirm(__t('js.confirm_insert_tpl'))) return;
   const s = area.selectionStart, en = area.selectionEnd;
   area.setRangeText(tpl, s, en, 'end');
   updateGutter();
   scheduleValidate();
 });
 
-// 校验
 async function doValidate() {
-  resultEl.textContent = '校验中…';
+  resultEl.textContent = __t('js.validating');
   resultEl.className = 'small text-muted';
   try {
-    const body = new URLSearchParams({
-      csrf_token: window.pypimeops.csrf(), content: area.value, kind: kindSel.value,
-    });
+    const body = new URLSearchParams({ csrf_token: window.pypimeops.csrf(), content: area.value, kind: kindSel.value });
     const d = await (await fetch('{{ url_for("scripts_validate") }}', { method: 'POST', body })).json();
-    resultEl.textContent = d.ok ? '✅ 校验通过' : ('❌ ' + (d.errors || []).join('；'));
+    resultEl.textContent = d.ok ? ('✅ ' + __t('js.validate_ok')) : ('❌ ' + (d.errors || []).join('; '));
     resultEl.className = 'small ' + (d.ok ? 'text-success' : 'text-danger');
   } catch (e) {
-    resultEl.textContent = '校验失败：' + e;
+    resultEl.textContent = __t('js.validate_fail') + e;
     resultEl.className = 'small text-danger';
   }
 }
@@ -188,13 +174,11 @@ function scheduleValidate() {
 }
 document.getElementById('validateBtn').addEventListener('click', doValidate);
 
-// Ctrl+S 保存 / Ctrl+Enter 校验
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); form.submit(); }
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); doValidate(); }
 });
 
-// PromQL 元数据 <-> 头部注释
 const metaIds = ['metaName', 'metaMode', 'metaWindow', 'metaStep', 'metaThreshold', 'metaUnit'];
 const mval = (id) => (document.getElementById(id).value || '').trim();
 

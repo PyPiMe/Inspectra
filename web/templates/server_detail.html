@@ -1,98 +1,98 @@
 {% extends "base.html" %}
 {% from "_macros.html" import script_picker %}
-{% block title %}服务器 {{ server.hostname }}{% endblock %}
+{% block title %}{{ t('nav.servers') }} {{ server.hostname }}{% endblock %}
 {% block content %}
 <h4>{{ server.hostname }}
   <span class="text-muted fs-6">{{ server.ip }}{% if server.port %}:{{ server.port }}{% endif %}</span>
   {% if conn_type == 'SSH' %}<span class="badge bg-primary">SSH</span>
   {% elif conn_type == 'Prometheus' %}<span class="badge bg-info text-dark">Prometheus</span>
   {% elif conn_type == 'SSH + Prometheus' %}<span class="badge bg-success">SSH + Prometheus</span>
-  {% else %}<span class="badge bg-secondary">未配置</span>{% endif %}
+  {% else %}<span class="badge bg-secondary">{{ t('servers.not_configured') }}</span>{% endif %}
 </h4>
 
 <div class="row g-3">
   <div class="col-lg-6">
-    <div class="card"><div class="card-header">编辑服务器</div><div class="card-body">
+    <div class="card"><div class="card-header">{{ t('server_detail.edit') }}</div><div class="card-body">
       <form method="post" action="{{ url_for('servers_save') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="id" value="{{ server.id }}">
-        <h6 class="text-muted">① 基本信息</h6>
+        <h6 class="text-muted">{{ t('servers.basic') }}</h6>
         <div class="row g-2 mb-2">
-          <div class="col-6"><label class="form-label">主机名</label><input class="form-control" name="hostname" value="{{ server.hostname }}" required></div>
-          <div class="col-6"><label class="form-label">IP</label><input class="form-control" name="ip" value="{{ server.ip }}" required></div>
-          <div class="col-6"><label class="form-label">虚拟化标识（可选，PVE 虚拟机名或 id）</label>
-            <input class="form-control" name="vm_ident" value="{{ server.vm_ident or '' }}" placeholder="app-vm-01 或 qemu/101">
-            <div class="form-text">填虚拟机名将自动解析为 PVE id；PromQL 模板用 <code>$guest</code> 引用。</div>
+          <div class="col-6"><label class="form-label">{{ t('servers.hostname') }}</label><input class="form-control" name="hostname" value="{{ server.hostname }}" required></div>
+          <div class="col-6"><label class="form-label">{{ t('common.ip') }}</label><input class="form-control" name="ip" value="{{ server.ip }}" required></div>
+          <div class="col-6"><label class="form-label">{{ t('servers.vm_ident_pve') }}</label>
+            <input class="form-control" name="vm_ident" value="{{ server.vm_ident or '' }}" placeholder="app-vm-01 / qemu/101">
+            <div class="form-text">{{ t('server_detail.vm_hint') | safe }}</div>
           </div>
-          <div class="col-6"><label class="form-label">分组</label>
+          <div class="col-6"><label class="form-label">{{ t('servers.group') }}</label>
             <select class="form-select" name="group_id"><option value="">-</option>
               {% for g in groups %}<option value="{{ g.id }}" {{ 'selected' if server.group_id==g.id else '' }}>{{ g.name }}</option>{% endfor %}
             </select>
           </div>
         </div>
 
-        <h6 class="text-muted">② SSH 信息（可选，仅 Prometheus 巡检可留空）</h6>
+        <h6 class="text-muted">{{ t('servers.ssh_info') }}</h6>
         <div class="row g-2 mb-2">
-          <div class="col-md-4"><label class="form-label">SSH 端口</label><input class="form-control" name="port" value="{{ server.port or '' }}" placeholder="留空=不使用 SSH"></div>
-          <div class="col-md-4"><label class="form-label">用户</label><input class="form-control" name="user" value="{{ server.user }}"></div>
-          <div class="col-md-4"><label class="form-label">凭据</label>
+          <div class="col-md-4"><label class="form-label">{{ t('servers.ssh_port') }}</label><input class="form-control" name="port" value="{{ server.port or '' }}" placeholder="{{ t('servers.port_ph') }}"></div>
+          <div class="col-md-4"><label class="form-label">{{ t('servers.user') }}</label><input class="form-control" name="user" value="{{ server.user }}"></div>
+          <div class="col-md-4"><label class="form-label">{{ t('servers.credential') }}</label>
             <select class="form-select" name="vault_key"><option value="">-</option>
               {% for c in credentials %}<option value="{{ c.key }}" {{ 'selected' if server.vault_key==c.key else '' }}>{{ c.name }}{% if c.note %}（{{ c.note }}）{% endif %}</option>{% endfor %}
             </select>
-            <div class="form-text">当前：{{ cred_names.get(server.vault_key) if server.vault_key else '未绑定' }}</div>
+            <div class="form-text">{{ t('server_detail.current_cred', name=(cred_names.get(server.vault_key) if server.vault_key else t('common.not_bound'))) }}</div>
           </div>
-          <div class="col-12"><label class="form-label">Shell 脚本</label>
+          <div class="col-12"><label class="form-label">{{ t('servers.shell_scripts') }}</label>
             {% set bound = json_or(server.scripts_json, []) %}
             {{ script_picker('scripts', shell_scripts, bound, 'spShellEdit') }}
           </div>
         </div>
-        <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if server.enabled else '' }}><label class="form-check-label">启用</label></div>
-        <button class="btn btn-primary">保存</button>
-        <a class="btn btn-outline-secondary" href="{{ url_for('servers') }}">返回列表</a>
+        <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if server.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div>
+        <button class="btn btn-primary">{{ t('common.save') }}</button>
+        <a class="btn btn-outline-secondary" href="{{ url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
       </form>
     </div></div>
   </div>
 
   <div class="col-lg-6">
-    <div class="card"><div class="card-header">③ Prometheus 数据源绑定</div><div class="card-body">
+    <div class="card"><div class="card-header">{{ t('server_detail.prom_bindings') }}</div><div class="card-body">
       <table class="table table-sm">
-        <thead><tr><th>数据源</th><th>prom_instance</th><th>promql 脚本</th><th></th></tr></thead>
+        <thead><tr><th>{{ t('nav.datasources') }}</th><th>prom_instance</th><th>{{ t('servers.prom_scripts') }}</th><th></th></tr></thead>
         <tbody>
         {% for b in bindings %}
           <tr>
             <td>{{ (datasources|selectattr('id','equalto',b.datasource_id)|list|first).name if datasources|selectattr('id','equalto',b.datasource_id)|list else b.datasource_id }}</td>
             <td>{{ b.prom_instance or '-' }}</td>
-            <td class="small">{{ json_or(b.scripts_json, [])|length }} 个</td>
+            <td class="small">{{ t('server_detail.script_count', n=(json_or(b.scripts_json, [])|length)) }}</td>
             <td>
-              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bind{{ b.id }}">编辑</button>
-              <form method="post" action="{{ url_for('binding_delete', sid=server.id, bid=b.id) }}" class="d-inline" onsubmit="return confirm('删除绑定？')">
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bind{{ b.id }}">{{ t('common.edit') }}</button>
+              <form method="post" action="{{ url_for('binding_delete', sid=server.id, bid=b.id) }}" class="d-inline" onsubmit="return confirm('{{ t('server_detail.confirm_binding_delete') }}')">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button class="btn btn-sm btn-outline-danger">删除</button>
+                <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
               </form>
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="4" class="text-muted">未绑定数据源（仅 SSH 巡检）</td></tr>
+          <tr><td colspan="4" class="text-muted">{{ t('server_detail.no_binding') }}</td></tr>
         {% endfor %}
         </tbody>
       </table>
 
-      <h6>新增绑定</h6>
+      <h6>{{ t('server_detail.add_binding') }}</h6>
       <form method="post" action="{{ url_for('binding_save', sid=server.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="row">
-          <div class="col-6 mb-2"><label class="form-label">数据源</label>
+          <div class="col-6 mb-2"><label class="form-label">{{ t('nav.datasources') }}</label>
             <select class="form-select" name="datasource_id" required>
               {% for d in datasources %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
             </select>
           </div>
-          <div class="col-6 mb-2"><label class="form-label">prom_instance（可空）</label><input class="form-control" name="prom_instance"></div>
-          <div class="col-12 mb-2"><label class="form-label">标签覆盖 (JSON)</label><input class="form-control" name="labels_json" value="{}"></div>
-          <div class="col-12 mb-2"><label class="form-label">promql 脚本</label>
+          <div class="col-6 mb-2"><label class="form-label">{{ t('server_detail.prom_instance_opt') }}</label><input class="form-control" name="prom_instance"></div>
+          <div class="col-12 mb-2"><label class="form-label">{{ t('servers.labels_override') }}</label><input class="form-control" name="labels_json" value="{}"></div>
+          <div class="col-12 mb-2"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
             {{ script_picker('prom_scripts', prom_scripts, [], 'spPromAdd') }}
           </div>
         </div>
-        <button class="btn btn-primary btn-sm">添加绑定</button>
+        <button class="btn btn-primary btn-sm">{{ t('server_detail.add') }}</button>
       </form>
     </div></div>
   </div>
@@ -104,21 +104,21 @@
   <form method="post" action="{{ url_for('binding_save', sid=server.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="binding_id" value="{{ b.id }}">
-    <div class="modal-header"><h5 class="modal-title">编辑绑定 #{{ b.id }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('server_detail.edit_binding', id=b.id) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><label class="form-label">数据源</label>
+      <div class="mb-2"><label class="form-label">{{ t('nav.datasources') }}</label>
         <select class="form-select" name="datasource_id">
           {% for d in datasources %}<option value="{{ d.id }}" {{ 'selected' if b.datasource_id==d.id else '' }}>{{ d.name }}</option>{% endfor %}
         </select>
       </div>
       <div class="mb-2"><label class="form-label">prom_instance</label><input class="form-control" name="prom_instance" value="{{ b.prom_instance }}"></div>
-      <div class="mb-2"><label class="form-label">标签覆盖 (JSON)</label><input class="form-control" name="labels_json" value="{{ b.labels_json }}"></div>
-      <div class="mb-2"><label class="form-label">promql 脚本</label>
+      <div class="mb-2"><label class="form-label">{{ t('servers.labels_override') }}</label><input class="form-control" name="labels_json" value="{{ b.labels_json }}"></div>
+      <div class="mb-2"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
         {{ script_picker('prom_scripts', prom_scripts, bound, 'spPromEdit' ~ b.id) }}
       </div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if b.enabled else '' }}><label class="form-check-label">启用</label></div>
+      <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if b.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 {% endfor %}

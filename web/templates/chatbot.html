@@ -1,29 +1,27 @@
 {% extends "base.html" %}
-{% block title %}智能巡检{% endblock %}
+{% block title %}{{ t('chatbot.title') }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-  <h4 class="mb-0">智能巡检 <span class="badge bg-secondary">只读</span>
-    {% if model_ok %}<span class="badge bg-info text-dark">模型：{{ model_label }}</span>{% endif %}
+  <h4 class="mb-0">{{ t('chatbot.title') }} <span class="badge bg-secondary">{{ t('chatbot.readonly') }}</span>
+    {% if model_ok %}<span class="badge bg-info text-dark">{{ t('chatbot.model', name=model_label) }}</span>{% endif %}
   </h4>
   <form method="post" action="{{ url_for('chatbot_clear') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-sm btn-outline-secondary">清空对话</button>
+    <button class="btn btn-sm btn-outline-secondary">{{ t('chatbot.clear') }}</button>
   </form>
 </div>
 
 {% if not model_ok %}
-<div class="alert alert-warning">未配置可用的默认模型。请先在「模型」页面配置并设为默认后再使用。</div>
+<div class="alert alert-warning">{{ t('chatbot.no_model') }}</div>
 {% endif %}
 
-<div class="alert alert-secondary small">
-  面向巡检人员的只读问答：可询问服务器清单、最近巡检概况、异常项等。<strong>仅依据系统当前数据作答，不执行任何写操作</strong>；对话仅保存在本会话。
-</div>
+<div class="alert alert-secondary small">{{ t('chatbot.alert') | safe }}</div>
 
 <div class="mb-2" id="suggestions">
-  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">最近一次巡检概况？</button>
-  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">哪些服务器最近出现异常？</button>
-  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">当前一共有多少台服务器？</button>
-  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">默认模型是什么？</button>
+  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">{{ t('chatbot.s1') }}</button>
+  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">{{ t('chatbot.s2') }}</button>
+  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">{{ t('chatbot.s3') }}</button>
+  <button type="button" class="btn btn-sm btn-outline-primary me-1 mb-1">{{ t('chatbot.s4') }}</button>
 </div>
 
 <div class="card">
@@ -38,12 +36,12 @@
           {% endif %}
         </div>
       {% else %}
-        <div class="text-muted small" id="chatEmpty">暂无对话，试试上面的推荐问题。</div>
+        <div class="text-muted small" id="chatEmpty">{{ t('chatbot.empty') }}</div>
       {% endfor %}
     </div>
     <div class="input-group">
-      <textarea id="chatInput" class="form-control" rows="2" placeholder="输入问题，Enter 发送，Shift+Enter 换行" {{ 'disabled' if not model_ok else '' }}></textarea>
-      <button class="btn btn-primary" id="chatSend" {{ 'disabled' if not model_ok else '' }}>发送</button>
+      <textarea id="chatInput" class="form-control" rows="2" placeholder="{{ t('chatbot.input_ph') }}" {{ 'disabled' if not model_ok else '' }}></textarea>
+      <button class="btn btn-primary" id="chatSend" {{ 'disabled' if not model_ok else '' }}>{{ t('chatbot.send') }}</button>
     </div>
   </div>
 </div>
@@ -73,17 +71,17 @@ async function sendChat(text) {
   if (!msg) return;
   appendBubble('user', msg);
   if (text == null) chatInput.value = '';
-  const thinking = appendBubble('assistant', '思考中…');
+  const thinking = appendBubble('assistant', __t('js.chat_thinking'));
   try {
     const body = new URLSearchParams({ csrf_token: window.pypimeops.csrf(), message: msg });
     const d = await (await fetch('{{ url_for("chatbot_ask") }}', { method: 'POST', body })).json();
     if (d.reply_html) {
       thinking.innerHTML = d.reply_html;
     } else {
-      thinking.textContent = '⚠️ ' + (d.error || '无回复');
+      thinking.textContent = '⚠️ ' + (d.error || __t('js.chat_no_reply'));
     }
   } catch (e) {
-    thinking.textContent = '⚠️ 请求失败：' + e;
+    thinking.textContent = '⚠️ ' + __t('js.chat_req_failed') + e;
   }
   chatBox.scrollTop = chatBox.scrollHeight;
 }

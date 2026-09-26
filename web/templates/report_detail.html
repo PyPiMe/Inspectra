@@ -1,34 +1,34 @@
 {% extends "base.html" %}
 {% from "_macros.html" import status_badge %}
-{% block title %}报告 #{{ run.id }}{% endblock %}
+{% block title %}{{ t('report_detail.title') }} #{{ run.id }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">&larr; 返回报告列表</a>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
   <div>
-    {% if run.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=run.id) }}">下载 .md</a>{% endif %}
-    <form method="post" action="{{ url_for('report_delete', rid=run.id) }}" class="d-inline" onsubmit="return confirm('删除报告及运行记录？')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+    {% if run.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=run.id) }}">{{ t('report_detail.download_md') }}</a>{% endif %}
+    <form method="post" action="{{ url_for('report_delete', rid=run.id) }}" class="d-inline" onsubmit="return confirm('{{ t('reports.confirm_single') }}')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
     </form>
   </div>
 </div>
 
 <h4 class="d-flex align-items-center gap-2 flex-wrap">
-  <span>巡检报告</span>
+  <span>{{ t('report_detail.title') }}</span>
   {{ status_badge(run.status) }}
   <span class="text-muted small">{{ run.started|local }}</span>
   <span class="text-muted small ms-auto">#{{ run.id }}</span>
 </h4>
 <div class="row mb-3">
-  <div class="col-md-3"><strong>触发</strong><br>{{ run.trigger }}</div>
-  <div class="col-md-3"><strong>分析模式</strong><br>{{ '模型分析' if run.mode != 'raw' else '仅原始结果' }}</div>
-  <div class="col-md-3"><strong>开始</strong><br>{{ run.started|local }}</div>
-  <div class="col-md-3"><strong>结束</strong><br>{{ run.finished|local }}</div>
+  <div class="col-md-3"><strong>{{ t('dashboard.trigger') }}</strong><br>{{ run.trigger }}</div>
+  <div class="col-md-3"><strong>{{ t('reports.analysis') }}</strong><br>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
+  <div class="col-md-3"><strong>{{ t('dashboard.start') }}</strong><br>{{ run.started|local }}</div>
+  <div class="col-md-3"><strong>{{ t('dashboard.end') }}</strong><br>{{ run.finished|local }}</div>
 </div>
 
 {% if run.status == 'running' %}
 <div class="card mb-3" id="runProgress">
   <div class="card-body">
-    <div id="phase" class="mb-2">巡检进行中…</div>
+    <div id="phase" class="mb-2">{{ t('report_detail.running') }}</div>
     <div class="progress" style="height: 20px;">
       <div id="bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div>
     </div>
@@ -40,7 +40,7 @@
 <div class="card"><div class="card-body report-md" id="reportBody">
   {{ content | markdown }}
 </div></div>
-<a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; 返回报告列表</a>
+<a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
 {% endblock %}
 
 {% block scripts %}
@@ -70,11 +70,11 @@ function enhanceReport() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-sm btn-outline-secondary ms-2';
-    btn.textContent = '折叠';
+    btn.textContent = __t('js.collapse');
     btn.addEventListener('click', () => {
       const hidden = foldables[0] && foldables[0].style.display === 'none';
       foldables.forEach((x) => { x.style.display = hidden ? '' : 'none'; });
-      btn.textContent = hidden ? '折叠' : '展开';
+      btn.textContent = hidden ? __t('js.collapse') : __t('js.expand');
     });
     h.appendChild(btn);
   });
@@ -97,9 +97,9 @@ enhanceReport();
         bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
         bar.style.width = pct + '%';
         bar.textContent = pct + '%';
-        phase.textContent = (p.label || '执行中') + '（' + p.done + '/' + p.total + '）';
+        phase.textContent = (p.label || __t('js.executing')) + '（' + p.done + '/' + p.total + '）';
       } else {
-        phase.textContent = (p.label || '执行中') + '…';
+        phase.textContent = (p.label || __t('js.executing')) + '…';
       }
       if (d.found && !d.running) { window.location.reload(); return; }
     } catch (e) { /* ignore */ }
