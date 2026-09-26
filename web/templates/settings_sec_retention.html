@@ -5,6 +5,12 @@
   <div class="col-md-2 small text-muted">当前 {{ audit_count }} 条</div>
 </div>
 <div class="row g-2 align-items-center mb-2">
+  <div class="col-md-4"><label class="form-label mb-0">应用日志</label></div>
+  <div class="col-md-3"><div class="input-group"><input class="form-control" name="app_log_retention_days" value="{{ settings.app_log_retention_days }}"><span class="input-group-text">天</span></div></div>
+  <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="applog" onclick="return confirm('按保留天数清理轮转日志文件？不可恢复。')">立即清理</button></div>
+  <div class="col-md-2 small text-muted">当前 {{ log_file_count }} 个文件</div>
+</div>
+<div class="row g-2 align-items-center mb-2">
   <div class="col-md-4"><label class="form-label mb-0">报告</label></div>
   <div class="col-md-3"><div class="input-group"><input class="form-control" name="report_retention_days" value="{{ settings.report_retention_days }}"><span class="input-group-text">天</span></div></div>
   <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="reports" onclick="return confirm('按保留天数清理报告？将同时删除报告文件与运行记录，不可恢复。')">立即清理</button></div>
@@ -16,4 +22,4 @@
   <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="backups" onclick="return confirm('按保留天数清理版本备份？不可恢复。')">立即清理</button></div>
   <div class="col-md-2 small text-muted">当前 {{ backup_count }} 条</div>
 </div>
-<div class="form-text mt-1">保留天数为自动清理阈值；「立即清理」按当前天数执行一次。应用日志的保留与清理见「应用日志」页。</div>
+<div class="form-text mt-1">保留天数为自动清理阈值；「立即清理」按当前天数执行一次。</div>

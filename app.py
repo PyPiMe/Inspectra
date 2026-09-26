@@ -1905,6 +1905,7 @@ def create_app() -> Flask:
             audit_count=models.query("SELECT COUNT(*) AS c FROM audit_log")[0]["c"],
             backup_count=models.query("SELECT COUNT(*) AS c FROM backup_versions")[0]["c"],
             report_count=models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"],
+            log_file_count=len(applog.list_log_files()),
         )
 
     @app.route("/settings/save", methods=["POST"])
@@ -1973,6 +1974,9 @@ def create_app() -> Flask:
         elif kind == "reports":
             n = _cleanup_reports(int(settings.get("report_retention_days", 90)))
             flash(f"已清理报告 {n} 份", "success")
+        elif kind == "applog":
+            res = applog.cleanup(days=int(settings.get("app_log_retention_days", 7)))
+            flash(f"已清理轮转日志 {res['deleted']} 个", "success")
         return redirect(url_for("settings_page"))
 
     def _cleanup_reports(retention_days: int) -> int:
@@ -2002,7 +2006,10 @@ def create_app() -> Flask:
         end = request.args.get("end") or ""
         q = request.args.get("q") or ""
         limit = parse_int(request.args.get("limit"), 2000)
-        if start or end or q:
+        mode = (request.args.get("mode") or "").lower()
+        if mode not in ("realtime", "query"):
+            mode = "query" if (start or end or q) else "realtime"
+        if mode == "query":
             lines = applog.read_range(selected, start, end, q, limit)
         else:
             lines = applog.read_last(selected, limit)
@@ -2018,6 +2025,7 @@ def create_app() -> Flask:
             q=q,
             limit=limit,
             offset=size,
+            mode=mode,
             active_log=applog.active_log(),
             retention_days=models.get_setting("app_log_retention_days", "7"),
             log_level=models.get_setting("app_log_level", "INFO"),
@@ -2038,6 +2046,25 @@ def create_app() -> Flask:
             offset = parse_int(request.args.get("offset"), 0)
             lines, offset = applog.read_tail(selected, offset)
         return jsonify({"lines": lines, "offset": offset})
+
+    @app.route("/logs/download")
+    def logs_download():
+        selected = applog.safe_name(request.args.get("file") or applog.active_log())
+        start = request.args.get("start") or ""
+        end = request.args.get("end") or ""
+        q = request.args.get("q") or ""
+        limit = parse_int(request.args.get("limit"), 5000)
+        if start or end or q:
+            lines = applog.read_range(selected, start, end, q, limit)
+        else:
+            lines = applog.read_last(selected, limit)
+        from flask import Response
+
+        return Response(
+            "\n".join(lines),
+            mimetype="text/plain",
+            headers={"Content-Disposition": f"attachment; filename={selected}"},
+        )
 
     @app.route("/logs/cleanup", methods=["POST"])
     def logs_cleanup():

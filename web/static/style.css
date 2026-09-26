@@ -11,6 +11,11 @@ body { font-size: 14px; }
   font-size: 12.5px;
 }
 .card-header { font-weight: 600; }
+.log-box { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-height: 70vh; }
+.log-line-err { color: #dc3545; }
+.log-line-warn { color: #b8860b; }
+.log-line-debug { color: #adb5bd; }
+.log-box mark { background: #fff3cd; padding: 0; }
 .table td, .table th { vertical-align: middle; }
 
 /* 报告 Markdown 渲染 */
