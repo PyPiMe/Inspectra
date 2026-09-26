@@ -1,52 +1,51 @@
 {% extends "base.html" %}
-{% block title %}应用日志{% endblock %}
+{% block title %}{{ t('nav.logs') }}{% endblock %}
 {% block content %}
-<h4>应用日志</h4>
+<h4>{{ t('nav.logs') }}</h4>
 
 <div class="card">
   <div class="card-header d-flex flex-wrap align-items-center gap-2">
     <select id="fileSel" class="form-select form-select-sm" style="width:auto;">
       {% for f in files %}
-      <option value="{{ f.name }}" {{ 'selected' if f.name == selected else '' }}>{{ f.name }}{{ '（当前）' if f.active else '' }} — {{ (f.size/1024)|round(1) }}KB</option>
+      <option value="{{ f.name }}" {{ 'selected' if f.name == selected else '' }}>{{ f.name }}{{ ' ' + t('logs.current_badge') if f.active else '' }} — {{ (f.size/1024)|round(1) }}KB</option>
       {% else %}
       <option value="{{ selected }}">{{ selected }}</option>
       {% endfor %}
     </select>
     <div class="btn-group btn-group-sm" role="group">
-      <a class="btn btn-{{ 'secondary' if mode == 'realtime' else 'outline-secondary' }}" href="{{ url_for('logs_page', file=selected, mode='realtime') }}">实时</a>
-      <a class="btn btn-{{ 'secondary' if mode == 'query' else 'outline-secondary' }}" href="{{ url_for('logs_page', file=selected, mode='query', start=start, end=end, q=q) }}">范围查询</a>
+      <a class="btn btn-{{ 'secondary' if mode == 'realtime' else 'outline-secondary' }}" href="{{ url_for('logs_page', file=selected, mode='realtime') }}">{{ t('logs.realtime') }}</a>
+      <a class="btn btn-{{ 'secondary' if mode == 'query' else 'outline-secondary' }}" href="{{ url_for('logs_page', file=selected, mode='query', start=start, end=end, q=q) }}">{{ t('logs.query') }}</a>
     </div>
     {% if mode == 'realtime' %}
-    <button type="button" class="btn btn-sm btn-success" id="rtBtn">开始实时</button>
-    <span id="rtState" class="text-muted small">已暂停</span>
-    <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="follow" checked><label class="form-check-label small" for="follow">跟随</label></div>
+    <button type="button" class="btn btn-sm btn-success" id="rtBtn">{{ t('logs.start_live') }}</button>
+    <span id="rtState" class="text-muted small">{{ t('logs.paused') }}</span>
+    <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="follow" checked><label class="form-check-label small" for="follow">{{ t('logs.follow') }}</label></div>
     {% endif %}
-    <select id="lvlSel" class="form-select form-select-sm" style="width:auto;" title="按级别过滤当前视图">
-      <option value="">级别过滤：全部</option>
-      <option value="WARN">级别过滤：ERROR / WARN</option>
-      <option value="ERROR">级别过滤：仅 ERROR</option>
+    <select id="lvlSel" class="form-select form-select-sm" style="width:auto;">
+      <option value="">{{ t('logs.level_filter') }}</option>
+      <option value="WARN">{{ t('logs.level_warn') }}</option>
+      <option value="ERROR">{{ t('logs.level_error') }}</option>
     </select>
     <div class="dropdown">
-      <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">日志级别</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">{{ t('logs.log_level') }}</button>
       <div class="dropdown-menu p-2" style="min-width: 15rem;">
         <form method="post" action="{{ url_for('logs_settings') }}">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <label class="form-label small mb-1">写入级别（即时生效）</label>
+          <label class="form-label small mb-1">{{ t('logs.write_level') }}</label>
           <select class="form-select form-select-sm" name="app_log_level">
             {% for lv in ['DEBUG', 'INFO', 'WARNING', 'ERROR'] %}
             <option value="{{ lv }}" {{ 'selected' if (log_level or 'INFO') == lv else '' }}>{{ lv }}</option>
             {% endfor %}
           </select>
-          <div class="form-text">控制 <code>pypimeops.*</code> 与日志文件级别。</div>
-          <button class="btn btn-sm btn-primary w-100 mt-1">保存级别</button>
+          <button class="btn btn-sm btn-primary w-100 mt-1">{{ t('logs.save_level') }}</button>
         </form>
       </div>
     </div>
     <div class="ms-auto d-flex flex-wrap gap-1">
-      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#filterBox">筛选</button>
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('logs_download', file=selected, start=start, end=end, q=q, limit=limit) }}">下载</a>
-      <button type="button" class="btn btn-sm btn-outline-secondary" id="copyBtn">复制</button>
-      <button type="button" class="btn btn-sm btn-outline-secondary" id="clearBtn">清屏</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#filterBox">{{ t('common.filter') }}</button>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('logs_download', file=selected, start=start, end=end, q=q, limit=limit) }}">{{ t('logs.download') }}</a>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="copyBtn">{{ t('logs.copy') }}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="clearBtn">{{ t('logs.clear') }}</button>
     </div>
   </div>
   <div class="card-body">
@@ -54,32 +53,32 @@
       <form class="row g-2 align-items-end mb-2" method="get" action="{{ url_for('logs_page') }}">
         <input type="hidden" name="file" value="{{ selected }}">
         <input type="hidden" name="mode" value="query">
-        <div class="col-auto"><span class="small text-muted d-block">快捷</span>
+        <div class="col-auto"><span class="small text-muted d-block">{{ t('logs.quick') }}</span>
           <div class="btn-group btn-group-sm">
-            {% for r, l in [(60,'近1h'),(360,'近6h'),(1440,'近24h'),(10080,'近7天'),(43200,'近30天')] %}
-            <button type="button" class="btn btn-outline-secondary log-preset" data-range="{{ r }}">{{ l }}</button>
+            {% for r, key in [(60,'range.1h'),(360,'range.6h'),(1440,'range.24h'),(10080,'range.7d_short'),(43200,'range.30d_short')] %}
+            <button type="button" class="btn btn-outline-secondary log-preset" data-range="{{ r }}">{{ t(key) }}</button>
             {% endfor %}
-            <button type="button" class="btn btn-outline-secondary log-preset" data-range="today">今天</button>
-            <button type="button" class="btn btn-outline-secondary log-preset" data-range="yesterday">昨天</button>
+            <button type="button" class="btn btn-outline-secondary log-preset" data-range="today">{{ t('range.today') }}</button>
+            <button type="button" class="btn btn-outline-secondary log-preset" data-range="yesterday">{{ t('range.yesterday') }}</button>
           </div>
         </div>
-        <div class="col-auto"><label class="form-label small mb-0">开始</label><input class="form-control form-control-sm" type="datetime-local" name="start" step="1" value="{{ start }}"></div>
-        <div class="col-auto"><label class="form-label small mb-0">结束</label><input class="form-control form-control-sm" type="datetime-local" name="end" step="1" value="{{ end }}"></div>
-        <div class="col-auto"><label class="form-label small mb-0">关键词</label><input class="form-control form-control-sm" name="q" value="{{ q }}"></div>
-        <div class="col-auto"><label class="form-label small mb-0">最大行数</label><input class="form-control form-control-sm" style="width:6rem;" type="number" name="limit" value="{{ limit }}"></div>
-        <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
-        <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('logs_page', file=selected) }}">重置</a></div>
+        <div class="col-auto"><label class="form-label small mb-0">{{ t('logs.start') }}</label><input class="form-control form-control-sm" type="datetime-local" name="start" step="1" value="{{ start }}"></div>
+        <div class="col-auto"><label class="form-label small mb-0">{{ t('logs.end') }}</label><input class="form-control form-control-sm" type="datetime-local" name="end" step="1" value="{{ end }}"></div>
+        <div class="col-auto"><label class="form-label small mb-0">{{ t('logs.keyword') }}</label><input class="form-control form-control-sm" name="q" value="{{ q }}"></div>
+        <div class="col-auto"><label class="form-label small mb-0">{{ t('logs.max_lines') }}</label><input class="form-control form-control-sm" style="width:6rem;" type="number" name="limit" value="{{ limit }}"></div>
+        <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('logs.query_btn') }}</button></div>
+        <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('logs_page', file=selected) }}">{{ t('logs.reset') }}</a></div>
       </form>
     </div>
     {% if start or end or q %}
     <div class="mb-2 d-flex flex-wrap align-items-center gap-2">
-      <span class="small text-muted">已应用：</span>
-      {% if start or end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('logs_page', file=selected, mode='query', q=q) }}">范围 {% if start and end %}{{ start }} ~ {{ end }}{% elif start %}≥ {{ start }}{% else %}≤ {{ end }}{% endif %} ×</a>{% endif %}
-      {% if q %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('logs_page', file=selected, mode='query', start=start, end=end) }}">关键词 {{ q }} ×</a>{% endif %}
+      <span class="small text-muted">{{ t('logs.applied') }}</span>
+      {% if start or end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('logs_page', file=selected, mode='query', q=q) }}">{{ t('logs.range') }} {% if start and end %}{{ start }} ~ {{ end }}{% elif start %}≥ {{ start }}{% else %}≤ {{ end }}{% endif %} ×</a>{% endif %}
+      {% if q %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('logs_page', file=selected, mode='query', start=start, end=end) }}">{{ t('logs.keyword') }} {{ q }} ×</a>{% endif %}
     </div>
     {% endif %}
     <pre id="logbox" class="report-pre log-box" data-q="{{ q }}"></pre>
-    <div class="text-muted small mt-1">当前文件：{{ selected }} · 模式：{{ '实时' if mode == 'realtime' else '范围查询' }}{% if start or end %}；范围 {{ start }} ~ {{ end }}{% endif %}{% if q %}；关键词 {{ q }}{% endif %}</div>
+    <div class="text-muted small mt-1">{{ t('logs.current_file') }}：{{ selected }} · {{ t('logs.mode_label') }}：{{ t('logs.realtime') if mode == 'realtime' else t('logs.query') }}{% if start or end %}；{{ t('logs.range') }} {{ start }} ~ {{ end }}{% endif %}{% if q %}；{{ t('logs.keyword') }} {{ q }}{% endif %}</div>
   </div>
 </div>
 {% endblock %}
@@ -95,12 +94,8 @@
   const errRe = /\b(ERROR|FATAL|CRIT|CRITICAL)\b/i;
   const warnRe = /\b(WARN|WARNING)\b/i;
   const debugRe = /\bDEBUG\b/i;
-
-  function esc(s) {
-    return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  }
+  function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
   function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
   function render() {
     const lvl = lvlSel ? lvlSel.value : '';
     const out = [];
@@ -119,17 +114,14 @@
     box.innerHTML = out.join('\n');
     if (atBottom || (followEl && followEl.checked)) box.scrollTop = box.scrollHeight;
   }
-
   const clearBtn = document.getElementById('clearBtn');
   if (clearBtn) clearBtn.addEventListener('click', () => { raw.length = 0; render(); });
   const copyBtn = document.getElementById('copyBtn');
   if (copyBtn) copyBtn.addEventListener('click', () => copyText(raw.join('\n'), copyBtn));
   if (lvlSel) lvlSel.addEventListener('change', render);
-
   document.getElementById('fileSel').addEventListener('change', function () {
     location = {{ url_for('logs_page') | tojson }} + '?file=' + encodeURIComponent(this.value) + '&mode=' + encodeURIComponent({{ mode | tojson }});
   });
-
   document.querySelectorAll('.log-preset').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.range;
     const form = b.closest('form');
@@ -139,19 +131,13 @@
     const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
     const now = new Date();
     if (k === 'today') { const st = new Date(); st.setHours(0, 0, 0, 0); s.value = fmt(st); e.value = fmt(now); form.submit(); return; }
-    if (k === 'yesterday') {
-      const st = new Date(); st.setDate(st.getDate() - 1); st.setHours(0, 0, 0, 0);
-      const en = new Date(); en.setDate(en.getDate() - 1); en.setHours(23, 59, 59, 0);
-      s.value = fmt(st); e.value = fmt(en); form.submit(); return;
-    }
+    if (k === 'yesterday') { const st = new Date(); st.setDate(st.getDate() - 1); st.setHours(0, 0, 0, 0); const en = new Date(); en.setDate(en.getDate() - 1); en.setHours(23, 59, 59, 0); s.value = fmt(st); e.value = fmt(en); form.submit(); return; }
     const m = parseInt(k, 10);
     s.value = fmt(new Date(now.getTime() - m * 60000));
     e.value = fmt(now);
     form.submit();
   }));
-
   render();
-
   const rtBtn = document.getElementById('rtBtn');
   if (!rtBtn) return;
   const file = {{ selected | tojson }};
@@ -162,25 +148,11 @@
   function poll() {
     fetch(dataUrl + '?file=' + encodeURIComponent(file) + '&offset=' + offset)
       .then((r) => r.json())
-      .then((d) => {
-        if (d.lines && d.lines.length) { d.lines.forEach((l) => raw.push(l)); render(); }
-        if (typeof d.offset === 'number') offset = d.offset;
-      })
+      .then((d) => { if (d.lines && d.lines.length) { d.lines.forEach((l) => raw.push(l)); render(); } if (typeof d.offset === 'number') offset = d.offset; })
       .catch(() => {});
   }
-  function start() {
-    if (timer) return;
-    timer = setInterval(poll, 2000);
-    rtBtn.textContent = '暂停';
-    rtBtn.className = 'btn btn-sm btn-warning';
-    state.textContent = '实时中（每 2s）';
-  }
-  function stop() {
-    clearInterval(timer); timer = null;
-    rtBtn.textContent = '开始实时';
-    rtBtn.className = 'btn btn-sm btn-success';
-    state.textContent = '已暂停';
-  }
+  function start() { if (timer) return; timer = setInterval(poll, 2000); rtBtn.textContent = __t('js.logs_pause'); rtBtn.className = 'btn btn-sm btn-warning'; state.textContent = __t('js.logs_live'); }
+  function stop() { clearInterval(timer); timer = null; rtBtn.textContent = __t('js.logs_start'); rtBtn.className = 'btn btn-sm btn-success'; state.textContent = __t('js.logs_paused'); }
   rtBtn.addEventListener('click', () => { timer ? stop() : start(); });
 })();
 </script>

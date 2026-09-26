@@ -1,53 +1,49 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager %}
-{% block title %}报告{% endblock %}
+{% block title %}{{ t('reports.title') }}{% endblock %}
 {% block content %}
-<h4>巡检报告</h4>
-{% set cn = {'success':'成功','partial':'部分失败','error':'失败','running':'生成中'} %}
+<h4>{{ t('reports.title') }}</h4>
+<div class="small text-muted mb-2">{{ t('reports.note') }} <a href="{{ url_for('audit_logs') }}">{{ t('nav.audit') }}</a>。</div>
+{% set cn = {'success': t('reports.success'), 'partial': t('reports.partial'), 'error': t('reports.error'), 'running': t('reports.running')} %}
 {% set back_url = url_for('reports', status=status, trigger=trigger, start=start, end=end) %}
 {% set active_mods = (1 if trigger else 0) + (1 if (start or end) else 0) %}
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <div class="btn-group btn-group-sm" role="group" aria-label="报告生成状态">
-    {% for st, label in [('need','需关注'),('','全部'),('success','成功'),('partial','部分失败'),('error','失败'),('running','生成中')] %}
+  <div class="btn-group btn-group-sm flex-wrap" role="group">
+    {% for st, label in [('need', t('reports.need')),('', t('common.all')),('success', t('reports.success')),('partial', t('reports.partial')),('error', t('reports.error')),('running', t('reports.running'))] %}
       {% set cnt = need_count if st == 'need' else (total_all if st == '' else counts.get(st, 0)) %}
       {% set color = 'danger' if st in ('need','error') else ('warning' if st == 'partial' else ('info' if st == 'running' else ('success' if st == 'success' else 'secondary'))) %}
-      <a class="btn btn-{{ color if status == st else 'outline-' + color }}"
-         href="{{ url_for('reports', status=st, trigger=trigger, start=start, end=end) }}">
-        {{ label }} <span class="badge text-bg-light">{{ cnt }}</span>
-      </a>
+      <a class="btn btn-{{ color if status == st else 'outline-' + color }}" href="{{ url_for('reports', status=st, trigger=trigger, start=start, end=end) }}">{{ label }} <span class="badge text-bg-light">{{ cnt }}</span></a>
     {% endfor %}
   </div>
 
   <div class="dropdown ms-auto">
-    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-      筛选{% if active_mods %} <span class="badge bg-primary">{{ active_mods }}</span>{% endif %}
-    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">{{ t('common.filter') }}{% if active_mods %} <span class="badge bg-primary">{{ active_mods }}</span>{% endif %}</button>
     <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 23rem;">
       <div class="mb-2">
-        <div class="small text-muted mb-1">报告触发类型</div>
+        <div class="small text-muted mb-1">{{ t('reports.trigger') }}</div>
         <div class="btn-group btn-group-sm" role="group">
-          <button type="button" class="btn btn-outline-secondary f-trigger {{ 'active' if not trigger else '' }}" data-val="">全部</button>
-          <button type="button" class="btn btn-outline-secondary f-trigger {{ 'active' if trigger == 'manual' else '' }}" data-val="manual">手动</button>
-          <button type="button" class="btn btn-outline-secondary f-trigger {{ 'active' if trigger == 'schedule' else '' }}" data-val="schedule">定时</button>
+          <button type="button" class="btn btn-outline-secondary f-trigger {{ 'active' if not trigger else '' }}" data-val="">{{ t('common.all') }}</button>
+          <button type="button" class="btn btn-outline-secondary f-trigger {{ 'active' if trigger == 'manual' else '' }}" data-val="manual">{{ t('trigger.manual') }}</button>
+          <button type="button" class="btn btn-outline-secondary f-trigger {{ 'active' if trigger == 'schedule' else '' }}" data-val="schedule">{{ t('trigger.schedule') }}</button>
         </div>
       </div>
       <div class="mb-2">
-        <div class="small text-muted mb-1">报告生成时间</div>
+        <div class="small text-muted mb-1">{{ t('reports.time_range') }}</div>
         <div class="d-flex flex-wrap gap-1">
-          {% for mins, lbl in [(60,'近1h'),(360,'近6h'),(1440,'近24h'),(10080,'近7天'),(43200,'近30天')] %}
-          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="{{ mins }}">{{ lbl }}</button>
+          {% for mins, key in [(60,'range.1h'),(360,'range.6h'),(1440,'range.24h'),(10080,'range.7d_short'),(43200,'range.30d_short')] %}
+          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="{{ mins }}">{{ t(key) }}</button>
           {% endfor %}
-          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="today">今天</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="yesterday">昨天</button>
-          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="all">全部</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="today">{{ t('range.today') }}</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="yesterday">{{ t('range.yesterday') }}</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary f-preset" data-range="all">{{ t('common.all') }}</button>
         </div>
       </div>
       <div class="d-flex flex-wrap align-items-end gap-2">
-        <div><label class="form-label small mb-0">开始</label><input id="fFrom" type="datetime-local" step="1" class="form-control form-control-sm"></div>
-        <div><label class="form-label small mb-0">结束</label><input id="fTo" type="datetime-local" step="1" class="form-control form-control-sm"></div>
-        <button type="button" class="btn btn-sm btn-primary" id="fApply">应用</button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="fClear">清除</button>
+        <div><label class="form-label small mb-0">{{ t('logs.start') }}</label><input id="fFrom" type="datetime-local" step="1" class="form-control form-control-sm"></div>
+        <div><label class="form-label small mb-0">{{ t('logs.end') }}</label><input id="fTo" type="datetime-local" step="1" class="form-control form-control-sm"></div>
+        <button type="button" class="btn btn-sm btn-primary" id="fApply">{{ t('common.apply') }}</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="fClear">{{ t('common.clear') }}</button>
       </div>
     </div>
   </div>
@@ -55,30 +51,24 @@
 
 {% if trigger or start or end %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <span class="small text-muted">已应用：</span>
-  {% if trigger %}
-  <a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, trigger='', start=start, end=end) }}">触发 {{ trigger_cn.get(trigger, trigger) }} ×</a>
-  {% endif %}
-  {% if start or end %}
-  <a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, trigger=trigger, start='', end='') }}">
-    时间 {% if start and end %}{{ start.replace('T',' ')[:16] }} ~ {{ end.replace('T',' ')[:16] }}{% elif start %}≥ {{ start.replace('T',' ')[:16] }}{% else %}≤ {{ end.replace('T',' ')[:16] }}{% endif %} ×
-  </a>
-  {% endif %}
+  <span class="small text-muted">{{ t('logs.applied') }}</span>
+  {% if trigger %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, trigger='', start=start, end=end) }}">{{ t('reports.trigger') }} {{ t('trigger.' ~ trigger) }} ×</a>{% endif %}
+  {% if start or end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, trigger=trigger, start='', end='') }}">{{ t('reports.time_range') }} {% if start and end %}{{ start.replace('T',' ')[:16] }} ~ {{ end.replace('T',' ')[:16] }}{% elif start %}≥ {{ start.replace('T',' ')[:16] }}{% else %}≤ {{ end.replace('T',' ')[:16] }}{% endif %} ×</a>{% endif %}
 </div>
 {% endif %}
 
 <div class="alert alert-light border py-1 px-2 mb-2 d-none" id="uiBatchBar">
   <div class="d-flex flex-wrap align-items-center gap-2">
-    <span class="small">已选 <strong id="uiSelCount">0</strong> 项</span>
-    <button type="button" class="btn btn-sm btn-outline-danger" id="uiBatchDelete">批量删除选中的</button>
-    <button type="button" class="btn btn-sm btn-outline-danger ui-danger" data-scope="filtered" data-confirm="确认删除当前筛选结果（{{ total }} 份）？">删除筛选结果（{{ total }}）</button>
-    <button type="button" class="btn btn-sm btn-danger ui-danger" data-scope="all" data-confirm="确认清空全部 {{ total_all }} 份报告？此操作不可恢复！">清空全部（{{ total_all }}）</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBatchClear">取消选择</button>
+    <span class="small">{{ t('reports.selected_prefix') }}<strong id="uiSelCount">0</strong>{{ t('reports.selected_suffix') }}</span>
+    <button type="button" class="btn btn-sm btn-outline-danger" id="uiBatchDelete">{{ t('reports.batch_delete') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-danger ui-danger" data-scope="filtered" data-confirm="{{ t('reports.confirm_filtered', n=total) }}">{{ t('reports.delete_filtered') }}（{{ total }}）</button>
+    <button type="button" class="btn btn-sm btn-danger ui-danger" data-scope="all">{{ t('reports.clear_all') }}（{{ total_all }}）</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBatchClear">{{ t('common.cancel_select') }}</button>
   </div>
 </div>
 
 <div class="d-flex align-items-center gap-2 mb-2">
-  <div class="form-check m-0"><input class="form-check-input" type="checkbox" id="uiSelectAll"><label class="form-check-label small" for="uiSelectAll">全选当前页</label></div>
+  <div class="form-check m-0"><input class="form-check-input" type="checkbox" id="uiSelectAll"><label class="form-check-label small" for="uiSelectAll">{{ t('common.select_page') }}</label></div>
 </div>
 
 <div class="row g-2">
@@ -91,24 +81,24 @@
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <span class="badge bg-{{ status_color.get(r.status, 'secondary') }}">{{ cn.get(r.status, r.status) }}</span>
             <strong class="small">{{ r.started|local }}</strong>
-            <span class="text-muted small">#{{ r.id }} · {{ trigger_cn.get(r.trigger, r.trigger) }} · {{ '模型分析' if r.mode != 'raw' else '仅原始结果' }}</span>
+            <span class="text-muted small">#{{ r.id }} · {{ t('trigger.' ~ r.trigger) }} · {{ t('reports.mode_model') if r.mode != 'raw' else t('reports.mode_raw') }}</span>
           </div>
-          <div class="small text-muted mt-1">服务器 {{ sm.server_count or 0 }} · 耗时 {{ r.duration or '-' }} · 异常 {{ sm.error_count or 0 }} / 不确定 {{ sm.uncertain_count or 0 }}</div>
+          <div class="small text-muted mt-1">{{ t('reports.servers') }} {{ sm.server_count or 0 }} · {{ t('reports.duration') }} {{ r.duration or '-' }} · {{ t('reports.errors') }} {{ sm.error_count or 0 }} / {{ t('reports.uncertain') }} {{ sm.uncertain_count or 0 }}</div>
         </div>
         <div class="text-nowrap">
-          {% if r.report_file %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('report_detail', rid=r.id) }}">查看</a>{% endif %}
-          {% if r.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=r.id) }}">下载</a>{% endif %}
-          <form class="ui-single-del d-inline" method="post" action="{{ url_for('report_delete', rid=r.id) }}" data-confirm="删除该报告及运行记录？">
+          {% if r.report_file %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('report_detail', rid=r.id) }}">{{ t('reports.view') }}</a>{% endif %}
+          {% if r.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=r.id) }}">{{ t('common.download') }}</a>{% endif %}
+          <form class="ui-single-del d-inline" method="post" action="{{ url_for('report_delete', rid=r.id) }}" data-confirm="{{ t('reports.confirm_single') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="back" value="{{ back_url }}">
-            <button class="btn btn-sm btn-outline-danger">删除</button>
+            <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
           </form>
         </div>
       </div>
     </div>
   </div>
 {% else %}
-  <div class="col-12 text-muted">暂无报告</div>
+  <div class="col-12 text-muted">{{ t('reports.empty') }}</div>
 {% endfor %}
 </div>
 {{ pager('reports', {'status': status, 'trigger': trigger, 'start': start, 'end': end}, page, pages, total, per_page) }}
@@ -151,7 +141,7 @@
   if (selAll) selAll.addEventListener('change', () => { cbs.forEach((c) => { c.checked = selAll.checked; }); refresh(); });
   cbs.forEach((c) => c.addEventListener('change', refresh));
   document.querySelectorAll('.ui-single-del').forEach((f) => {
-    f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm || '确认删除？')) e.preventDefault(); });
+    f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm || '?')) e.preventDefault(); });
   });
   function submitBatch(scope, msg, skipConfirm) {
     if (!skipConfirm && !confirm(msg)) return;
@@ -166,15 +156,15 @@
   }
   const bdel = document.getElementById('uiBatchDelete');
   if (bdel) bdel.addEventListener('click', () => {
-    if (!checked().length) { alert('请先勾选报告'); return; }
-    submitBatch('selected', `确认删除选中的 ${checked().length} 份报告？此操作不可恢复。`);
+    if (!checked().length) { alert(__t('js.pick_first')); return; }
+    submitBatch('selected', __t('js.confirm_selected').replace('{n}', checked().length));
   });
   const bclr = document.getElementById('uiBatchClear');
   if (bclr) bclr.addEventListener('click', () => { cbs.forEach((c) => { c.checked = false; }); if (selAll) selAll.checked = false; refresh(); });
   document.querySelectorAll('.ui-danger').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.scope === 'all') {
-      const kw = prompt('此操作将删除【全部报告】，且不可恢复。\n请输入「清空全部」以确认：');
-      if (kw !== '清空全部') { if (kw !== null) alert('输入不匹配，已取消'); return; }
+      const kw = prompt(__t('js.clear_prompt'));
+      if (kw !== __t('js.clear_keyword')) { if (kw !== null) alert(__t('js.input_mismatch')); return; }
       submitBatch('all', '', true);
       return;
     }
@@ -191,29 +181,20 @@
   const from = document.getElementById('fFrom');
   const to = document.getElementById('fTo');
   const pad = (n) => String(n).padStart(2, '0');
-  const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T'
-    + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   document.querySelectorAll('.f-trigger').forEach((b) => b.addEventListener('click', () => { fTrig.value = b.dataset.val; form.submit(); }));
   document.querySelectorAll('.f-preset').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.range;
     const now = new Date();
     if (k === 'all') { fStart.value = ''; fEnd.value = ''; form.submit(); return; }
     if (k === 'today') { const s = new Date(); s.setHours(0, 0, 0, 0); fStart.value = fmt(s); fEnd.value = fmt(now); form.submit(); return; }
-    if (k === 'yesterday') {
-      const s = new Date(); s.setDate(s.getDate() - 1); s.setHours(0, 0, 0, 0);
-      const e = new Date(); e.setDate(e.getDate() - 1); e.setHours(23, 59, 59, 0);
-      fStart.value = fmt(s); fEnd.value = fmt(e); form.submit(); return;
-    }
+    if (k === 'yesterday') { const s = new Date(); s.setDate(s.getDate() - 1); s.setHours(0, 0, 0, 0); const e = new Date(); e.setDate(e.getDate() - 1); e.setHours(23, 59, 59, 0); fStart.value = fmt(s); fEnd.value = fmt(e); form.submit(); return; }
     const m = parseInt(k, 10);
     fStart.value = fmt(new Date(now.getTime() - m * 60000));
     fEnd.value = fmt(now);
     form.submit();
   }));
-  document.getElementById('fApply').addEventListener('click', () => {
-    if (from.value) fStart.value = from.value;
-    if (to.value) fEnd.value = to.value;
-    form.submit();
-  });
+  document.getElementById('fApply').addEventListener('click', () => { if (from.value) fStart.value = from.value; if (to.value) fEnd.value = to.value; form.submit(); });
   document.getElementById('fClear').addEventListener('click', () => { fTrig.value = ''; fStart.value = ''; fEnd.value = ''; form.submit(); });
   from.value = fStart.value || '';
   to.value = fEnd.value || '';

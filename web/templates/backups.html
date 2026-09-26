@@ -1,18 +1,15 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager %}
-{% block title %}备份恢复{% endblock %}
+{% block title %}{{ t('nav.backups') }}{% endblock %}
 {% block content %}
-<h4>配置版本备份 / 恢复</h4>
-<div class="alert alert-secondary small">
-  本页仅显示<strong>审计以外的备份</strong>（如"恢复前自动备份当前状态"、导入的版本链等）；
-  常规增/删/改产生的版本已合并到 <a href="{{ url_for('audit_logs') }}">审计日志</a>，可在对应记录上直接"查看/恢复"。
-</div>
+<h4>{{ t('backups.title') }}</h4>
+<div class="alert alert-secondary small">{{ t('backups.alert') }}</div>
 
 {% set flt = {'object_type': object_type, 'object_id': object_id, 'action': action} %}
 <ul class="nav nav-pills mb-3">
-  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'objects' else '' }}" href="{{ url_for('backups', tab='objects', **flt) }}">按对象 <span class="badge text-bg-light">{{ obj_count }}</span></a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'versions' else '' }}" href="{{ url_for('backups', tab='versions', **flt) }}">版本明细 <span class="badge text-bg-light">{{ ver_count }}</span></a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'io' else '' }}" href="{{ url_for('backups', tab='io') }}">导入导出</a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'objects' else '' }}" href="{{ url_for('backups', tab='objects', **flt) }}">{{ t('backups.tab_objects') }} <span class="badge text-bg-light">{{ obj_count }}</span></a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'versions' else '' }}" href="{{ url_for('backups', tab='versions', **flt) }}">{{ t('backups.tab_versions') }} <span class="badge text-bg-light">{{ ver_count }}</span></a></li>
+  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'io' else '' }}" href="{{ url_for('backups', tab='io') }}">{{ t('backups.tab_io') }}</a></li>
 </ul>
 
 {% if tab in ('objects', 'versions') %}
@@ -20,73 +17,73 @@
   <input type="hidden" name="tab" value="{{ tab }}">
   <div class="col-auto">
     <select class="form-select form-select-sm" name="object_type">
-      <option value="">全部类型</option>
-      {% for t in objtypes %}<option value="{{ t }}" {{ 'selected' if object_type == t else '' }}>{{ ttype_cn.get(t, t) }}</option>{% endfor %}
+      <option value="">{{ t('backups.all_types') }}</option>
+      {% for tp in objtypes %}<option value="{{ tp }}" {{ 'selected' if object_type == tp else '' }}>{{ t('type.' ~ tp) }}</option>{% endfor %}
     </select>
   </div>
   <div class="col-auto">
     <select class="form-select form-select-sm" name="action">
-      <option value="">全部动作</option>
-      {% for a in actions %}<option value="{{ a }}" {{ 'selected' if action == a else '' }}>{{ action_cn.get(a, a) }}</option>{% endfor %}
+      <option value="">{{ t('backups.all_actions') }}</option>
+      {% for a in actions %}<option value="{{ a }}" {{ 'selected' if action == a else '' }}>{{ t('audit.' ~ a) }}</option>{% endfor %}
     </select>
   </div>
-  <div class="col-auto"><input class="form-control form-control-sm" name="object_id" value="{{ object_id }}" placeholder="对象 ID"></div>
-  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">筛选</button></div>
-  {% if object_type or object_id or action %}<div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('backups', tab=tab) }}">重置</a></div>{% endif %}
+  <div class="col-auto"><input class="form-control form-control-sm" name="object_id" value="{{ object_id }}" placeholder="{{ t('backups.object_id') }}"></div>
+  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.filter') }}</button></div>
+  {% if object_type or object_id or action %}<div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('backups', tab=tab) }}">{{ t('common.reset') }}</a></div>{% endif %}
 </form>
 {% endif %}
 
 {% if tab == 'objects' %}
 <table class="table table-sm table-hover align-middle">
-  <thead><tr><th>对象</th><th>版本数</th><th>最近动作</th><th>最近时间</th><th class="text-end">操作</th></tr></thead>
+  <thead><tr><th>{{ t('backups.obj') }}</th><th>{{ t('backups.version_count') }}</th><th>{{ t('backups.last_action') }}</th><th>{{ t('backups.last_time') }}</th><th class="text-end">{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for g in grouped %}
     <tr>
       <td>
-        {% if g.display_name %}<a href="{{ url_for('backups', tab='versions', object_type=g.object_type, object_id=g.object_id) }}">{{ g.display_name }}</a>{% else %}<span class="text-muted">（已删除）</span>{% endif %}
-        <span class="badge bg-secondary ms-1">{{ ttype_cn.get(g.object_type, g.object_type) }}</span>
+        {% if g.display_name %}<a href="{{ url_for('backups', tab='versions', object_type=g.object_type, object_id=g.object_id) }}">{{ g.display_name }}</a>{% else %}<span class="text-muted">{{ t('backups.deleted_obj') }}</span>{% endif %}
+        <span class="badge bg-secondary ms-1">{{ t('type.' ~ g.object_type) }}</span>
         <code class="small text-muted ms-1">{{ g.object_type }}#{{ g.object_id }}</code>
       </td>
       <td>{{ g.cnt }}</td>
-      <td>{% if g.last_action %}<span class="badge bg-{{ action_color.get(g.last_action, 'secondary') }}">{{ action_cn.get(g.last_action, g.last_action) }}</span>{% endif %}</td>
+      <td>{% if g.last_action %}<span class="badge bg-{{ action_color.get(g.last_action, 'secondary') }}">{{ t('audit.' ~ g.last_action) }}</span>{% endif %}</td>
       <td class="small">{{ g.last_at|local }}</td>
       <td class="text-end text-nowrap">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('backups', tab='versions', object_type=g.object_type, object_id=g.object_id) }}">查看版本</a>
-        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=g.last_id) }}">最近快照</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('backups', tab='versions', object_type=g.object_type, object_id=g.object_id) }}">{{ t('backups.view_versions') }}</a>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=g.last_id) }}">{{ t('backups.latest_snapshot') }}</a>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="text-muted">暂无版本记录</td></tr>
+    <tr><td colspan="5" class="text-muted">{{ t('backups.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
 {% elif tab == 'versions' %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <span class="small text-muted">已选 <strong id="cmpCount">0</strong> 个版本（勾选两个可对比）</span>
-  <button type="button" class="btn btn-sm btn-outline-primary" id="cmpBtn" disabled>对比选中的两个版本</button>
+  <span class="small text-muted">{{ t('reports.selected_versions_prefix') }}<strong id="cmpCount">0</strong>{{ t('reports.selected_versions_suffix') }}</span>
+  <button type="button" class="btn btn-sm btn-outline-primary" id="cmpBtn" disabled>{{ t('backups.compare_selected') }}</button>
 </div>
 <table class="table table-sm table-hover align-middle">
-  <thead><tr><th style="width:32px"></th><th>对象</th><th>版本</th><th>动作</th><th>时间</th><th>IP</th><th>备注</th><th class="text-end">操作</th></tr></thead>
+  <thead><tr><th style="width:32px"></th><th>{{ t('backups.obj') }}</th><th>{{ t('common.version') }}</th><th>{{ t('common.action') }}</th><th>{{ t('common.time') }}</th><th>{{ t('common.ip') }}</th><th>{{ t('common.note') }}</th><th class="text-end">{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for v in versions %}
     <tr>
       <td><input class="form-check-input ver-cb" type="checkbox" value="{{ v.id }}"></td>
       <td>
-        {% if v.display_name %}{{ v.display_name }}{% else %}<span class="text-muted">（已删除）</span>{% endif %}
-        <span class="badge bg-secondary ms-1">{{ ttype_cn.get(v.object_type, v.object_type) }}</span>
+        {% if v.display_name %}{{ v.display_name }}{% else %}<span class="text-muted">{{ t('backups.deleted_obj') }}</span>{% endif %}
+        <span class="badge bg-secondary ms-1">{{ t('type.' ~ v.object_type) }}</span>
         <code class="small text-muted ms-1">{{ v.object_type }}#{{ v.object_id }}</code>
       </td>
       <td>v{{ v.version }}</td>
-      <td><span class="badge bg-{{ action_color.get(v.action, 'secondary') }}">{{ action_cn.get(v.action, v.action) }}</span></td>
+      <td><span class="badge bg-{{ action_color.get(v.action, 'secondary') }}">{{ t('audit.' ~ v.action) }}</span></td>
       <td class="small">{{ v.created_at|local }}</td>
       <td class="small">{{ v.operator_ip }}</td>
       <td class="small">{{ v.note }}</td>
       <td class="text-end text-nowrap">
-        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=v.id) }}">查看/恢复</a>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=v.id) }}">{{ t('backups.view_restore') }}</a>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="8" class="text-muted">暂无版本记录</td></tr>
+    <tr><td colspan="8" class="text-muted">{{ t('backups.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -94,23 +91,22 @@
 {% else %}
 <div class="row g-3">
   <div class="col-md-5">
-    <div class="card"><div class="card-header">全量导出</div><div class="card-body">
-      <p class="small text-muted">导出全部配置对象、settings、版本链与加密凭据（不含明文密钥）。</p>
-      <a class="btn btn-outline-primary" href="{{ url_for('backup_export') }}">下载 JSON</a>
+    <div class="card"><div class="card-header">{{ t('backups.export_full') }}</div><div class="card-body">
+      <a class="btn btn-outline-primary" href="{{ url_for('backup_export') }}">{{ t('common.download') }} JSON</a>
     </div></div>
   </div>
   <div class="col-md-7">
-    <div class="card"><div class="card-header">全量导入</div><div class="card-body">
+    <div class="card"><div class="card-header">{{ t('backups.import_full') }}</div><div class="card-body">
       <form method="post" action="{{ url_for('backup_import') }}" enctype="multipart/form-data" class="row g-2" onsubmit="return confirmImport(this)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="col-7"><input class="form-control" type="file" name="file" accept="application/json" required></div>
         <div class="col-3"><select class="form-select" name="mode">
-          <option value="daily">新增式（分配新 ID）</option>
-          <option value="migrate">覆盖式（保留原 ID）</option>
+          <option value="daily">{{ t('backups.mode_daily') }}</option>
+          <option value="migrate">{{ t('backups.mode_migrate') }}</option>
         </select></div>
-        <div class="col-2"><button class="btn btn-primary">导入</button></div>
-        <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="force" id="impForce"><label class="form-check-label small" for="impForce">覆盖式需勾选确认（非空库）</label></div></div>
-        <div class="col-12"><div class="form-text">新增式：为导入对象分配新 ID，安全，适合日常合并。覆盖式：保留原 ID 与版本链，仅限空库或二次确认，风险高。</div></div>
+        <div class="col-2"><button class="btn btn-primary">{{ t('backups.import') }}</button></div>
+        <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="force" id="impForce"><label class="form-check-label small" for="impForce">{{ t('backups.force_label') }}</label></div></div>
+        <div class="col-12"><div class="form-text">{{ t('backups.mode_hint') }}</div></div>
       </form>
     </div></div>
   </div>
@@ -141,7 +137,7 @@
 })();
 function confirmImport(form) {
   const mode = form.querySelector('select[name="mode"]').value;
-  if (mode === 'migrate') return confirm('覆盖式导入将保留原 ID 并覆盖同 ID 对象，风险较高。确认继续？');
+  if (mode === 'migrate') return confirm(__t('js.confirm_import'));
   return true;
 }
 </script>

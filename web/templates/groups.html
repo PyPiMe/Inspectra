@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager %}
-{% block title %}分组{% endblock %}
+{% block title %}{{ t('nav.groups') }}{% endblock %}
 {% block content %}
-<h4>分组管理</h4>
+<h4>{{ t('groups.title') }}</h4>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createGroup">新增分组</button>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createGroup">{{ t('groups.new') }}</button>
   <form class="row g-2" method="get" action="{{ url_for('groups') }}">
-    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="名称/说明"></div>
-    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
-    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('groups') }}">重置</a></div>
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('groups.query_ph') }}"></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('groups') }}">{{ t('common.reset') }}</a></div>
   </form>
 </div>
 
 <table class="table table-sm table-hover">
-  <thead><tr><th>名称</th><th>说明</th><th>组级标签</th><th>操作</th></tr></thead>
+  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('common.desc') }}</th><th>{{ t('groups.labels') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for g in groups %}
     <tr>
@@ -21,16 +21,16 @@
       <td>{{ g.desc }}</td>
       <td><code class="small">{{ g.prom_labels_json }}</code></td>
       <td class="text-nowrap">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('groups_history', gid=g.id) }}">历史</a>
-        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ g.id }}">编辑</button>
-        <form method="post" action="{{ url_for('groups_delete', gid=g.id) }}" class="d-inline" onsubmit="return confirm('确认删除？')">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('groups_history', gid=g.id) }}">{{ t('common.history') }}</a>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ g.id }}">{{ t('common.edit') }}</button>
+        <form method="post" action="{{ url_for('groups_delete', gid=g.id) }}" class="d-inline" onsubmit="return confirm('{{ t('common.confirm_delete') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="btn btn-sm btn-outline-danger">删除</button>
+          <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
         </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="4" class="text-muted">暂无分组</td></tr>
+    <tr><td colspan="4" class="text-muted">{{ t('groups.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -39,13 +39,13 @@
 <div class="modal fade" id="createGroup"><div class="modal-dialog"><div class="modal-content">
   <form method="post" action="{{ url_for('groups_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="modal-header"><h5 class="modal-title">新增分组</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('groups.new') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><label class="form-label">名称</label><input class="form-control" name="name" required></div>
-      <div class="mb-2"><label class="form-label">说明</label><input class="form-control" name="desc"></div>
-      <div class="mb-2"><label class="form-label">组级 Prometheus 标签 (JSON)</label><textarea class="form-control" name="prom_labels_json" rows="2">{}</textarea></div>
+      <div class="mb-2"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" required></div>
+      <div class="mb-2"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc"></div>
+      <div class="mb-2"><label class="form-label">{{ t('groups.prom_labels') }}</label><textarea class="form-control" name="prom_labels_json" rows="2">{}</textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 
@@ -54,13 +54,13 @@
   <form method="post" action="{{ url_for('groups_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <input type="hidden" name="id" value="{{ g.id }}">
-    <div class="modal-header"><h5 class="modal-title">编辑分组 #{{ g.id }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('groups.edit_title', id=g.id) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <div class="mb-2"><label class="form-label">名称</label><input class="form-control" name="name" value="{{ g.name }}" required></div>
-      <div class="mb-2"><label class="form-label">说明</label><input class="form-control" name="desc" value="{{ g.desc }}"></div>
-      <div class="mb-2"><label class="form-label">组级 Prometheus 标签 (JSON)</label><textarea class="form-control" name="prom_labels_json" rows="2">{{ g.prom_labels_json }}</textarea></div>
+      <div class="mb-2"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ g.name }}" required></div>
+      <div class="mb-2"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ g.desc }}"></div>
+      <div class="mb-2"><label class="form-label">{{ t('groups.prom_labels') }}</label><textarea class="form-control" name="prom_labels_json" rows="2">{{ g.prom_labels_json }}</textarea></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 {% endfor %}

@@ -1,51 +1,51 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager %}
-{% block title %}数据源{% endblock %}
+{% block title %}{{ t('nav.datasources') }}{% endblock %}
 {% block content %}
-<h4>Prometheus 数据源</h4>
+<h4>{{ t('datasources.title') }}</h4>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDs">新增数据源</button>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDs">{{ t('datasources.new') }}</button>
   <form class="row g-2" method="get" action="{{ url_for('datasources') }}">
-    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="名称/地址"></div>
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('datasources.query_ph') }}"></div>
     <div class="col-auto">
       <select class="form-select form-select-sm" name="enabled">
-        <option value="">全部状态</option>
-        <option value="1" {{ 'selected' if enabled == '1' else '' }}>启用</option>
-        <option value="0" {{ 'selected' if enabled == '0' else '' }}>停用</option>
+        <option value="">{{ t('servers.all_status') }}</option>
+        <option value="1" {{ 'selected' if enabled == '1' else '' }}>{{ t('common.enabled') }}</option>
+        <option value="0" {{ 'selected' if enabled == '0' else '' }}>{{ t('common.disabled') }}</option>
       </select>
     </div>
-    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
-    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('datasources') }}">重置</a></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('datasources') }}">{{ t('common.reset') }}</a></div>
   </form>
 </div>
 
 <table class="table table-sm table-hover">
-  <thead><tr><th>名称</th><th>地址</th><th>认证</th><th>secret_env</th><th>校验TLS</th><th>超时</th><th>默认标签</th><th>启用</th><th>已绑服务器</th><th>操作</th></tr></thead>
+  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('datasources.base_url') }}</th><th>{{ t('datasources.auth') }}</th><th>secret_env</th><th>{{ t('datasources.verify_tls') }}</th><th>{{ t('datasources.timeout') }}</th><th>{{ t('datasources.labels') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('datasources.bound') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for d in datasources %}
     {% set binds = bindings_by_ds.get(d.id, []) %}
     <tr>
       <td>{{ d.name }}</td><td>{{ d.base_url }}</td><td>{{ d.auth_type }}</td>
-      <td>{{ d.secret_env }}</td><td>{{ '是' if d.verify_tls else '否' }}</td><td>{{ d.timeout }}s</td>
+      <td>{{ d.secret_env }}</td><td>{{ t('common.yes') if d.verify_tls else t('common.no') }}</td><td>{{ d.timeout }}s</td>
       <td><code class="small">{{ d.labels_json if d.labels_json and d.labels_json != '{}' else '-' }}</code></td>
-      <td>{{ '是' if d.enabled else '否' }}</td>
+      <td>{{ t('common.yes') if d.enabled else t('common.no') }}</td>
       <td>
         {% if binds %}
           <span class="badge bg-info text-dark">{{ binds|length }}</span>
-          <button class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#bind{{ d.id }}">查看</button>
+          <button class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#bind{{ d.id }}">{{ t('datasources.view') }}</button>
         {% else %}
-          <span class="text-muted small">-（仅 SSH 巡检）</span>
+          <span class="text-muted small">{{ t('datasources.ssh_only') }}</span>
         {% endif %}
       </td>
       <td class="text-nowrap">
-        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ d.id }}">编辑</button>
-        <form method="post" action="{{ url_for('datasources_delete', did=d.id) }}" class="d-inline" onsubmit="return confirm('确认删除？')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">删除</button>
+        <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ d.id }}">{{ t('common.edit') }}</button>
+        <form method="post" action="{{ url_for('datasources_delete', did=d.id) }}" class="d-inline" onsubmit="return confirm('{{ t('datasources.confirm_delete') }}')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
         </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="10" class="text-muted">暂无数据源</td></tr>
+    <tr><td colspan="10" class="text-muted">{{ t('datasources.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -54,31 +54,31 @@
 <div class="modal fade" id="createDs"><div class="modal-dialog modal-lg"><div class="modal-content">
   <form method="post" action="{{ url_for('datasources_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="modal-header"><h5 class="modal-title">新增数据源</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('datasources.new') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body row g-2">
-      <div class="col-md-6"><label class="form-label">名称</label><input class="form-control" name="name" required></div>
-      <div class="col-md-6"><label class="form-label">地址</label><input class="form-control" name="base_url" placeholder="http://host:9090" required></div>
-      <div class="col-md-4"><label class="form-label">认证</label>
+      <div class="col-md-6"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" required></div>
+      <div class="col-md-6"><label class="form-label">{{ t('datasources.base_url') }}</label><input class="form-control" name="base_url" placeholder="http://host:9090" required></div>
+      <div class="col-md-4"><label class="form-label">{{ t('datasources.auth') }}</label>
         <select class="form-select" name="auth_type"><option value="none">none</option><option value="basic">basic</option><option value="bearer">bearer</option></select>
       </div>
       <div class="col-md-4"><label class="form-label">secret_env</label><input class="form-control" name="secret_env" placeholder="PROM_TOKEN"></div>
-      <div class="col-md-4"><label class="form-label">超时(秒)</label><input class="form-control" name="timeout" value="10"></div>
-      <div class="col-md-6"><label class="form-label">默认标签 (JSON，可作 instance 匹配兜底)</label>
+      <div class="col-md-4"><label class="form-label">{{ t('datasources.timeout_s') }}</label><input class="form-control" name="timeout" value="10"></div>
+      <div class="col-md-6"><label class="form-label">{{ t('datasources.labels_hint') }}</label>
         <input class="form-control" name="labels_json" value="{}">
         <select class="form-select form-select-sm mt-1" id="createDs-jobs" onchange="applyJob(this, 'createDs')" disabled>
-          <option value="">测试成功后可选 job…</option>
+          <option value="">{{ t('datasources.job_ph') }}</option>
         </select>
       </div>
       <div class="col-md-6 d-flex align-items-end gap-2">
-        <button type="button" class="btn btn-outline-secondary" onclick="testDsForm('createDs', this)">测试连通性</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="testDsForm('createDs', this)">{{ t('datasources.test') }}</button>
         <span id="createDs-result" class="small"></span>
       </div>
       <div class="col-12">
-        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="verify_tls" checked><label class="form-check-label">校验 TLS</label></div>
-        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">启用</label></div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="verify_tls" checked><label class="form-check-label">{{ t('datasources.verify_tls') }}</label></div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">{{ t('common.enabled') }}</label></div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 
@@ -86,56 +86,56 @@
 <div class="modal fade" id="edit{{ d.id }}"><div class="modal-dialog modal-lg"><div class="modal-content">
   <form method="post" action="{{ url_for('datasources_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="id" value="{{ d.id }}">
-    <div class="modal-header"><h5 class="modal-title">编辑数据源「{{ d.name }}」</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('datasources.edit_title', name=d.name) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body row g-2">
-      <div class="col-md-6"><label class="form-label">名称</label><input class="form-control" name="name" value="{{ d.name }}" required></div>
-      <div class="col-md-6"><label class="form-label">地址</label><input class="form-control" name="base_url" value="{{ d.base_url }}" required></div>
-      <div class="col-md-4"><label class="form-label">认证</label>
+      <div class="col-md-6"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ d.name }}" required></div>
+      <div class="col-md-6"><label class="form-label">{{ t('datasources.base_url') }}</label><input class="form-control" name="base_url" value="{{ d.base_url }}" required></div>
+      <div class="col-md-4"><label class="form-label">{{ t('datasources.auth') }}</label>
         <select class="form-select" name="auth_type">
           {% for a in ['none','basic','bearer'] %}<option value="{{ a }}" {{ 'selected' if d.auth_type==a else '' }}>{{ a }}</option>{% endfor %}
         </select>
       </div>
       <div class="col-md-4"><label class="form-label">secret_env</label><input class="form-control" name="secret_env" value="{{ d.secret_env }}"></div>
-      <div class="col-md-4"><label class="form-label">超时</label><input class="form-control" name="timeout" value="{{ d.timeout }}"></div>
-      <div class="col-md-6"><label class="form-label">默认标签 (JSON)</label>
+      <div class="col-md-4"><label class="form-label">{{ t('datasources.timeout') }}</label><input class="form-control" name="timeout" value="{{ d.timeout }}"></div>
+      <div class="col-md-6"><label class="form-label">{{ t('datasources.labels') }} (JSON)</label>
         <input class="form-control" name="labels_json" value="{{ d.labels_json or '{}' }}">
         <select class="form-select form-select-sm mt-1" id="edit{{ d.id }}-jobs" onchange="applyJob(this, 'edit{{ d.id }}')" disabled>
-          <option value="">测试成功后可选 job…</option>
+          <option value="">{{ t('datasources.job_ph') }}</option>
         </select>
       </div>
       <div class="col-md-6 d-flex align-items-end gap-2">
-        <button type="button" class="btn btn-outline-secondary" onclick="testDsForm('edit{{ d.id }}', this)">测试连通性</button>
+        <button type="button" class="btn btn-outline-secondary" onclick="testDsForm('edit{{ d.id }}', this)">{{ t('datasources.test') }}</button>
         <span id="edit{{ d.id }}-result" class="small"></span>
       </div>
       <div class="col-12">
-        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="verify_tls" {{ 'checked' if d.verify_tls else '' }}><label class="form-check-label">校验 TLS</label></div>
-        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if d.enabled else '' }}><label class="form-check-label">启用</label></div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="verify_tls" {{ 'checked' if d.verify_tls else '' }}><label class="form-check-label">{{ t('datasources.verify_tls') }}</label></div>
+        <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if d.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div>
       </div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 
 {% set binds = bindings_by_ds.get(d.id, []) %}
 {% if binds %}
 <div class="modal fade" id="bind{{ d.id }}"><div class="modal-dialog modal-lg"><div class="modal-content">
-  <div class="modal-header"><h5 class="modal-title">数据源「{{ d.name }}」已绑服务器（{{ binds|length }}）</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-header"><h5 class="modal-title">{{ t('datasources.bind_title', name=d.name, n=binds|length) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <table class="table table-sm">
-      <thead><tr><th>服务器</th><th>IP</th><th>prom_instance</th><th>promql 脚本</th><th>状态</th></tr></thead>
+      <thead><tr><th>{{ t('nav.servers') }}</th><th>{{ t('common.ip') }}</th><th>prom_instance</th><th>{{ t('servers.prom_scripts') }}</th><th>{{ t('common.status') }}</th></tr></thead>
       <tbody>
       {% for b in binds %}
         <tr>
           <td>{% if b.server_id %}<a href="{{ url_for('server_detail', sid=b.server_id) }}">{{ b.hostname }}</a>{% else %}{{ b.hostname }}{% endif %}</td>
           <td class="small">{{ b.ip or '-' }}</td>
-          <td class="small">{{ b.prom_instance or '按 IP 推导' }}</td>
+          <td class="small">{{ b.prom_instance or t('datasources.derive_ip') }}</td>
           <td class="small">{{ b.script_count }}</td>
-          <td>{% if b.enabled %}<span class="badge bg-success">启用</span>{% else %}<span class="badge bg-secondary">停用</span>{% endif %}</td>
+          <td>{% if b.enabled %}<span class="badge bg-success">{{ t('common.enabled') }}</span>{% else %}<span class="badge bg-secondary">{{ t('common.disabled') }}</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>
     </table>
-    <div class="text-muted small">绑定维护入口：服务器详情页 → 「Prometheus 数据源绑定」。</div>
+    <div class="text-muted small">{{ t('datasources.bind_hint') }}</div>
   </div>
 </div></div></div>
 {% endif %}
@@ -167,19 +167,19 @@ async function testDsForm(modalId, btn) {
     secret_env: val('secret_env'), verify_tls: val('verify_tls'), timeout: val('timeout'),
   });
   const out = document.getElementById(modalId + '-result');
-  out.textContent = '测试中…'; out.className = 'small text-muted';
+  out.textContent = __t('js.testing'); out.className = 'small text-muted';
   try {
     const d = await (await fetch('{{ url_for("datasources_test_ajax") }}', { method: 'POST', body })).json();
     out.textContent = (d.ok ? '✅ ' : '❌ ') + (d.message || '');
     out.className = 'small ' + (d.ok ? 'text-success' : 'text-danger');
     const sel = document.getElementById(modalId + '-jobs');
     if (sel) {
-      sel.innerHTML = '<option value="">选择 job 填充标签…</option>';
+      sel.innerHTML = '<option value="">' + __t('js.choose_job') + '</option>';
       (d.jobs || []).forEach((j) => { const o = document.createElement('option'); o.value = j; o.textContent = j; sel.appendChild(o); });
       sel.disabled = !(d.jobs || []).length;
     }
   } catch (e) {
-    out.textContent = '测试失败：' + e; out.className = 'small text-danger';
+    out.textContent = __t('js.test_failed') + e; out.className = 'small text-danger';
   }
 }
 </script>

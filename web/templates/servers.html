@@ -1,55 +1,55 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager, conn_badge, script_picker %}
-{% block title %}服务器{% endblock %}
+{% block title %}{{ t('nav.servers') }}{% endblock %}
 {% block content %}
-<h4>服务器</h4>
+<h4>{{ t('nav.servers') }}</h4>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createServer">新增服务器</button>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createServer">{{ t('servers.new') }}</button>
   <form class="row g-2" method="get" action="{{ url_for('servers') }}">
-    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="主机名/IP"></div>
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('servers.query_ph') }}"></div>
     <div class="col-auto">
       <select class="form-select form-select-sm" name="group_id">
-        <option value="">全部分组</option>
+        <option value="">{{ t('servers.all_groups') }}</option>
         {% for g in all_groups %}<option value="{{ g.id }}" {{ 'selected' if group_id == g.id else '' }}>{{ g.name }}</option>{% endfor %}
       </select>
     </div>
     <div class="col-auto">
       <select class="form-select form-select-sm" name="enabled">
-        <option value="">全部状态</option>
-        <option value="1" {{ 'selected' if enabled == '1' else '' }}>启用</option>
-        <option value="0" {{ 'selected' if enabled == '0' else '' }}>停用</option>
+        <option value="">{{ t('servers.all_status') }}</option>
+        <option value="1" {{ 'selected' if enabled == '1' else '' }}>{{ t('common.enabled') }}</option>
+        <option value="0" {{ 'selected' if enabled == '0' else '' }}>{{ t('common.disabled') }}</option>
       </select>
     </div>
-    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">查询</button></div>
-    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('servers') }}">重置</a></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('servers') }}">{{ t('common.reset') }}</a></div>
   </form>
 </div>
 
 <table class="table table-sm table-hover">
-  <thead><tr><th>主机名</th><th>IP</th><th>连接方式</th><th>SSH端口</th><th>用户</th><th>分组</th><th>凭据</th><th>启用</th><th>操作</th></tr></thead>
+  <thead><tr><th>{{ t('servers.hostname') }}</th><th>{{ t('common.ip') }}</th><th>{{ t('servers.conn') }}</th><th>{{ t('servers.ssh_port') }}</th><th>{{ t('servers.user') }}</th><th>{{ t('servers.group') }}</th><th>{{ t('servers.credential') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for s in servers %}
-    {% set ct = conn_types.get(s.id, '未配置') %}
+    {% set ct = conn_types.get(s.id, t('servers.not_configured')) %}
     <tr>
       <td><a href="{{ url_for('server_detail', sid=s.id) }}">{{ s.hostname }}</a>
-        {% if s.vm_ident %} <span class="badge bg-light text-dark border" title="虚拟化标识">VM: {{ s.vm_ident }}</span>{% endif %}</td>
+        {% if s.vm_ident %} <span class="badge bg-light text-dark border" title="{{ t('servers.vm_ident') }}">VM: {{ s.vm_ident }}</span>{% endif %}</td>
       <td>{{ s.ip }}</td>
       <td>{{ conn_badge(ct) }}</td>
       <td>{{ s.port if s.port else '-' }}</td>
       <td>{{ s.user }}</td>
       <td>{{ groups.get(s.group_id).name if s.group_id and groups.get(s.group_id) else '-' }}</td>
       <td>{{ cred_names.get(s.vault_key) if s.vault_key else '-' }}</td>
-      <td>{{ '是' if s.enabled else '否' }}</td>
+      <td>{{ t('common.yes') if s.enabled else t('common.no') }}</td>
       <td class="text-nowrap">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_detail', sid=s.id) }}">详情</a>
-        <form method="post" action="{{ url_for('servers_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('确认删除？将同时删除数据源绑定')">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_detail', sid=s.id) }}">{{ t('common.details') }}</a>
+        <form method="post" action="{{ url_for('servers_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('servers.confirm_delete') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="btn btn-sm btn-outline-danger">删除</button>
+          <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
         </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="text-muted">暂无服务器</td></tr>
+    <tr><td colspan="9" class="text-muted">{{ t('servers.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
@@ -58,50 +58,50 @@
 <div class="modal fade" id="createServer"><div class="modal-dialog modal-lg"><div class="modal-content">
   <form method="post" action="{{ url_for('servers_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="modal-header"><h5 class="modal-title">新增服务器</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-header"><h5 class="modal-title">{{ t('servers.new_title') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
-      <h6 class="text-muted">① 基本信息</h6>
+      <h6 class="text-muted">{{ t('servers.basic') }}</h6>
       <div class="row g-2 mb-2">
-        <div class="col-md-6"><label class="form-label">主机名</label><input class="form-control" name="hostname" required></div>
-        <div class="col-md-6"><label class="form-label">IP</label><input class="form-control" name="ip" required></div>
-        <div class="col-md-6"><label class="form-label">虚拟化标识（可选）</label><input class="form-control" name="vm_ident" placeholder="PVE 虚拟机名或 id（如 app-vm-01 / qemu/101）"></div>
-        <div class="col-md-6"><label class="form-label">分组</label>
+        <div class="col-md-6"><label class="form-label">{{ t('servers.hostname') }}</label><input class="form-control" name="hostname" required></div>
+        <div class="col-md-6"><label class="form-label">{{ t('common.ip') }}</label><input class="form-control" name="ip" required></div>
+        <div class="col-md-6"><label class="form-label">{{ t('servers.vm_ident') }}</label><input class="form-control" name="vm_ident" placeholder="{{ t('servers.vm_ident_ph') }}"></div>
+        <div class="col-md-6"><label class="form-label">{{ t('servers.group') }}</label>
           <select class="form-select" name="group_id"><option value="">-</option>
             {% for g in all_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
           </select>
         </div>
       </div>
 
-      <h6 class="text-muted">② SSH 信息（可选，仅 Prometheus 巡检可留空）</h6>
+      <h6 class="text-muted">{{ t('servers.ssh_info') }}</h6>
       <div class="row g-2 mb-2">
-        <div class="col-md-4"><label class="form-label">SSH 端口</label><input class="form-control" name="port" placeholder="留空=不使用 SSH"></div>
-        <div class="col-md-4"><label class="form-label">用户</label><input class="form-control" name="user"></div>
-        <div class="col-md-4"><label class="form-label">凭据</label>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.ssh_port') }}</label><input class="form-control" name="port" placeholder="{{ t('servers.port_ph') }}"></div>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.user') }}</label><input class="form-control" name="user"></div>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.credential') }}</label>
           <select class="form-select" name="vault_key"><option value="">-</option>
             {% for c in credentials %}<option value="{{ c.key }}">{{ c.name }}</option>{% endfor %}
           </select>
         </div>
-        <div class="col-12"><label class="form-label">Shell 脚本</label>
+        <div class="col-12"><label class="form-label">{{ t('servers.shell_scripts') }}</label>
           {{ script_picker('scripts', scripts, [], 'spShellCreate') }}
         </div>
       </div>
 
-      <h6 class="text-muted">③ Prometheus 数据源绑定（可选，单个）</h6>
+      <h6 class="text-muted">{{ t('servers.prom_binding') }}</h6>
       <div class="row g-2">
-        <div class="col-md-4"><label class="form-label">数据源</label>
+        <div class="col-md-4"><label class="form-label">{{ t('nav.datasources') }}</label>
           <select class="form-select" name="datasource_id"><option value="">-</option>
             {% for d in datasources %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
           </select>
         </div>
-        <div class="col-md-4"><label class="form-label">prom_instance（可空=按 IP 推导）</label><input class="form-control" name="prom_instance"></div>
-        <div class="col-md-4"><label class="form-label">标签覆盖 (JSON)</label><input class="form-control" name="labels_json" value="{}"></div>
-        <div class="col-12"><label class="form-label">promql 脚本</label>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.prom_instance') }}</label><input class="form-control" name="prom_instance"></div>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.labels_override') }}</label><input class="form-control" name="labels_json" value="{}"></div>
+        <div class="col-12"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
           {{ script_picker('prom_scripts', prom_scripts, [], 'spPromCreate') }}
         </div>
       </div>
-      <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">启用</label></div>
+      <div class="form-check mt-2"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">{{ t('common.enabled') }}</label></div>
     </div>
-    <div class="modal-footer"><button class="btn btn-primary">保存</button></div>
+    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
 </div></div></div>
 {% endblock %}

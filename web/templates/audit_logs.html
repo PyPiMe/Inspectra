@@ -1,82 +1,83 @@
 {% extends "base.html" %}
 {% from "_macros.html" import pager %}
-{% block title %}审计日志{% endblock %}
+{% block title %}{{ t('nav.audit') }}{% endblock %}
 {% block content %}
-<h4>审计日志</h4>
+<h4>{{ t('nav.audit') }}</h4>
+<div class="small text-muted mb-2">{{ t('audit.note') }} <a href="{{ url_for('reports') }}">{{ t('nav.reports') }}</a>。</div>
 {% set mods = {'ip': request.args.get('ip',''), 'target_type': request.args.get('target_type',''), 'q': request.args.get('q',''), 'status': request.args.get('status',''), 'start': request.args.get('start',''), 'end': request.args.get('end','')} %}
 {% set export_action = cur_action if cur_action not in ('', 'need') else '' %}
 {% set active_mods = (1 if mods.ip else 0) + (1 if mods.target_type else 0) + (1 if mods.q else 0) + (1 if mods.status else 0) + (1 if (mods.start or mods.end) else 0) %}
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
   <div class="btn-group btn-group-sm flex-wrap" role="group">
-    <a class="btn btn-{{ 'danger' if cur_action == 'need' else 'outline-danger' }}" href="{{ url_for('audit_logs', action='need', **mods) }}">需关注 <span class="badge text-bg-light">{{ need_count }}</span></a>
-    <a class="btn btn-{{ 'secondary' if not cur_action else 'outline-secondary' }}" href="{{ url_for('audit_logs', action='', **mods) }}">全部 <span class="badge text-bg-light">{{ total_all }}</span></a>
+    <a class="btn btn-{{ 'danger' if cur_action == 'need' else 'outline-danger' }}" href="{{ url_for('audit_logs', action='need', **mods) }}">{{ t('audit.need') }} <span class="badge text-bg-light">{{ need_count }}</span></a>
+    <a class="btn btn-{{ 'secondary' if not cur_action else 'outline-secondary' }}" href="{{ url_for('audit_logs', action='', **mods) }}">{{ t('common.all') }} <span class="badge text-bg-light">{{ total_all }}</span></a>
     {% for a in audit_actions %}
-    <a class="btn btn-{{ action_color.get(a, 'secondary') if cur_action == a else 'outline-' + action_color.get(a, 'secondary') }}" href="{{ url_for('audit_logs', action=a, **mods) }}">{{ action_cn.get(a, a) }} <span class="badge text-bg-light">{{ action_counts.get(a, 0) }}</span></a>
+    <a class="btn btn-{{ action_color.get(a, 'secondary') if cur_action == a else 'outline-' + action_color.get(a, 'secondary') }}" href="{{ url_for('audit_logs', action=a, **mods) }}">{{ t('audit.' ~ a) }} <span class="badge text-bg-light">{{ action_counts.get(a, 0) }}</span></a>
     {% endfor %}
   </div>
   <div class="dropdown ms-auto">
-    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-      筛选{% if active_mods %} <span class="badge bg-primary">{{ active_mods }}</span>{% endif %}
-    </button>
+    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">{{ t('common.filter') }}{% if active_mods %} <span class="badge bg-primary">{{ active_mods }}</span>{% endif %}</button>
     <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 24rem;">
       <form class="a-filter" method="get" action="{{ url_for('audit_logs') }}">
         <input type="hidden" name="action" value="{{ cur_action }}">
-        <div class="mb-2"><label class="form-label small mb-0">对象类型</label>
+        <div class="mb-2"><label class="form-label small mb-0">{{ t('audit.target_type') }}</label>
           <select class="form-select form-select-sm" name="target_type">
-            <option value="">全部对象</option>
-            {% for t in ['group','server','script','datasource','model','notification','schedule','setting','credential','run','report','backup','applog','server_datasource','all'] %}
-            <option value="{{ t }}" {{ 'selected' if mods.target_type == t else '' }}>{{ ttype_cn.get(t, t) }}</option>
+            <option value="">{{ t('common.all') }}</option>
+            {% for tp in ['group','server','script','datasource','model','notification','schedule','setting','credential','run','report','backup','applog','server_datasource','all'] %}
+            <option value="{{ tp }}" {{ 'selected' if mods.target_type == tp else '' }}>{{ t('type.' ~ tp) }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="row g-1 mb-2">
-          <div class="col-6"><label class="form-label small mb-0">来源 IP</label><input class="form-control form-control-sm" name="ip" value="{{ mods.ip }}"></div>
-          <div class="col-6"><label class="form-label small mb-0">状态</label>
+          <div class="col-6"><label class="form-label small mb-0">{{ t('audit.source_ip') }}</label><input class="form-control form-control-sm" name="ip" value="{{ mods.ip }}"></div>
+          <div class="col-6"><label class="form-label small mb-0">{{ t('common.status') }}</label>
             <select class="form-select form-select-sm" name="status">
-              <option value="" {{ 'selected' if not mods.status else '' }}>全部</option>
-              <option value="ok" {{ 'selected' if mods.status == 'ok' else '' }}>成功</option>
-              <option value="error" {{ 'selected' if mods.status == 'error' else '' }}>失败</option>
+              <option value="" {{ 'selected' if not mods.status else '' }}>{{ t('common.all') }}</option>
+              <option value="ok" {{ 'selected' if mods.status == 'ok' else '' }}>{{ t('audit.status_ok') }}</option>
+              <option value="error" {{ 'selected' if mods.status == 'error' else '' }}>{{ t('audit.status_failed') }}</option>
             </select>
           </div>
         </div>
-        <div class="mb-2"><label class="form-label small mb-0">关键词</label><input class="form-control form-control-sm" name="q" value="{{ mods.q }}"></div>
-        <div class="mb-1"><div class="small text-muted mb-1">时间</div>
+        <div class="mb-2"><label class="form-label small mb-0">{{ t('audit.keyword') }}</label><input class="form-control form-control-sm" name="q" value="{{ mods.q }}"></div>
+        <div class="mb-1"><div class="small text-muted mb-1">{{ t('common.time') }}</div>
           <div class="d-flex flex-wrap gap-1">
-            {% for r, l in [(60,'近1h'),(360,'近6h'),(1440,'近24h'),(10080,'近7天'),(43200,'近30天')] %}<button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="{{ r }}">{{ l }}</button>{% endfor %}
-            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="today">今天</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="yesterday">昨天</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="all">全部</button>
+            {% for r, key in [(60,'range.1h'),(360,'range.6h'),(1440,'range.24h'),(10080,'range.7d_short'),(43200,'range.30d_short')] %}
+            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="{{ r }}">{{ t(key) }}</button>
+            {% endfor %}
+            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="today">{{ t('range.today') }}</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="yesterday">{{ t('range.yesterday') }}</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary a-preset" data-range="all">{{ t('common.all') }}</button>
           </div>
         </div>
         <div class="row g-1 mb-2">
-          <div class="col-6"><label class="form-label small mb-0">开始</label><input type="datetime-local" step="1" class="form-control form-control-sm" name="start" value="{{ mods.start }}"></div>
-          <div class="col-6"><label class="form-label small mb-0">结束</label><input type="datetime-local" step="1" class="form-control form-control-sm" name="end" value="{{ mods.end }}"></div>
+          <div class="col-6"><label class="form-label small mb-0">{{ t('logs.start') }}</label><input type="datetime-local" step="1" class="form-control form-control-sm" name="start" value="{{ mods.start }}"></div>
+          <div class="col-6"><label class="form-label small mb-0">{{ t('logs.end') }}</label><input type="datetime-local" step="1" class="form-control form-control-sm" name="end" value="{{ mods.end }}"></div>
         </div>
         <div class="d-flex gap-1">
-          <button class="btn btn-sm btn-primary">应用</button>
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('audit_logs', action=cur_action) }}">清除</a>
+          <button class="btn btn-sm btn-primary">{{ t('common.apply') }}</button>
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('audit_logs', action=cur_action) }}">{{ t('common.clear') }}</a>
         </div>
       </form>
     </div>
   </div>
   <div class="dropdown">
-    <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">导出</button>
+    <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">{{ t('audit.export') }}</button>
     <ul class="dropdown-menu dropdown-menu-end">
-      <li><a class="dropdown-item" href="{{ url_for('audit_export', format='csv', action=export_action, **mods) }}">导出 CSV</a></li>
-      <li><a class="dropdown-item" href="{{ url_for('audit_export', format='json', action=export_action, **mods) }}">导出 JSON</a></li>
+      <li><a class="dropdown-item" href="{{ url_for('audit_export', format='csv', action=export_action, **mods) }}">CSV</a></li>
+      <li><a class="dropdown-item" href="{{ url_for('audit_export', format='json', action=export_action, **mods) }}">JSON</a></li>
     </ul>
   </div>
 </div>
 
 {% if active_mods %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <span class="small text-muted">已应用：</span>
-  {% if mods.target_type %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, ip=mods.ip, q=mods.q, status=mods.status, start=mods.start, end=mods.end) }}">对象 {{ ttype_cn.get(mods.target_type, mods.target_type) }} ×</a>{% endif %}
-  {% if mods.ip %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, q=mods.q, status=mods.status, start=mods.start, end=mods.end) }}">来源IP {{ mods.ip }} ×</a>{% endif %}
-  {% if mods.q %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, ip=mods.ip, status=mods.status, start=mods.start, end=mods.end) }}">关键词 {{ mods.q }} ×</a>{% endif %}
-  {% if mods.status %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, ip=mods.ip, q=mods.q, start=mods.start, end=mods.end) }}">状态 {{ '成功' if mods.status == 'ok' else '失败' }} ×</a>{% endif %}
-  {% if mods.start or mods.end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, ip=mods.ip, q=mods.q, status=mods.status) }}">时间 {% if mods.start and mods.end %}{{ mods.start.replace('T',' ')[:16] }} ~ {{ mods.end.replace('T',' ')[:16] }}{% elif mods.start %}≥ {{ mods.start.replace('T',' ')[:16] }}{% else %}≤ {{ mods.end.replace('T',' ')[:16] }}{% endif %} ×</a>{% endif %}
+  <span class="small text-muted">{{ t('logs.applied') }}</span>
+  {% if mods.target_type %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, ip=mods.ip, q=mods.q, status=mods.status, start=mods.start, end=mods.end) }}">{{ t('audit.target_type') }} {{ t('type.' ~ mods.target_type) }} ×</a>{% endif %}
+  {% if mods.ip %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, q=mods.q, status=mods.status, start=mods.start, end=mods.end) }}">{{ t('audit.source_ip') }} {{ mods.ip }} ×</a>{% endif %}
+  {% if mods.q %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, ip=mods.ip, status=mods.status, start=mods.start, end=mods.end) }}">{{ t('audit.keyword') }} {{ mods.q }} ×</a>{% endif %}
+  {% if mods.status %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, ip=mods.ip, q=mods.q, start=mods.start, end=mods.end) }}">{{ t('common.status') }} {{ t('audit.status_ok') if mods.status == 'ok' else t('audit.status_failed') }} ×</a>{% endif %}
+  {% if mods.start or mods.end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('audit_logs', action=cur_action, target_type=mods.target_type, ip=mods.ip, q=mods.q, status=mods.status) }}">{{ t('common.time') }} {% if mods.start and mods.end %}{{ mods.start.replace('T',' ')[:16] }} ~ {{ mods.end.replace('T',' ')[:16] }}{% elif mods.start %}≥ {{ mods.start.replace('T',' ')[:16] }}{% else %}≤ {{ mods.end.replace('T',' ')[:16] }}{% endif %} ×</a>{% endif %}
 </div>
 {% endif %}
 
@@ -87,22 +88,20 @@
       <div class="card-body py-2 d-flex align-items-center gap-3">
         <div class="flex-grow-1">
           <div class="d-flex align-items-center gap-2 flex-wrap">
-            <span class="badge bg-{{ action_color.get(l.action, 'secondary') }}">{{ action_cn.get(l.action, l.action) }}</span>
+            <span class="badge bg-{{ action_color.get(l.action, 'secondary') }}">{{ t('audit.' ~ l.action) }}</span>
             <strong class="small">{{ l.ts|local }}</strong>
             <span class="text-muted small">{{ l.ip }}</span>
-            <span class="text-muted small">· {{ ttype_cn.get(l.target_type, l.target_type) }}{% if l.target_name %}/{{ l.target_name }}{% endif %}</span>
-            {% if l.status != 'ok' %}<span class="badge bg-danger">{{ '失败' if l.status == 'error' else l.status }}</span>{% endif %}
+            <span class="text-muted small">· {{ t('type.' ~ l.target_type) }}{% if l.target_name %}/{{ l.target_name }}{% endif %}</span>
+            {% if l.status != 'ok' %}<span class="badge bg-danger">{{ t('audit.status_failed') }}</span>{% endif %}
           </div>
         </div>
         <div class="text-nowrap">
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#detailModal"
-                  onclick="showAuditDetail(this)" data-detail="{{ l.detail }}"
-                  data-title="{{ action_cn.get(l.action, l.action) }} {{ ttype_cn.get(l.target_type, l.target_type) }} #{{ l.target_id }}">详情</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#detailModal" onclick="showAuditDetail(this)" data-detail="{{ l.detail }}" data-title="{{ t('audit.' ~ l.action) }} {{ t('type.' ~ l.target_type) }} #{{ l.target_id }}">{{ t('common.details') }}</button>
           {% if l.version_id %}
-            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=l.version_id) }}">查看</a>
-            <form method="post" action="{{ url_for('audit_restore', aid=l.id) }}" class="d-inline" onsubmit="return confirm('恢复到该操作对应的版本？恢复前会自动备份当前状态')">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('backup_detail', vid=l.version_id) }}">{{ t('audit.view_version') }}</a>
+            <form method="post" action="{{ url_for('audit_restore', aid=l.id) }}" class="d-inline" onsubmit="return confirm('{{ t('audit.confirm_restore') }}')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="btn btn-sm btn-warning">恢复</button>
+              <button class="btn btn-sm btn-warning">{{ t('audit.restore') }}</button>
             </form>
           {% endif %}
         </div>
@@ -110,18 +109,18 @@
     </div>
   </div>
 {% else %}
-  <div class="col-12 text-muted">暂无审计记录</div>
+  <div class="col-12 text-muted">{{ t('audit.empty') }}</div>
 {% endfor %}
 </div>
 {{ pager('audit_logs', {'action': cur_action, 'ip': mods.ip, 'target_type': mods.target_type, 'q': mods.q, 'status': mods.status, 'start': mods.start, 'end': mods.end}, page, pages, total, per_page) }}
 
 <div class="modal fade" id="detailModal"><div class="modal-dialog modal-lg"><div class="modal-content">
-  <div class="modal-header"><h5 class="modal-title" id="detailTitle">审计详情</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+  <div class="modal-header"><h5 class="modal-title" id="detailTitle">{{ t('common.details') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
   <div class="modal-body">
     <div id="detailDiff" class="mb-2 d-none"></div>
     <div class="json-wrap">
       <div class="json-actions">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('detailPre').textContent, this)">复制</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyText(document.getElementById('detailPre').textContent, this)">{{ t('common.copy') }}</button>
       </div>
       <pre class="json-view" id="detailPre"></pre>
     </div>
@@ -133,33 +132,23 @@
 <script>
 (function () {
   const pad = (n) => String(n).padStart(2, '0');
-  const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T'
-    + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
   document.querySelectorAll('form.a-filter').forEach((form) => {
     const s = form.querySelector('input[name="start"]');
     const e = form.querySelector('input[name="end"]');
     if (!s || !e) return;
     form.querySelectorAll('.a-preset').forEach((b) => b.addEventListener('click', () => {
-      const k = b.dataset.range;
-      const now = new Date();
+      const k = b.dataset.range; const now = new Date();
       if (k === 'all') { s.value = ''; e.value = ''; form.submit(); return; }
       if (k === 'today') { const st = new Date(); st.setHours(0, 0, 0, 0); s.value = fmt(st); e.value = fmt(now); form.submit(); return; }
-      if (k === 'yesterday') {
-        const st = new Date(); st.setDate(st.getDate() - 1); st.setHours(0, 0, 0, 0);
-        const en = new Date(); en.setDate(en.getDate() - 1); en.setHours(23, 59, 59, 0);
-        s.value = fmt(st); e.value = fmt(en); form.submit(); return;
-      }
-      const m = parseInt(k, 10);
-      s.value = fmt(new Date(now.getTime() - m * 60000));
-      e.value = fmt(now);
-      form.submit();
+      if (k === 'yesterday') { const st = new Date(); st.setDate(st.getDate() - 1); st.setHours(0, 0, 0, 0); const en = new Date(); en.setDate(en.getDate() - 1); en.setHours(23, 59, 59, 0); s.value = fmt(st); e.value = fmt(en); form.submit(); return; }
+      const m = parseInt(k, 10); s.value = fmt(new Date(now.getTime() - m * 60000)); e.value = fmt(now); form.submit();
     }));
   });
 })();
-
 function showAuditDetail(btn) {
   const raw = btn.getAttribute('data-detail') || '';
-  document.getElementById('detailTitle').textContent = btn.getAttribute('data-title') || '审计详情';
+  document.getElementById('detailTitle').textContent = btn.getAttribute('data-title') || '';
   const pre = document.getElementById('detailPre');
   let obj = null;
   try { obj = JSON.parse(raw); } catch (e) { obj = null; }
@@ -169,11 +158,8 @@ function showAuditDetail(btn) {
   const diff = document.getElementById('detailDiff');
   if (obj && typeof obj === 'object' && ('old' in obj) && ('new' in obj)) {
     diff.className = 'mb-2 diff-chg p-2';
-    diff.innerHTML = '<strong>变更：</strong><br>old: ' + escapeHtml(String(obj.old)) + '<br>new: ' + escapeHtml(String(obj.new));
-  } else {
-    diff.className = 'mb-2 d-none';
-    diff.innerHTML = '';
-  }
+    diff.innerHTML = '<strong>' + __t('js.changed') + '</strong><br>old: ' + escapeHtml(String(obj.old)) + '<br>new: ' + escapeHtml(String(obj.new));
+  } else { diff.className = 'mb-2 d-none'; diff.innerHTML = ''; }
 }
 </script>
 {% endblock %}

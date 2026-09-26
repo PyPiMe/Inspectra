@@ -1,35 +1,35 @@
 {% extends "base.html" %}
-{% block title %}仪表盘{% endblock %}
+{% block title %}{{ t('nav.dashboard') }}{% endblock %}
 {% block content %}
 <div class="row g-3 mb-3">
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ servers|length }}</div><div class="text-muted small">服务器</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ group_count }}</div><div class="text-muted small">分组</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ script_count }}</div><div class="text-muted small">脚本</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ datasource_count }}</div><div class="text-muted small">数据源</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ model_count }}</div><div class="text-muted small">模型</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ notification_count }}</div><div class="text-muted small">通知</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ servers|length }}</div><div class="text-muted small">{{ t('nav.servers') }}</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ group_count }}</div><div class="text-muted small">{{ t('nav.groups') }}</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ script_count }}</div><div class="text-muted small">{{ t('nav.scripts') }}</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ datasource_count }}</div><div class="text-muted small">{{ t('nav.datasources') }}</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ model_count }}</div><div class="text-muted small">{{ t('nav.models') }}</div></div></div></div>
+  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ notification_count }}</div><div class="text-muted small">{{ t('nav.notifications') }}</div></div></div></div>
 </div>
 
 {% if latest %}
 <div class="card mb-3">
-  <div class="card-header">最近一次巡检 #{{ latest.id }}
+  <div class="card-header">{{ t('dashboard.latest_run') }} #{{ latest.id }}
     <span class="badge bg-{{ 'success' if latest.status=='success' else ('warning' if latest.status=='partial' else 'danger') }}">{{ latest.status }}</span>
   </div>
   <div class="card-body">
     <div class="row">
-      <div class="col-md-3"><strong>开始</strong><br>{{ latest.started|local }}</div>
-      <div class="col-md-3"><strong>结束</strong><br>{{ latest.finished|local }}</div>
-      <div class="col-md-3"><strong>服务器数</strong><br>{{ summary.server_count or 0 }}</div>
-      <div class="col-md-3"><strong>异常/不确定</strong><br>{{ summary.error_count or 0 }} / {{ summary.uncertain_count or 0 }}</div>
+      <div class="col-md-3"><strong>{{ t('dashboard.start') }}</strong><br>{{ latest.started|local }}</div>
+      <div class="col-md-3"><strong>{{ t('dashboard.end') }}</strong><br>{{ latest.finished|local }}</div>
+      <div class="col-md-3"><strong>{{ t('dashboard.server_count') }}</strong><br>{{ summary.server_count or 0 }}</div>
+      <div class="col-md-3"><strong>{{ t('dashboard.errors') }}</strong><br>{{ summary.error_count or 0 }} / {{ summary.uncertain_count or 0 }}</div>
     </div>
-    <a class="btn btn-sm btn-primary mt-2" href="{{ url_for('report_detail', rid=latest.id) }}">查看报告</a>
+    <a class="btn btn-sm btn-primary mt-2" href="{{ url_for('report_detail', rid=latest.id) }}">{{ t('dashboard.view_report') }}</a>
   </div>
 </div>
 {% endif %}
 
-<h5>最近运行</h5>
+<h5>{{ t('dashboard.recent') }}</h5>
 <table class="table table-sm table-hover">
-  <thead><tr><th>触发</th><th>开始</th><th>结束</th><th>状态</th><th>报告</th></tr></thead>
+  <thead><tr><th>{{ t('dashboard.trigger') }}</th><th>{{ t('dashboard.start') }}</th><th>{{ t('dashboard.end') }}</th><th>{{ t('common.status') }}</th><th>{{ t('dashboard.report') }}</th></tr></thead>
   <tbody>
   {% for r in runs %}
     <tr>
@@ -37,10 +37,10 @@
       <td>{{ r.started|local }}</td>
       <td>{{ r.finished|local }}</td>
       <td><span class="badge bg-{{ 'success' if r.status=='success' else ('warning' if r.status=='partial' else ('secondary' if r.status=='running' else 'danger')) }}">{{ r.status }}</span></td>
-      <td><a href="{{ url_for('report_detail', rid=r.id) }}">查看</a></td>
+      <td><a href="{{ url_for('report_detail', rid=r.id) }}">{{ t('common.view') }}</a></td>
     </tr>
   {% else %}
-    <tr><td colspan="5" class="text-muted">暂无运行记录</td></tr>
+    <tr><td colspan="5" class="text-muted">{{ t('dashboard.no_runs') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
