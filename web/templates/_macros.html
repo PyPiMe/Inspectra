@@ -103,3 +103,17 @@
 {% macro script_picker(name, items, selected, picker_id) %}
 {{ check_picker(name, items, selected, picker_id) }}
 {% endmacro %}
+
+{# 标签覆盖编辑器：默认键值行，可切到高级 JSON；对应后端的 labels_json 字段 #}
+{% macro label_editor(name, value, ident) %}
+<div class="label-editor" id="{{ ident }}" data-name="{{ name }}">
+  <input type="hidden" name="{{ name }}" class="le-hidden" value="{{ value or '{}' }}">
+  <div class="le-rows"></div>
+  <div class="d-flex gap-2 flex-wrap align-items-center mt-1">
+    <button type="button" class="btn btn-sm btn-outline-secondary le-add">{{ t('server_detail.add_label') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary le-toggle">{{ t('server_detail.label_advanced') }}</button>
+    <span class="text-muted small">{{ t('server_detail.labels_help') }}</span>
+  </div>
+  <textarea class="form-control form-control-sm le-json d-none mt-1" rows="2" spellcheck="false"></textarea>
+</div>
+{% endmacro %}

@@ -90,6 +90,10 @@ body { font-size: 14px; }
 .script-picker .sp-item { display: block; margin-bottom: .1rem; }
 .script-picker .sp-item .form-check-input { margin-top: .25rem; }
 
+/* 标签覆盖编辑器（键值行 / 高级 JSON） */
+.label-editor .le-rows { max-height: 12rem; overflow: auto; }
+.label-editor .le-del { line-height: 1; }
+
 /* 智能问答气泡 */
 .chat-messages { max-height: 60vh; overflow: auto; }
 .chat-row { display: flex; margin-bottom: .5rem; }

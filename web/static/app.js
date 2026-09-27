@@ -148,3 +148,87 @@ function initScriptPickers(root) {
 }
 document.addEventListener('DOMContentLoaded', () => initScriptPickers());
 document.addEventListener('shown.bs.modal', () => initScriptPickers());
+
+// 标签覆盖编辑器：默认键值行，可切换高级 JSON；同步隐藏的 labels_json 输入
+function initLabelEditors(root) {
+  (root || document).querySelectorAll('.label-editor').forEach((ed) => {
+    if (ed.dataset.init) return;
+    ed.dataset.init = '1';
+    const hidden = ed.querySelector('.le-hidden');
+    const rows = ed.querySelector('.le-rows');
+    const json = ed.querySelector('.le-json');
+    const addBtn = ed.querySelector('.le-add');
+    const toggle = ed.querySelector('.le-toggle');
+    if (!hidden || !rows || !json || !addBtn || !toggle) return;
+    let obj = {};
+    try { obj = JSON.parse(hidden.value || '{}') || {}; } catch (e) { obj = {}; }
+    if (typeof obj !== 'object' || Array.isArray(obj)) obj = {};
+
+    const rowHtml = (k, v) => (
+      '<div class="input-group input-group-sm mb-1 le-row">' +
+      '<input class="form-control le-k" placeholder="' + __t('server_detail.label_key', '键') + '" value="' + escapeHtml(k) + '">' +
+      '<span class="input-group-text">=</span>' +
+      '<input class="form-control le-v" placeholder="' + __t('server_detail.label_value', '值') + '" value="' + escapeHtml(v) + '">' +
+      '<button type="button" class="btn btn-outline-danger le-del">&times;</button>' +
+      '</div>'
+    );
+    const readRows = () => {
+      const out = {};
+      rows.querySelectorAll('.le-row').forEach((r) => {
+        const k = (r.querySelector('.le-k').value || '').trim();
+        const v = r.querySelector('.le-v').value;
+        if (k) out[k] = v;
+      });
+      return out;
+    };
+    const sync = () => {
+      hidden.value = JSON.stringify(obj);
+      json.value = JSON.stringify(obj, null, 2);
+    };
+    const renderRows = () => {
+      rows.innerHTML = '';
+      Object.keys(obj).forEach((k) => rows.insertAdjacentHTML('beforeend', rowHtml(k, obj[k])));
+      sync();
+    };
+    rows.addEventListener('input', () => { obj = readRows(); sync(); });
+    rows.addEventListener('click', (e) => {
+      const del = e.target.closest('.le-del');
+      if (!del) return;
+      del.closest('.le-row').remove();
+      obj = readRows(); sync();
+    });
+    addBtn.addEventListener('click', () => {
+      rows.insertAdjacentHTML('beforeend', rowHtml('', ''));
+      const last = rows.querySelector('.le-row:last-child .le-k');
+      if (last) last.focus();
+    });
+    toggle.addEventListener('click', () => {
+      const nowSimple = json.classList.toggle('d-none');
+      if (nowSimple) {
+        rows.classList.remove('d-none');
+        addBtn.classList.remove('d-none');
+        try {
+          obj = JSON.parse(json.value || '{}') || {};
+          if (typeof obj !== 'object' || Array.isArray(obj)) obj = {};
+        } catch (e) { /* keep last valid */ }
+        renderRows();
+        toggle.textContent = __t('server_detail.label_advanced', '高级（JSON）');
+      } else {
+        rows.classList.add('d-none');
+        addBtn.classList.add('d-none');
+        json.value = JSON.stringify(obj, null, 2);
+        toggle.textContent = __t('server_detail.label_simple', '简易模式');
+      }
+    });
+    json.addEventListener('input', () => {
+      try {
+        obj = JSON.parse(json.value || '{}') || {};
+        if (typeof obj !== 'object' || Array.isArray(obj)) obj = {};
+        hidden.value = json.value;
+      } catch (e) { /* invalid JSON, wait */ }
+    });
+    renderRows();
+  });
+}
+document.addEventListener('DOMContentLoaded', () => initLabelEditors());
+document.addEventListener('shown.bs.modal', () => initLabelEditors());
