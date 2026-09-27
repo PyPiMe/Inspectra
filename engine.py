@@ -490,9 +490,48 @@ def _items_table(items: list[dict[str, Any]], default_unit: str = "") -> list[st
     return out
 
 
+def _is_bad_result(r: dict[str, Any]) -> bool:
+    """异常结果：状态为 WARN/FAIL/ERROR/UNKNOWN 或带错误。"""
+    return r.get("status") in ("WARN", "FAIL", "ERROR", "UNKNOWN") or bool(r.get("error"))
+
+
+def _script_detail_lines(r: dict[str, Any]) -> list[str]:
+    """单个脚本结果块（异常项或信息面板）。"""
+    raw = r.get("output") or ""
+    meta = r.get("meta") or {}
+    out = [f"##### {r['script_name']}"]
+    bits = [
+        f"状态 {_STATUS_CN.get(r['status'], r['status'])}",
+        f"来源 {_SOURCE_CN.get(r['source'], r['source'])}",
+    ]
+    mode = (meta.get("MODE") or "").lower()
+    if mode:
+        bits.append(f"查询 {_MODE_CN.get(mode, meta.get('MODE'))}")
+    unit = (meta.get("UNIT") or "").strip()
+    if unit and unit.lower() != "mixed":
+        bits.append(f"单位 {unit}")
+    if meta.get("THRESHOLD"):
+        bits.append(f"阈值 {meta['THRESHOLD']}")
+    out.append("> " + " ｜ ".join(bits))
+    if r.get("error"):
+        out.append(f"错误：{r['error']}")
+    hits = r.get("sanitize_hits") or ""
+    if hits and hits != "未命中":
+        out.append(f"脱敏：{hits}")
+    out.append("")
+    items = r.get("items") or []
+    if items:
+        out.extend(_items_table(items, unit))
+    else:
+        out.append("```text")
+        out.append(raw.rstrip("\n"))
+        out.append("```")
+    return out
+
+
 def _report_markdown(ctx: dict[str, Any]) -> str:
     lines: list[str] = []
-    lines.append(f"# PyPiMeOps 巡检报告 #{ctx['run_id']}")
+    lines.append(f"# {ctx.get('site_title') or 'PyPiMeOps'} 巡检报告 #{ctx['run_id']}")
     lines.append("")
     lines.append(f"- 触发方式：{ctx['trigger']}")
     lines.append(f"- 分析模式：{'模型分析' if ctx.get('mode') != 'raw' else '仅原始结果'}")
@@ -513,19 +552,32 @@ def _report_markdown(ctx: dict[str, Any]) -> str:
         if ctx.get("skipped_count"):
             line += f"，跳过 {ctx['skipped_count']} 台（未配置可执行项）"
         lines.append(line)
+    app_groups = ctx.get("app_groups") or []
+
+    def _bad_count(servers: list[dict[str, Any]]) -> int:
+        return sum(1 for s in servers for r in s.get("results", []) if _is_bad_result(r))
+
     lines.append("")
     lines.append("## 应用汇总")
     lines.append("")
-    lines.append("| 应用 | 状态 | 说明 |")
-    lines.append("|------|------|------|")
-    app_groups = ctx.get("app_groups") or []
+    lines.append("| 应用 | 状态 | 服务器 | 问题 |")
+    lines.append("|------|------|--------|------|")
     for a in app_groups:
-        lines.append(f"| {a['name']} | {_STATUS_CN.get(a['status'], a['status'])} | — |")
+        lines.append(
+            f"| {a['name']} | {_STATUS_CN.get(a['status'], a['status'])} | "
+            f"{len(a['servers'])} | {_bad_count(a['servers'])} |"
+        )
     lines.append("")
     lines.append("## 明细")
     for a in app_groups:
         lines.append("")
         lines.append(f"### 应用：{a['name']} — {_STATUS_CN.get(a['status'], a['status'])}")
+        lines.append("")
+        lines.append("| 服务器 | 状态 | 问题 |")
+        lines.append("|--------|------|------|")
+        for s in a["servers"]:
+            n = _bad_count([s]) if s.get("results") else (1 if s.get("skipped") else 0)
+            lines.append(f"| {s['name']} | {_STATUS_CN.get(s['status'], s['status'])} | {n} |")
         for s in a["servers"]:
             lines.append("")
             lines.append(f"#### 服务器：{s['name']} — {_STATUS_CN.get(s['status'], s['status'])}")
@@ -538,42 +590,19 @@ def _report_markdown(ctx: dict[str, Any]) -> str:
                 lines.append(f"处置建议：{s['suggestion']}")
             if s.get("attention"):
                 lines.append(f"> 模型关注度：{s['attention']}")
-            if not s["results"] and not note:
+            if not s["results"]:
                 lines.append("（未执行：无 Shell 脚本且无启用的 Prometheus 数据源绑定）" if s.get("skipped") else "（无结果）")
+                continue
+            good: list[str] = []
             for r in s["results"]:
-                raw = r.get("output") or ""
-                meta = r.get("meta") or {}
-                lines.append("")
-                lines.append(f"##### {r['script_name']}")
-                bits = [
-                    f"状态 {_STATUS_CN.get(r['status'], r['status'])}",
-                    f"来源 {_SOURCE_CN.get(r['source'], r['source'])}",
-                ]
-                mode = (meta.get("MODE") or "").lower()
-                if mode:
-                    bits.append(f"查询 {_MODE_CN.get(mode, meta.get('MODE'))}")
-                unit = (meta.get("UNIT") or "").strip()
-                if unit and unit.lower() != "mixed":
-                    bits.append(f"单位 {unit}")
-                if meta.get("THRESHOLD"):
-                    bits.append(f"阈值 {meta['THRESHOLD']}")
-                lines.append("> " + " ｜ ".join(bits))
-                if r.get("error"):
-                    lines.append(f"错误：{r['error']}")
-                hits = r.get("sanitize_hits") or ""
-                if hits and hits != "未命中":
-                    lines.append(f"脱敏：{hits}")
-                lines.append("")
-                items = r.get("items") or []
-                if items:
-                    lines.extend(_items_table(items, unit))
-                    if not any(it.get("threshold") or it.get("warn") for it in items):
-                        lines.append("")
-                        lines.append("> 未设阈值（仅展示）")
+                if _is_bad_result(r) or collectors.is_display(r.get("meta") or {}):
+                    lines.append("")
+                    lines.extend(_script_detail_lines(r))
                 else:
-                    lines.append("```text")
-                    lines.append(raw.rstrip("\n"))
-                    lines.append("```")
+                    good.append(r["script_name"])
+            if good:
+                lines.append("")
+                lines.append(f"> 其余 {len(good)} 项正常：{'、'.join(good)}")
     if ctx.get("notify_failures"):
         lines.append("")
         lines.append(f"> 告警发送失败：{ctx['notify_failures']}")
@@ -977,6 +1006,7 @@ def run(
             "finished": finished,
             "policy": policy,
             "targets_label": targets_label,
+            "site_title": (settings.get("site_title") or "").strip() or "PyPiMeOps",
             "servers": servers_out,
             "app_groups": app_groups,
             "selected_count": len(servers),

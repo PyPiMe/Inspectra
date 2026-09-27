@@ -1807,7 +1807,7 @@ def create_app() -> Flask:
         if not row:
             abort(404)
         content = _read_report(row.get("report_file") or "")
-        return render_template("report_detail.html", run=row, content=content)
+        return render_template("report_detail.html", run=row, content=content, summary=json_or(row.get("summary"), {}))
 
     def _read_report(filename: str) -> str:
         if not filename:

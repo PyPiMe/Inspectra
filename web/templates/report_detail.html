@@ -18,12 +18,23 @@
   <span class="text-muted small">{{ run.started|local }}</span>
   <span class="text-muted small ms-auto">#{{ run.id }}</span>
 </h4>
-<div class="row mb-3">
-  <div class="col-md-3"><strong>{{ t('dashboard.trigger') }}</strong><br>{{ run.trigger }}</div>
-  <div class="col-md-3"><strong>{{ t('reports.analysis') }}</strong><br>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
-  <div class="col-md-3"><strong>{{ t('dashboard.start') }}</strong><br>{{ run.started|local }}</div>
-  <div class="col-md-3"><strong>{{ t('dashboard.end') }}</strong><br>{{ run.finished|local }}</div>
-</div>
+
+<div class="card mb-3"><div class="card-body py-2">
+  <div class="row g-2 text-center">
+    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('dashboard.trigger') }}</div>{{ t('trigger.' ~ run.trigger) }}</div>
+    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('reports.analysis') }}</div>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
+    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('reports.servers') }}</div>{{ summary.server_count or 0 }}</div>
+    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('reports.issues') }}</div>
+      <strong class="{{ 'text-danger' if (summary.issues|length) else 'text-success' }}">{{ summary.issues|length }}</strong></div>
+  </div>
+  {% if summary.apps %}
+  <div class="d-flex flex-wrap gap-1 mt-2 justify-content-center">
+    {% for a in summary.apps %}
+      <span class="badge bg-{{ 'danger' if a.status in ('FAIL','ERROR') else ('warning' if a.status == 'WARN' else ('secondary' if a.status == 'UNKNOWN' else 'success')) }}">{{ a.name }} · {{ a.status }} · {{ a.server_count }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div></div>
 
 {% if run.status == 'running' %}
 <div class="card mb-3" id="runProgress">
@@ -36,47 +47,100 @@
 </div>
 {% endif %}
 
-<div id="reportToc" class="mb-2"></div>
-<div class="card"><div class="card-body report-md" id="reportBody">
-  {{ content | markdown }}
-</div></div>
-<a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
+<div class="row g-3">
+  <div class="col-lg-9 order-2 order-lg-1">
+    <div class="card"><div class="card-body report-md" id="reportBody">
+      {{ content | markdown }}
+    </div></div>
+    <a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
+  </div>
+  <div class="col-lg-3 order-1 order-lg-2">
+    <div class="card sticky-top" style="top: .75rem;">
+      <div class="card-header d-flex justify-content-between align-items-center gap-2">
+        <span>{{ t('reports.toc') }}</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleOnlyBad">{{ t('reports.only_bad') }}</button>
+      </div>
+      <div class="card-body p-2" id="reportToc" style="max-height: 78vh; overflow:auto;"></div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+function pickStatus(text) {
+  if (/失败|异常/.test(text)) return 'danger';
+  if (/警告/.test(text)) return 'warning';
+  if (/未知/.test(text)) return 'secondary';
+  return 'success';
+}
 function enhanceReport() {
   const root = document.getElementById('reportBody');
-  if (!root) return;
   const toc = document.getElementById('reportToc');
-  let idx = 0;
-  root.querySelectorAll('h3').forEach((h) => {
-    const id = 'sec' + (idx++);
-    h.id = id;
-    const title = h.textContent.trim();
-    if (toc) {
-      const a = document.createElement('a');
-      a.href = '#' + id;
-      a.className = 'btn btn-sm btn-outline-secondary me-1 mb-1';
-      a.textContent = title;
-      toc.appendChild(a);
-    }
-    if (/ERROR|FAIL|UNKNOWN/i.test(title)) h.classList.add('text-danger');
-    else if (/\bOK\b/i.test(title)) h.classList.add('text-success');
+  if (!root) return;
+  const state = { onlyBad: false };
+  const blocks = [];   // {level, el, nodes:[...], status}
 
-    const foldables = [];
-    let n = h.nextElementSibling;
-    while (n && n.tagName !== 'H3') { foldables.push(n); n = n.nextElementSibling; }
+  let curApp = null;
+  root.querySelectorAll('h3, h4').forEach((h) => {
+    const level = h.tagName === 'H3' ? 3 : 4;
+    const status = pickStatus(h.textContent);
+    h.classList.add('text-' + status);
+    h.style.cursor = 'pointer';
+    if (level === 3) {
+      curApp = { level, el: h, nodes: [], status, children: [] };
+      blocks.push(curApp);
+    } else {
+      const blk = { level, el: h, nodes: [], status };
+      blocks.push(blk);
+      if (curApp) curApp.children.push(blk);
+    }
+  });
+  // collect following siblings per block
+  blocks.forEach((b) => {
+    let n = b.el.nextElementSibling;
+    while (n && !['H3', 'H4'].includes(n.tagName)) { b.nodes.push(n); n = n.nextElementSibling; }
+    b.el.id = 'sec-' + Math.random().toString(36).slice(2, 8);
+  });
+
+  // TOC
+  if (toc) {
+    toc.innerHTML = '';
+    blocks.forEach((b) => {
+      const a = document.createElement('a');
+      a.href = '#' + b.el.id;
+      a.className = 'd-block text-truncate small py-1 border-bottom';
+      a.innerHTML = '<span class="text-' + b.status + '">●</span> ' + b.el.textContent.replace(/\s+/g, ' ').trim();
+      if (b.level === 4) a.classList.add('ps-3');
+      toc.appendChild(a);
+    });
+  }
+
+  // fold button on server headings
+  blocks.filter((b) => b.level === 4).forEach((b) => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn btn-sm btn-outline-secondary ms-2';
     btn.textContent = __t('js.collapse');
-    btn.addEventListener('click', () => {
-      const hidden = foldables[0] && foldables[0].style.display === 'none';
-      foldables.forEach((x) => { x.style.display = hidden ? '' : 'none'; });
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const hidden = b.nodes[0] && b.nodes[0].style.display === 'none';
+      b.nodes.forEach((x) => { x.style.display = hidden ? '' : 'none'; });
       btn.textContent = hidden ? __t('js.collapse') : __t('js.expand');
     });
-    h.appendChild(btn);
+    b.el.appendChild(btn);
+  });
+
+  const toggle = document.getElementById('toggleOnlyBad');
+  if (toggle) toggle.addEventListener('click', () => {
+    state.onlyBad = !state.onlyBad;
+    toggle.classList.toggle('active', state.onlyBad);
+    toggle.textContent = state.onlyBad ? __t('js.show_all') : __t('js.only_bad');
+    blocks.filter((b) => b.level === 4).forEach((b) => {
+      const hide = state.onlyBad && b.status === 'success';
+      b.el.style.display = hide ? 'none' : '';
+      b.nodes.forEach((x) => { x.style.display = hide ? 'none' : ''; });
+    });
   });
 }
 enhanceReport();
