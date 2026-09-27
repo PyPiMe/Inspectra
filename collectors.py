@@ -366,6 +366,7 @@ class SSHCollector:
             status="UNKNOWN",
         )
         client = self._client()
+        stdin = stdout = stderr = None
         try:
             pkey = _load_pkey(private_key)
             client.connect(
@@ -417,6 +418,14 @@ class SSHCollector:
             base.hard_fact = True
             base.error = f"SSH 采集异常：{exc}"
         finally:
+            # 先关闭通道文件，再关客户端：避免 close 后 ChannelFile.__del__ 向已断开的
+            # transport 发送 EOF 而抛出 "'NoneType' object has no attribute 'time'"
+            for fh in (stdin, stdout, stderr):
+                try:
+                    if fh is not None:
+                        fh.close()
+                except Exception:  # noqa: BLE001
+                    pass
             try:
                 client.close()
             except Exception:  # noqa: BLE001
@@ -486,29 +495,34 @@ class PrometheusCollector:
         `pve_guest_info` 同时带 `id`/`name`/`instance`(exporter) 标签，可用于去重。
         """
         base = (self.ds.get("base_url") or "").rstrip("/")
+        esc = promql_escape(ident)
         if "/" in ident:
-            matcher = f'id="{promql_escape(ident)}"'
+            matchers = [f'id="{esc}"']
+        elif ident.isdigit():
+            matchers = [f'id="qemu/{esc}"', f'id="lxc/{esc}"', f'name="{esc}"']
         else:
-            matcher = f'name="{promql_escape(ident)}"'
-        query = f"pve_guest_info{{{matcher}}}"
+            matchers = [f'name="{esc}"']
         auth, headers = self._auth()
-        resp = requests.get(
-            f"{base}/api/v1/query", params={"query": query}, auth=auth, headers=headers,
-            timeout=self.timeout, verify=self.verify,
-        )
-        if resp.status_code != 200:
-            raise RuntimeError(f"HTTP {resp.status_code}: {_prom_error(resp)}")
-        payload = resp.json()
-        if payload.get("status") != "success":
-            raise RuntimeError(str(payload.get("error")))
         out: list[dict[str, Any]] = []
-        seen: set[tuple] = set()
-        for item in (payload.get("data") or {}).get("result") or []:
-            m = item.get("metric") or {}
-            gid, inst = m.get("id"), m.get("instance")
-            if gid and (gid, inst) not in seen:
-                seen.add((gid, inst))
-                out.append({"id": gid, "instance": inst})
+        for matcher in matchers:
+            resp = requests.get(
+                f"{base}/api/v1/query", params={"query": f"pve_guest_info{{{matcher}}}"},
+                auth=auth, headers=headers, timeout=self.timeout, verify=self.verify,
+            )
+            if resp.status_code != 200:
+                raise RuntimeError(f"HTTP {resp.status_code}: {_prom_error(resp)}")
+            payload = resp.json()
+            if payload.get("status") != "success":
+                raise RuntimeError(str(payload.get("error")))
+            seen: set[tuple] = set()
+            for item in (payload.get("data") or {}).get("result") or []:
+                m = item.get("metric") or {}
+                gid, inst = m.get("id"), m.get("instance")
+                if gid and (gid, inst) not in seen:
+                    seen.add((gid, inst))
+                    out.append({"id": gid, "instance": inst})
+            if out:
+                break
         return out
 
     def run(

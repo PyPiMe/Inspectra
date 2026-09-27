@@ -313,7 +313,8 @@ def _run_promql(
 
     # 虚拟化标识：填 id 或名字；解析出 id，并在未显式指定 prom_instance 时用解析到的 exporter 去重
     guest_matcher: str | None = None
-    vm = (server.get("vm_ident") or "").strip()
+    # 仅在脚本确实使用 $guest 时才解析虚拟化标识（避免 keepalived 等脚本被 vm 解析牵连）
+    vm = (server.get("vm_ident") or "").strip() if "$guest" in (content or "") else ""
     if vm:
         try:
             infos = collector.resolve_guest(vm)

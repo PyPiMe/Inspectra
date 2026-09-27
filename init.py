@@ -123,6 +123,94 @@ echo "uptime_seconds=${up%.*}"
 echo "idle_seconds=${idle%.*}"
 """,
     },
+    {
+        "name": "Java 进程检查",
+        "filename": "java-process.sh",
+        "desc": "通用检查：java 进程数量（为 0 FAIL）与总 RSS",
+        "content": """#!/usr/bin/env bash
+# NAME: Java 进程检查
+# UNIT: mixed
+n=$(pgrep -x java 2>/dev/null | wc -l)
+echo "java_proc_count=$n threshold=<1 unit=count"
+rss=$(ps -C java -o rss= 2>/dev/null | awk '{s+=$1} END{print s+0}')
+echo "java_rss_kb=$rss unit=KB"
+""",
+    },
+    {
+        "name": "VIP 归属",
+        "filename": "vip-holder.sh",
+        "desc": "反代节点：判断本机是否持有 VIP（master/backup），并检查 keepalived/nginx 服务；VIP 地址取自 keepalived 配置",
+        "content": """#!/usr/bin/env bash
+# NAME: VIP 归属
+# UNIT: mixed
+conf=/etc/keepalived/keepalived.conf
+vip=$(grep -A5 -i 'virtual_ipaddress' "$conf" 2>/dev/null | grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -1)
+[ -n "$vip" ] || vip=$(grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}' "$conf" 2>/dev/null | head -1)
+present=0
+[ -n "$vip" ] && present=$(ip -4 -o addr show 2>/dev/null | grep -c "$vip/")
+role=backup; [ "$present" = "1" ] && role=master
+echo "vip_conf_readable=$([ -r "$conf" ] && echo 1 || echo 0) unit=bool"
+echo "vip_address=$vip"
+echo "vip_present=$present unit=bool"
+echo "node_role=$role"
+echo "keepalived_active=$(systemctl is-active keepalived 2>/dev/null) threshold=!=active"
+echo "nginx_active=$(systemctl is-active nginx 2>/dev/null) threshold=!=active"
+""",
+    },
+    {
+        "name": "Redis 健康",
+        "filename": "redis-health.sh",
+        "desc": "按进程自动发现本机 redis-server 实例：存活/role/内存占比/命中率/淘汰/阻塞/RDB/主从；密码取实例 conf 的 requirepass（REDISCLI_AUTH 传入）",
+        "content": """#!/usr/bin/env bash
+# NAME: Redis 健康
+# UNIT: mixed
+set -u
+count=0
+for p in $(pgrep -x redis-server 2>/dev/null); do
+  cmd=$(tr '\\0' ' ' < /proc/$p/cmdline 2>/dev/null)
+  bin=$(echo "$cmd" | awk '{print $1}')
+  port=$(echo "$cmd" | grep -oE '[0-9]+$')
+  [ -n "$port" ] || port=$(echo "$cmd" | grep -oE ':[0-9]+' | head -1 | tr -d ':')
+  [ -n "$port" ] || continue
+  confarg=$(echo "$cmd" | grep -oE '/[^ ]+\\.conf' | head -1)
+  home=""; case "$bin" in /*) home=$(dirname "$(dirname "$bin")");; esac
+  pass=""
+  for c in "$confarg" "$home/conf/redis.conf" "$(dirname "$bin")/redis.conf" "/etc/redis/redis-$port.conf" "/etc/redis/redis.conf"; do
+    [ -n "$c" ] && [ -r "$c" ] || continue
+    pv=$(grep -E '^[[:space:]]*requirepass[[:space:]]+.' "$c" 2>/dev/null | head -1 | awk '{print $2}')
+    [ -n "$pv" ] && { pass="$pv"; break; }
+  done
+  count=$((count+1))
+  [ -n "$pass" ] && export REDISCLI_AUTH="$pass"
+  info=$(timeout 5 redis-cli --no-auth-warning -p "$port" info 2>/dev/null | tr -d '\\r')
+  if [ -z "$info" ]; then echo "redis_${port}_alive=0 threshold=!=1 unit=bool"; [ -n "$pass" ] && unset REDISCLI_AUTH; continue; fi
+  echo "redis_${port}_alive=1 threshold=!=1 unit=bool"
+  echo "$info" | awk -F: -v P="$port" '
+    function emit(k,v,thr,warn,unit){ printf("redis_%s_%s=%s", P, k, v); if(thr!="")printf(" threshold=%s",thr); if(warn!="")printf(" warn=%s",warn); if(unit!="")printf(" unit=%s",unit); print "" }
+    $1=="role"{emit("role",$2)}
+    $1=="connected_clients"{emit("clients",$2)}
+    $1=="blocked_clients"{emit("blocked",$2,"",">0","")}
+    $1=="used_memory"{um=$2}
+    $1=="maxmemory"{mm=$2}
+    $1=="used_memory_human"{uh=$2}
+    $1=="maxmemory_human"{mh=$2}
+    $1=="mem_fragmentation_ratio"{emit("mem_frag",$2,"",">3","")}
+    $1=="keyspace_hits"{h=$2}
+    $1=="keyspace_misses"{mi=$2}
+    $1=="rdb_last_bgsave_status"{emit("rdb_status",$2,"!=ok")}
+    $1=="master_link_status"{emit("repl_status",$2,"!=up")}
+    $1=="master_last_io_seconds_ago"{emit("repl_lag_s",$2,"",">10")}
+    END{
+      if(mm+0>0 && um!=""){printf("redis_%s_used_mem_pct=%.1f threshold=>90 warn=>80 unit=%%\\n",P,um*100/mm); printf("redis_%s_mem=%s/%s\\n",P,uh,mh)}
+      else if(uh!=""){printf("redis_%s_mem=%s (maxmemory=unlimited)\\n",P,uh)}
+      tot=h+mi; if(tot>0){printf("redis_%s_hit_ratio=%.1f warn=<90 threshold=<70 unit=%%\\n",P,h*100/tot)}
+    }
+  '
+  [ -n "$pass" ] && unset REDISCLI_AUTH
+done
+echo "redis_instance_count=$count"
+""",
+    },
 ]
 
 SEED_PROMQL = [
@@ -353,7 +441,7 @@ sum(rate(pve_network_transmit_bytes_total{id=~"qemu/.*|lxc/.*",$instance}[5m]))
 # MODE: instant
 # THRESHOLD: >90
 # UNIT: %
-pve_cpu_usage_ratio{$guest,$instance} * 100
+max by (id)(pve_cpu_usage_ratio{$guest}) * 100
 """,
     },
     {
@@ -364,7 +452,7 @@ pve_cpu_usage_ratio{$guest,$instance} * 100
 # MODE: instant
 # THRESHOLD: >90
 # UNIT: %
-pve_memory_usage_bytes{$guest,$instance} / pve_memory_size_bytes{$guest,$instance} * 100
+max by (id)(pve_memory_usage_bytes{$guest}) / max by (id)(pve_memory_size_bytes{$guest}) * 100
 """,
     },
     {
@@ -374,7 +462,7 @@ pve_memory_usage_bytes{$guest,$instance} / pve_memory_size_bytes{$guest,$instanc
         "content": """# NAME: PVE 虚拟机网络入站速率
 # MODE: instant
 # UNIT: B/s
-sum(rate(pve_network_receive_bytes_total{$guest,$instance}[5m]))
+max by (id)(rate(pve_network_receive_bytes_total{$guest}[5m]))
 """,
     },
     {
@@ -384,7 +472,7 @@ sum(rate(pve_network_receive_bytes_total{$guest,$instance}[5m]))
         "content": """# NAME: PVE 虚拟机网络出站速率
 # MODE: instant
 # UNIT: B/s
-sum(rate(pve_network_transmit_bytes_total{$guest,$instance}[5m]))
+max by (id)(rate(pve_network_transmit_bytes_total{$guest}[5m]))
 """,
     },
     {
@@ -394,7 +482,7 @@ sum(rate(pve_network_transmit_bytes_total{$guest,$instance}[5m]))
         "content": """# NAME: PVE 虚拟机磁盘写入速率
 # MODE: instant
 # UNIT: B/s
-sum(rate(pve_disk_written_bytes_total{$guest,$instance}[5m]))
+max by (id)(rate(pve_disk_written_bytes_total{$guest}[5m]))
 """,
     },
     {
@@ -404,7 +492,7 @@ sum(rate(pve_disk_written_bytes_total{$guest,$instance}[5m]))
         "content": """# NAME: PVE 虚拟机运行时长
 # MODE: instant
 # UNIT: s
-pve_uptime_seconds{$guest,$instance}
+max by (id)(pve_uptime_seconds{$guest})
 """,
     },
     {
@@ -415,18 +503,7 @@ pve_uptime_seconds{$guest,$instance}
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: bool
-pve_ha_state{state="started",$guest,$instance}
-""",
-    },
-    {
-        "name": "PVE 虚拟机未备份",
-        "filename": "pve-vm-not-backed-up.promql",
-        "desc": "指定虚拟机超过备份周期未备份时 FAIL",
-        "content": """# NAME: PVE 虚拟机未备份
-# MODE: instant
-# THRESHOLD: >0
-# UNIT: bool
-pve_not_backed_up_info{$guest,$instance}
+max by (id)(pve_ha_state{state="started",$guest})
 """,
     },
     # ---- Nginx ----
@@ -442,22 +519,13 @@ nginx_up{$instance}
 """,
     },
     {
-        "name": "Nginx 活跃连接数",
-        "filename": "nginx-connections.promql",
-        "desc": "Nginx 当前活跃连接数（仅展示）",
-        "content": """# NAME: Nginx 活跃连接数
-# MODE: instant
-# UNIT: conn
-nginx_connections_active{$instance}
-""",
-    },
-    {
         "name": "Nginx 概览",
         "filename": "nginx-overview.promql",
         "desc": "Nginx 汇总：up/活跃/读写等待连接/累计请求与连接/QPS/新建连接速率",
         "content": """# NAME: Nginx 概览
 # MODE: instant
 # UNIT: mixed
+# DISPLAY: true
 label_replace(nginx_up{$instance}, "item", "存活(1=正常)", "__name__", ".*")
 or label_replace(nginx_connections_active{$instance}, "item", "活跃连接", "__name__", ".*")
 or label_replace(nginx_connections_reading{$instance}, "item", "读取中连接", "__name__", ".*")
@@ -466,8 +534,6 @@ or label_replace(nginx_connections_waiting{$instance}, "item", "等待连接", "
 or label_replace(nginx_connections_accepted{$instance}, "item", "累计接受连接", "__name__", ".*")
 or label_replace(nginx_connections_handled{$instance}, "item", "累计处理连接", "__name__", ".*")
 or label_replace(nginx_http_requests_total{$instance}, "item", "累计请求数", "__name__", ".*")
-or label_replace(rate(nginx_http_requests_total{$instance}[5m]), "item", "QPS(请求/秒)", "__name__", ".*")
-or label_replace(rate(nginx_connections_accepted{$instance}[5m]), "item", "新建连接/秒", "__name__", ".*")
 """,
     },
     {
@@ -478,7 +544,7 @@ or label_replace(rate(nginx_connections_accepted{$instance}[5m]), "item", "新�
 # MODE: instant
 # THRESHOLD: >100
 # UNIT: req/s
-sum(rate(nginx_http_requests_total{$instance}[5m]))
+sum by (instance)(rate(nginx_http_requests_total{$instance}[5m]))
 """,
     },
     {
@@ -489,29 +555,19 @@ sum(rate(nginx_http_requests_total{$instance}[5m]))
 # MODE: instant
 # THRESHOLD: >100
 # UNIT: conn/s
-sum(rate(nginx_connections_accepted{$instance}[5m]))
+sum by (instance)(rate(nginx_connections_accepted{$instance}[5m]))
 """,
     },
     {
-        "name": "Nginx 活跃连接数(阈值)",
+        "name": "Nginx 活跃连接数",
         "filename": "nginx-active-threshold.promql",
         "desc": "Nginx 当前活跃连接数，超阈值 FAIL（默认 >500，可改）",
-        "content": """# NAME: Nginx 活跃连接数(阈值)
+        "content": """# NAME: Nginx 活跃连接数
 # MODE: instant
-# THRESHOLD: >500
+# WARN: >800
+# THRESHOLD: >1000
 # UNIT: conn
 nginx_connections_active{$instance}
-""",
-    },
-    {
-        "name": "Nginx 等待连接数",
-        "filename": "nginx-waiting.promql",
-        "desc": "Nginx Keep-Alive 等待连接数，超阈值 FAIL（默认 >100，可改）",
-        "content": """# NAME: Nginx 等待连接数
-# MODE: instant
-# THRESHOLD: >100
-# UNIT: conn
-nginx_connections_waiting{$instance}
 """,
     },
     # ---- Keepalived ----
@@ -534,7 +590,7 @@ keepalived_up{$instance}
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: bool
-min(keepalived_script_status{$instance})
+min by (name)(keepalived_script_status{$instance})
 """,
     },
     # ---- HTTP 站点探活 ----
@@ -570,6 +626,30 @@ sum(rate(anubis_proxied_requests_total{$instance}[5m]))
 # THRESHOLD: >90
 # UNIT: %
 sum(vl_data_size_bytes{$instance}) / sum(vl_total_disk_space_bytes{$instance}) * 100
+""",
+    },
+    {
+        "name": "Keepalived 概览",
+        "filename": "keepalived-overview.promql",
+        "desc": "Keepalived 服务/VRRP 状态/健康检查脚本（信息展示，不判定）",
+        "content": """# NAME: Keepalived 概览
+# MODE: instant
+# UNIT: mixed
+# DISPLAY: true
+label_replace(keepalived_up{$instance}, "item", "Keepalived存活", "job", ".*")
+or label_replace(keepalived_vrrp_state{$instance}, "item", "VRRP状态(2=MASTER)", "iname", ".*")
+or label_replace(keepalived_script_status{$instance}, "item", "健康检查", "name", ".*")
+""",
+    },
+    {
+        "name": "Keepalived 主备",
+        "filename": "keepalived-master.promql",
+        "desc": "全集群 MASTER 数量（0 表示 VIP 无人持有），<1 FAIL；建议绑定到 VIP（不依赖 $instance）",
+        "content": """# NAME: Keepalived 主备
+# MODE: instant
+# THRESHOLD: <1
+# UNIT: count
+label_replace(count(keepalived_vrrp_state{job="keepalived"} == 2), "item", "master_count", "job", ".*")
 """,
     },
 ]
