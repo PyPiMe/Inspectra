@@ -1174,6 +1174,10 @@ def create_app() -> Flask:
         flash(f"已复制脚本「{src.get('name')}」", "success")
         return redirect(url_for("script_detail", sid=new_id))
 
+    @app.route("/scripts/help")
+    def scripts_help():
+        return render_template("scripts_help.html")
+
     @app.route("/scripts/new")
     def script_new():
         return render_template(
@@ -1297,8 +1301,11 @@ def create_app() -> Flask:
             f"SELECT COUNT(*) AS c FROM models{clause}",
             params, page, per_page,
         )
+        _dm = models.get_setting("default_model", "")
+        _dm_row = models.fetch_one("models", int(_dm)) if _dm.isdigit() else None
         return render_template(
-            "models.html", models=rows, default_model=models.get_setting("default_model", ""),
+            "models.html", models=rows, default_model=_dm,
+            default_model_label=(_dm_row or {}).get("label", ""),
             q=q, enabled=enabled, page=page, pages=pages, total=total, per_page=per_page,
         )
 

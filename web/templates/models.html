@@ -3,7 +3,7 @@
 {% block title %}{{ t('nav.models') }}{% endblock %}
 {% block content %}
 <h4>{{ t('models.title') }}</h4>
-<div class="alert alert-secondary small mb-2">{{ t('models.alert', name=(default_model or t('common.not_set'))) | safe }}</div>
+<div class="alert alert-secondary small mb-2">{{ t('models.alert', name=(default_model_label or t('common.not_set'))) | safe }}</div>
 
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModel">{{ t('models.new') }}</button>

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t('scripts.help') }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+  <h4 class="mb-0">{{ t('scripts.help') }}</h4>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts') }}">&larr; {{ t('nav.scripts') }}</a>
+</div>
+
+<div class="card"><div class="card-body">
+  <div class="alert alert-secondary small mb-3">{{ t('scripts.output_hint') | safe }}</div>
+  <h6>Shell</h6>
+  <ul class="small">
+    <li>一行一个 <code>key=value</code>；多值可在行内附 <code>threshold=&gt;90</code> / <code>warn=&gt;80</code> / <code>unit=%</code>。</li>
+    <li>纯信息类加 <code># DISPLAY: true</code>（仅展示、不判定）。</li>
+    <li>异常行用 <code>ERROR:</code> 前缀；保存前自动 <code>bash -n</code> 校验。</li>
+  </ul>
+  <h6>PromQL</h6>
+  <ul class="small">
+    <li>头部元数据：<code># NAME / # MODE: instant|range / # WINDOW / # STEP / # THRESHOLD / # WARN / # UNIT / # DISPLAY</code>。</li>
+    <li>占位符：<code>$instance</code>（实例匹配器）、<code>$guest</code>（PVE 虚拟机）。</li>
+    <li>多指标阈值：<code>label_replace(..., "threshold", "&gt;90", ...)</code> 让每条 series 自带阈值。</li>
+    <li>结果按 <code>item=&lt;名&gt;</code> 标签展示；<code>MODE=range</code> 取区间最后一个值判定。</li>
+  </ul>
+</div></div>
+{% endblock %}

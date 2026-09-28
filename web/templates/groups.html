@@ -3,6 +3,7 @@
 {% block title %}{{ t('nav.groups') }}{% endblock %}
 {% block content %}
 <h4>{{ t('groups.title') }}</h4>
+<div class="alert alert-secondary small mb-2">{{ t('groups.alert') }}</div>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createGroup">{{ t('groups.new') }}</button>
   <form class="row g-2" method="get" action="{{ url_for('groups') }}">
@@ -43,7 +44,12 @@
     <div class="modal-body">
       <div class="mb-2"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" required></div>
       <div class="mb-2"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc"></div>
-      <div class="mb-2"><label class="form-label">{{ t('groups.prom_labels') }}</label><textarea class="form-control" name="prom_labels_json" rows="2">{}</textarea></div>
+      <div class="mb-2">
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#cAdvLabels">{{ t('server_detail.advanced') }}</button>
+        <div class="collapse mt-2" id="cAdvLabels">
+          <label class="form-label">{{ t('groups.prom_labels') }}</label><textarea class="form-control" name="prom_labels_json" rows="2">{}</textarea>
+        </div>
+      </div>
     </div>
     <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
@@ -58,7 +64,12 @@
     <div class="modal-body">
       <div class="mb-2"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ g.name }}" required></div>
       <div class="mb-2"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ g.desc }}"></div>
-      <div class="mb-2"><label class="form-label">{{ t('groups.prom_labels') }}</label><textarea class="form-control" name="prom_labels_json" rows="2">{{ g.prom_labels_json }}</textarea></div>
+      <div class="mb-2">
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#eAdvLabels{{ g.id }}">{{ t('server_detail.advanced') }}</button>
+        <div class="collapse mt-2" id="eAdvLabels{{ g.id }}">
+          <label class="form-label">{{ t('groups.prom_labels') }}</label><textarea class="form-control" name="prom_labels_json" rows="2">{{ g.prom_labels_json }}</textarea>
+        </div>
+      </div>
     </div>
     <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>

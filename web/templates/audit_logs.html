@@ -3,7 +3,7 @@
 {% block title %}{{ t('nav.audit') }}{% endblock %}
 {% block content %}
 <h4>{{ t('nav.audit') }}</h4>
-<div class="small text-muted mb-2">{{ t('audit.note') }} <a href="{{ url_for('reports') }}">{{ t('nav.reports') }}</a>。</div>
+<div class="alert alert-secondary small mb-2">{{ t('audit.note') }} <a href="{{ url_for('reports') }}">{{ t('nav.reports') }}</a>。</div>
 {% set mods = {'ip': request.args.get('ip',''), 'target_type': request.args.get('target_type',''), 'q': request.args.get('q',''), 'status': request.args.get('status',''), 'start': request.args.get('start',''), 'end': request.args.get('end','')} %}
 {% set export_action = cur_action if cur_action not in ('', 'need') else '' %}
 {% set active_mods = (1 if mods.ip else 0) + (1 if mods.target_type else 0) + (1 if mods.q else 0) + (1 if mods.status else 0) + (1 if (mods.start or mods.end) else 0) %}

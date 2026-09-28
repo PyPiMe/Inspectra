@@ -3,6 +3,7 @@
 {% block title %}{{ t('nav.datasources') }}{% endblock %}
 {% block content %}
 <h4>{{ t('datasources.title') }}</h4>
+<div class="alert alert-secondary small mb-2">{{ t('datasources.alert') }}</div>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
   <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createDs">{{ t('datasources.new') }}</button>
   <form class="row g-2" method="get" action="{{ url_for('datasources') }}">

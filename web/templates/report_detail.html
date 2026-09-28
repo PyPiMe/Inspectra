@@ -60,11 +60,11 @@
 {% if detail and detail.apps %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
   <div class="btn-group btn-group-sm" role="group" id="fStatus" data-default="{{ default_f }}">
+    <button type="button" class="btn btn-outline-danger" data-f="bad">{{ t('reports.abnormal') }}</button>
     <button type="button" class="btn btn-outline-secondary" data-f="all">{{ t('common.all') }}</button>
-    <button type="button" class="btn btn-outline-danger" data-f="bad">{{ t('reports.only_bad') }}</button>
-    <button type="button" class="btn btn-outline-danger" data-f="FAIL">FAIL</button>
-    <button type="button" class="btn btn-outline-warning" data-f="WARN">WARN</button>
-    <button type="button" class="btn btn-outline-secondary" data-f="UNKNOWN">UNKNOWN</button>
+    <button type="button" class="btn btn-outline-danger" data-f="FAIL">{{ t('status.fail') }}</button>
+    <button type="button" class="btn btn-outline-warning" data-f="WARN">{{ t('status.warn') }}</button>
+    <button type="button" class="btn btn-outline-secondary" data-f="UNKNOWN">{{ t('status.unknown') }}</button>
   </div>
   <input type="search" class="form-control form-control-sm" style="max-width: 16rem;" id="fSearch" placeholder="{{ t('reports.search_ph') }}">
   <span class="text-muted small" id="fCount"></span>

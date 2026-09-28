@@ -3,7 +3,7 @@
 {% block title %}{{ t('reports.title') }}{% endblock %}
 {% block content %}
 <h4>{{ t('reports.title') }}</h4>
-<div class="small text-muted mb-2">{{ t('reports.note') }} <a href="{{ url_for('audit_logs') }}">{{ t('nav.audit') }}</a>。</div>
+<div class="alert alert-secondary small mb-2">{{ t('reports.note') }} <a href="{{ url_for('audit_logs') }}">{{ t('nav.audit') }}</a>。</div>
 {% set cn = {'success': t('reports.success'), 'partial': t('reports.partial'), 'error': t('reports.error'), 'running': t('reports.running')} %}
 {% set back_url = url_for('reports', status=status, trigger=trigger, start=start, end=end) %}
 {% set active_mods = (1 if trigger else 0) + (1 if (start or end) else 0) %}

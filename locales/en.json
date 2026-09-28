@@ -221,7 +221,7 @@
   "groups.labels": "Group labels",
   "groups.name": "Name",
   "groups.new": "New group",
-  "groups.prom_labels": "Group Prometheus labels (JSON)",
+  "groups.prom_labels": "Group-level default match labels (JSON, optional, usually {})",
   "groups.query_ph": "Name / description",
   "groups.server_count": "Servers",
   "groups.title": "Groups",
@@ -303,7 +303,7 @@
   "logs.title": "App logs",
   "logs.title_nav": "App logs",
   "logs.write_level": "Write level (immediate)",
-  "models.alert": "API keys are <strong>not stored</strong>; only the env var name is saved (e.g. <code>DEEPSEEK_API_KEY</code>); the real value goes in <code>secrets.env</code>. Supports <abbr title=\"OpenAI-compatible\">OpenAI-compatible APIs</abbr>. Default model: <strong>{name}</strong>",
+  "models.alert": "The real API key lives only in secrets.env; here you only set the variable name (e.g. DEEPSEEK_API_KEY) — the system does not store the secret. OpenAI-compatible APIs supported. Default model: <strong>{name}</strong>",
   "models.api_key_env": "Key env",
   "models.base_url": "Base URL",
   "models.custom": "Custom",
@@ -655,5 +655,14 @@
   "type.server": "Server",
   "type.server_datasource": "Data source binding",
   "type.setting": "Setting",
-  "status.info": "Info"
+  "status.info": "Info",
+  "servers.alert": "Authoritative host inventory; SSH port/user/credential are optional (leave blank for Prometheus-only); belongs to 0–1 group; bind data sources and scripts here.",
+  "groups.alert": "A reusable set of servers (for bulk selection / scheduling / label inheritance); a server belongs to at most one group; cannot be deleted while referenced by an application.",
+  "applications.alert": "A business-facing composition whose members are servers or groups (many-to-many, no hierarchy); reports/alerts are aggregated by application; unassigned go to \"Unassigned\".",
+  "datasources.alert": "Prometheus endpoint (auth none/basic/bearer); bind it on a server and pick promql scripts; instance matching order: explicit > binding/datasource/group labels > IP.",
+  "scripts.note_short": "Shell scripts are checked with <code>bash -n</code> before saving; PromQL scripts need header metadata (NAME/THRESHOLD/UNIT etc.).",
+  "scripts.help": "Script guide",
+  "credentials.used_count": "{n}",
+  "credentials.used_title": "Referenced by servers",
+  "reports.abnormal": "Issues"
 }
