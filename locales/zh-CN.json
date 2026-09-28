@@ -664,5 +664,18 @@
   "scripts.help": "脚本规范",
   "credentials.used_count": "{n} 台",
   "credentials.used_title": "被引用服务器",
-  "reports.abnormal": "异常"
+  "reports.abnormal": "异常",
+  "server_detail.save_server": "保存服务器",
+  "server_detail.save_binding": "保存绑定",
+  "server_detail.save_hint": "修改后请点右侧「保存服务器」",
+  "server_detail.unsaved": "未保存",
+  "server_detail.err_pick_ds": "请选择数据源",
+  "server_detail.err_labels": "标签需为合法 JSON",
+  "server_detail.binding_clash": "该服务器已绑定该数据源（绑定 #{id}），请改选其他数据源或编辑现有绑定",
+  "server_detail.binding_updated": "数据源绑定已更新",
+  "server_detail.binding_updated_existing": "该服务器已绑定该数据源，已更新现有绑定",
+  "server_detail.binding_created": "数据源绑定已保存",
+  "server_detail.binding_deleted": "绑定已删除",
+  "js.save_failed": "保存失败",
+  "js.delete_failed": "删除失败"
 }

@@ -771,8 +771,30 @@ def create_app() -> Flask:
         flash("服务器已删除（含数据源绑定）", "success")
         return redirect(url_for("servers"))
 
+    def _render_bindings(sid: int) -> str:
+        """渲染服务器的数据源绑定区块（含弹窗），供页面内 AJAX 局部刷新。
+
+        Render the server's datasource-binding section (incl. modals) for in-page AJAX refresh.
+        """
+        return render_template(
+            "_server_bindings.html",
+            server=models.fetch_one("servers", sid),
+            bindings=models.fetch_all("server_datasources", "server_id=?", (sid,)),
+            datasources=models.fetch_all("datasources"),
+            prom_scripts=models.fetch_all("scripts", "kind='promql'"),
+        )
+
     @app.route("/servers/<int:sid>/bindings/save", methods=["POST"])
     def binding_save(sid: int):
+        want_json = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
+        def _fail(key: str, **kw):
+            msg = i18n.t(key, **kw)
+            if want_json:
+                return jsonify({"ok": False, "error": msg})
+            flash(msg, "danger")
+            return redirect(url_for("server_detail", sid=sid))
+
         bid = parse_int(request.form.get("binding_id")) or None
         data = {
             "server_id": sid,
@@ -783,13 +805,11 @@ def create_app() -> Flask:
             "enabled": 1 if request.form.get("enabled") else 0,
         }
         if not data["datasource_id"]:
-            flash("请选择数据源", "danger")
-            return redirect(url_for("server_detail", sid=sid))
+            return _fail("server_detail.err_pick_ds")
         try:
             json.loads(data["labels_json"])
         except ValueError:
-            flash("标签需为合法 JSON", "danger")
-            return redirect(url_for("server_detail", sid=sid))
+            return _fail("server_detail.err_labels")
         table = "server_datasources"
         with models.db() as conn:
             if bid:
@@ -798,11 +818,10 @@ def create_app() -> Flask:
                     (sid, data["datasource_id"], bid),
                 ).fetchone()
                 if clash:
-                    flash(f"该服务器已绑定该数据源（绑定 #{clash['id']}），请改选其他数据源或编辑现有绑定", "danger")
-                    return redirect(url_for("server_detail", sid=sid))
+                    return _fail("server_detail.binding_clash", id=clash["id"])
                 models.update(conn, table, bid, data)
                 models.write_audit(conn, g.ip, "update", "server_datasource", bid, f"server-{sid}", data)
-                msg, cat = "数据源绑定已更新", "success"
+                msg, cat = i18n.t("server_detail.binding_updated"), "success"
             else:
                 existing = conn.execute(
                     "SELECT id FROM server_datasources WHERE server_id=? AND datasource_id=?",
@@ -810,23 +829,30 @@ def create_app() -> Flask:
                 ).fetchone()
                 if existing:
                     # 已存在同一 (服务器, 数据源) 绑定：改为更新，避免 UNIQUE 冲突
+                    # Same (server, datasource) already bound: update it to avoid a UNIQUE conflict
                     bid = int(existing["id"])
                     models.update(conn, table, bid, data)
                     models.write_audit(conn, g.ip, "update", "server_datasource", bid, f"server-{sid}", data)
-                    msg, cat = "该服务器已绑定该数据源，已更新现有绑定", "warning"
+                    msg, cat = i18n.t("server_detail.binding_updated_existing"), "warning"
                 else:
                     bid = models.insert(conn, table, data)
                     models.write_audit(conn, g.ip, "create", "server_datasource", bid, f"server-{sid}", data)
-                    msg, cat = "数据源绑定已保存", "success"
+                    msg, cat = i18n.t("server_detail.binding_created"), "success"
+        if want_json:
+            return jsonify({"ok": True, "msg": msg, "html": _render_bindings(sid)})
         flash(msg, cat)
         return redirect(url_for("server_detail", sid=sid))
 
     @app.route("/servers/<int:sid>/bindings/<int:bid>/delete", methods=["POST"])
     def binding_delete(sid: int, bid: int):
+        want_json = request.headers.get("X-Requested-With") == "XMLHttpRequest"
         with models.db() as conn:
             models.delete(conn, "server_datasources", bid)
             models.write_audit(conn, g.ip, "delete", "server_datasource", bid, f"server-{sid}", {"deleted": True})
-        flash("绑定已删除", "success")
+        msg = i18n.t("server_detail.binding_deleted")
+        if want_json:
+            return jsonify({"ok": True, "msg": msg, "html": _render_bindings(sid)})
+        flash(msg, "success")
         return redirect(url_for("server_detail", sid=sid))
 
     # ---- 数据源

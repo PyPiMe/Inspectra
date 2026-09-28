@@ -18,9 +18,9 @@
         <span class="badge bg-light text-dark border">{{ t('servers.credential') }}: {{ cred_names.get(server.vault_key) if server.vault_key else t('common.not_bound') }}</span>
         {% if server.enabled %}<span class="badge bg-success">{{ t('common.enabled') }}</span>
         {% else %}<span class="badge bg-secondary">{{ t('common.disabled') }}</span>{% endif %}
+        <span class="badge bg-warning text-dark d-none" id="dirtyBadge">{{ t('server_detail.unsaved') }}</span>
       </div>
-      <div class="ms-auto d-flex gap-2">
-        <button type="submit" form="serverForm" class="btn btn-primary">{{ t('common.save') }}</button>
+      <div class="ms-auto">
         <a class="btn btn-outline-secondary" href="{{ url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
       </div>
     </div>
@@ -82,85 +82,85 @@
         </div>
       </div>
     </div>
-    <div class="card-footer text-end"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
+    <div class="card-footer d-flex justify-content-between align-items-center">
+      <span class="text-muted small">{{ t('server_detail.save_hint') }}</span>
+      <button class="btn btn-primary">{{ t('server_detail.save_server') }}</button>
+    </div>
   </div>
 </form>
 
-<div class="card mb-3">
-  <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <span>{{ t('server_detail.section_prom') }} <span class="text-muted small">{{ t('server_detail.binding_count', n=(bindings | length)) }}</span></span>
-    <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#bindNew">{{ t('server_detail.add_binding') }}</button>
-  </div>
-  <div class="card-body p-0">
-    <table class="table table-sm mb-0">
-      <thead><tr><th>{{ t('nav.datasources') }}</th><th>prom_instance</th><th>{{ t('servers.labels_override') }}</th><th>{{ t('servers.prom_scripts') }}</th><th>{{ t('common.enabled') }}</th><th></th></tr></thead>
-      <tbody>
-      {% for b in bindings %}
-        <tr>
-          <td>{{ (datasources|selectattr('id','equalto',b.datasource_id)|list|first).name if datasources|selectattr('id','equalto',b.datasource_id)|list else b.datasource_id }}</td>
-          <td>{{ b.prom_instance or '-' }}</td>
-          <td class="small text-muted">{{ t('server_detail.label_count', n=(json_or(b.labels_json, {})|length)) }}</td>
-          <td class="small">{{ t('server_detail.script_count', n=(json_or(b.scripts_json, [])|length)) }}</td>
-          <td>{% if b.enabled %}<span class="badge bg-success">{{ t('common.yes') }}</span>{% else %}<span class="badge bg-secondary">{{ t('common.no') }}</span>{% endif %}</td>
-          <td class="text-nowrap">
-            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bind{{ b.id }}">{{ t('common.edit') }}</button>
-            <form method="post" action="{{ url_for('binding_delete', sid=server.id, bid=b.id) }}" class="d-inline" onsubmit="return confirm('{{ t('server_detail.confirm_binding_delete') }}')">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-              <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
-            </form>
-          </td>
-        </tr>
-      {% else %}
-        <tr><td colspan="6" class="text-muted p-3">{{ t('server_detail.no_binding') }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+{% include "_server_bindings.html" %}
+<a class="btn btn-outline-secondary mt-2" href="{{ url_for('servers') }}">&larr; {{ t('server_detail.back_list') }}</a>
+{% endblock %}
 
-<div class="modal fade" id="bindNew"><div class="modal-dialog"><div class="modal-content">
-  <form method="post" action="{{ url_for('binding_save', sid=server.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="modal-header"><h5 class="modal-title">{{ t('server_detail.add_binding') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="mb-2"><label class="form-label">{{ t('nav.datasources') }}</label>
-        <select class="form-select" name="datasource_id" required>
-          {% for d in datasources %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="mb-2"><label class="form-label">{{ t('server_detail.prom_instance_opt') }}</label><input class="form-control" name="prom_instance"></div>
-      <div class="mb-2"><label class="form-label">{{ t('servers.labels_override') }}</label>{{ label_editor('labels_json', '{}', 'leNew') }}</div>
-      <div class="mb-2"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
-        {{ script_picker('prom_scripts', prom_scripts, [], 'spPromAdd') }}
-      </div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">{{ t('common.enabled') }}</label></div>
-    </div>
-    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
-  </form>
-</div></div></div>
+{% block scripts %}
+<script>
+(function () {
+  // 服务器表单：未保存提示 + 离开拦截
+  // Server form: unsaved indicator + navigation guard
+  const form = document.getElementById('serverForm');
+  const dirtyBadge = document.getElementById('dirtyBadge');
+  let dirty = false;
+  function mark() { dirty = true; if (dirtyBadge) dirtyBadge.classList.remove('d-none'); }
+  if (form) {
+    form.addEventListener('input', mark);
+    form.addEventListener('change', mark);
+    form.addEventListener('submit', () => { dirty = false; });
+    window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+  }
 
-{% for b in bindings %}
-{% set bound = json_or(b.scripts_json, []) %}
-<div class="modal fade" id="bind{{ b.id }}"><div class="modal-dialog"><div class="modal-content">
-  <form method="post" action="{{ url_for('binding_save', sid=server.id) }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="binding_id" value="{{ b.id }}">
-    <div class="modal-header"><h5 class="modal-title">{{ t('server_detail.edit_binding', id=b.id) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <div class="mb-2"><label class="form-label">{{ t('nav.datasources') }}</label>
-        <select class="form-select" name="datasource_id">
-          {% for d in datasources %}<option value="{{ d.id }}" {{ 'selected' if b.datasource_id==d.id else '' }}>{{ d.name }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="mb-2"><label class="form-label">prom_instance</label><input class="form-control" name="prom_instance" value="{{ b.prom_instance }}"></div>
-      <div class="mb-2"><label class="form-label">{{ t('servers.labels_override') }}</label>{{ label_editor('labels_json', b.labels_json, 'leBind' ~ b.id) }}</div>
-      <div class="mb-2"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
-        {{ script_picker('prom_scripts', prom_scripts, bound, 'spPromEdit' ~ b.id) }}
-      </div>
-      <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if b.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div>
-    </div>
-    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
-  </form>
-</div></div></div>
-{% endfor %}
+  // 绑定区：AJAX 增删改，避免整页跳转丢失服务器表单未保存内容
+  // Bindings: AJAX save/delete so unsaved server edits are not lost
+  function reinit() {
+    if (window.initScriptPickers) initScriptPickers();
+    if (window.initLabelEditors) initLabelEditors();
+  }
+  function applyHtml(html) {
+    const cur = document.getElementById('bindingsSection');
+    if (!cur) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html.trim();
+    cur.replaceWith(tmp.firstElementChild);
+    reinit();
+  }
+  function hideModal(el) {
+    const m = el && el.closest && el.closest('.modal');
+    if (m && window.bootstrap) {
+      const inst = bootstrap.Modal.getInstance(m);
+      if (inst) inst.hide();
+    }
+  }
+  async function postForm(f) {
+    const res = await fetch(f.action, {
+      method: 'POST',
+      body: new FormData(f),
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    });
+    return res.json();
+  }
+  document.addEventListener('submit', async (e) => {
+    const f = e.target;
+    if (f.classList && f.classList.contains('binding-form')) {
+      e.preventDefault();
+      try {
+        const d = await postForm(f);
+        if (d.ok) { hideModal(f); applyHtml(d.html); }
+        else alert(d.error || __t('js.save_failed'));
+      } catch (err) { alert(__t('js.save_failed')); }
+    }
+  });
+  document.addEventListener('submit', async (e) => {
+    const f = e.target;
+    if (f.classList && f.classList.contains('binding-del-form')) {
+      if (!confirm(f.dataset.confirm || '?')) { e.preventDefault(); return; }
+      e.preventDefault();
+      try {
+        const d = await postForm(f);
+        if (d.ok) applyHtml(d.html);
+        else alert(d.error || __t('js.delete_failed'));
+      } catch (err) { alert(__t('js.delete_failed')); }
+    }
+  });
+})();
+</script>
 {% endblock %}

@@ -664,5 +664,18 @@
   "scripts.help": "Script guide",
   "credentials.used_count": "{n}",
   "credentials.used_title": "Referenced by servers",
-  "reports.abnormal": "Issues"
+  "reports.abnormal": "Issues",
+  "server_detail.save_server": "Save server",
+  "server_detail.save_binding": "Save binding",
+  "server_detail.save_hint": "Click \"Save server\" on the right after editing",
+  "server_detail.unsaved": "Unsaved",
+  "server_detail.err_pick_ds": "Please select a datasource",
+  "server_detail.err_labels": "Labels must be valid JSON",
+  "server_detail.binding_clash": "This server already binds that datasource (binding #{id}); choose another or edit the existing binding",
+  "server_detail.binding_updated": "Binding updated",
+  "server_detail.binding_updated_existing": "This server already binds that datasource; existing binding updated",
+  "server_detail.binding_created": "Binding saved",
+  "server_detail.binding_deleted": "Binding deleted",
+  "js.save_failed": "Save failed",
+  "js.delete_failed": "Delete failed"
 }

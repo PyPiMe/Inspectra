@@ -1,0 +1,80 @@
+{% from "_macros.html" import script_picker, label_editor %}
+<div id="bindingsSection">
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>{{ t('server_detail.section_prom') }} <span class="text-muted small">{{ t('server_detail.binding_count', n=(bindings | length)) }}</span></span>
+      <button class="btn btn-sm btn-primary" type="button" data-bs-toggle="modal" data-bs-target="#bindNew">{{ t('server_detail.add_binding') }}</button>
+    </div>
+    <div class="card-body p-0">
+      <table class="table table-sm mb-0">
+        <thead><tr><th>{{ t('nav.datasources') }}</th><th>prom_instance</th><th>{{ t('servers.labels_override') }}</th><th>{{ t('servers.prom_scripts') }}</th><th>{{ t('common.enabled') }}</th><th></th></tr></thead>
+        <tbody>
+        {% for b in bindings %}
+          <tr>
+            <td>{{ (datasources|selectattr('id','equalto',b.datasource_id)|list|first).name if datasources|selectattr('id','equalto',b.datasource_id)|list else b.datasource_id }}</td>
+            <td>{{ b.prom_instance or '-' }}</td>
+            <td class="small text-muted">{{ t('server_detail.label_count', n=(json_or(b.labels_json, {})|length)) }}</td>
+            <td class="small">{{ t('server_detail.script_count', n=(json_or(b.scripts_json, [])|length)) }}</td>
+            <td>{% if b.enabled %}<span class="badge bg-success">{{ t('common.yes') }}</span>{% else %}<span class="badge bg-secondary">{{ t('common.no') }}</span>{% endif %}</td>
+            <td class="text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="modal" data-bs-target="#bind{{ b.id }}">{{ t('common.edit') }}</button>
+              <form method="post" action="{{ url_for('binding_delete', sid=server.id, bid=b.id) }}" class="d-inline binding-del-form" data-confirm="{{ t('server_detail.confirm_binding_delete') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="text-muted p-3">{{ t('server_detail.no_binding') }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="modal fade" id="bindNew"><div class="modal-dialog"><div class="modal-content">
+    <form method="post" action="{{ url_for('binding_save', sid=server.id) }}" class="binding-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="modal-header"><h5 class="modal-title">{{ t('server_detail.add_binding') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">{{ t('nav.datasources') }}</label>
+          <select class="form-select" name="datasource_id" required>
+            {% for d in datasources %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-2"><label class="form-label">{{ t('server_detail.prom_instance_opt') }}</label><input class="form-control" name="prom_instance"></div>
+        <div class="mb-2"><label class="form-label">{{ t('servers.labels_override') }}</label>{{ label_editor('labels_json', '{}', 'leNew') }}</div>
+        <div class="mb-2"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
+          {{ script_picker('prom_scripts', prom_scripts, [], 'spPromAdd') }}
+        </div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">{{ t('common.enabled') }}</label></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary">{{ t('server_detail.save_binding') }}</button></div>
+    </form>
+  </div></div></div>
+
+  {% for b in bindings %}
+  {% set bound = json_or(b.scripts_json, []) %}
+  <div class="modal fade" id="bind{{ b.id }}"><div class="modal-dialog"><div class="modal-content">
+    <form method="post" action="{{ url_for('binding_save', sid=server.id) }}" class="binding-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="binding_id" value="{{ b.id }}">
+      <div class="modal-header"><h5 class="modal-title">{{ t('server_detail.edit_binding', id=b.id) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <div class="mb-2"><label class="form-label">{{ t('nav.datasources') }}</label>
+          <select class="form-select" name="datasource_id">
+            {% for d in datasources %}<option value="{{ d.id }}" {{ 'selected' if b.datasource_id==d.id else '' }}>{{ d.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="mb-2"><label class="form-label">prom_instance</label><input class="form-control" name="prom_instance" value="{{ b.prom_instance }}"></div>
+        <div class="mb-2"><label class="form-label">{{ t('servers.labels_override') }}</label>{{ label_editor('labels_json', b.labels_json, 'leBind' ~ b.id) }}</div>
+        <div class="mb-2"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
+          {{ script_picker('prom_scripts', prom_scripts, bound, 'spPromEdit' ~ b.id) }}
+        </div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if b.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div>
+      </div>
+      <div class="modal-footer"><button class="btn btn-primary">{{ t('server_detail.save_binding') }}</button></div>
+    </form>
+  </div></div></div>
+  {% endfor %}
+</div>
