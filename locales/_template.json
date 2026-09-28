@@ -664,5 +664,6 @@
   "server_detail.binding_created": "数据源绑定已保存",
   "server_detail.binding_deleted": "绑定已删除",
   "js.save_failed": "保存失败",
-  "js.delete_failed": "删除失败"
+  "js.delete_failed": "删除失败",
+  "reports.need_hint": "运行失败，或报告含失败/警告项"
 }

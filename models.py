@@ -155,6 +155,7 @@ CREATE TABLE IF NOT EXISTS run_history (
     sanitize_hits TEXT DEFAULT '[]',
     error TEXT DEFAULT '',
     summary TEXT DEFAULT '{}',
+    issue_count INTEGER DEFAULT 0,
     report_file TEXT DEFAULT ''
 );
 
@@ -340,6 +341,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
     hcols = {r["name"] for r in conn.execute("PRAGMA table_info(run_history)").fetchall()}
     if "mode" not in hcols:
         conn.execute("ALTER TABLE run_history ADD COLUMN mode TEXT DEFAULT 'model'")
+    if "issue_count" not in hcols:
+        conn.execute("ALTER TABLE run_history ADD COLUMN issue_count INTEGER DEFAULT 0")
     svcols = {r["name"] for r in conn.execute("PRAGMA table_info(servers)").fetchall()}
     if "vm_ident" not in svcols:
         conn.execute("ALTER TABLE servers ADD COLUMN vm_ident TEXT DEFAULT ''")

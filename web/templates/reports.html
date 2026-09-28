@@ -13,7 +13,9 @@
     {% for st, label in [('need', t('reports.need')),('', t('common.all')),('success', t('reports.success')),('partial', t('reports.partial')),('error', t('reports.error')),('running', t('reports.running'))] %}
       {% set cnt = need_count if st == 'need' else (total_all if st == '' else counts.get(st, 0)) %}
       {% set color = 'danger' if st in ('need','error') else ('warning' if st == 'partial' else ('info' if st == 'running' else ('success' if st == 'success' else 'secondary'))) %}
-      <a class="btn btn-{{ color if status == st else 'outline-' + color }}" href="{{ url_for('reports', status=st, trigger=trigger, start=start, end=end) }}">{{ label }} <span class="badge text-bg-light">{{ cnt }}</span></a>
+      <a class="btn btn-{{ color if status == st else 'outline-' + color }}"
+         {% if st == 'need' %}title="{{ t('reports.need_hint') }}" data-bs-toggle="tooltip"{% endif %}
+         href="{{ url_for('reports', status=st, trigger=trigger, start=start, end=end) }}">{{ label }} <span class="badge text-bg-light">{{ cnt }}</span></a>
     {% endfor %}
   </div>
 

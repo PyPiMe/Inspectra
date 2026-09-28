@@ -1088,13 +1088,14 @@ def run(
 
         with models.db() as conn:
             conn.execute(
-                "UPDATE run_history SET finished=?, status=?, policy=?, sanitize_hits=?, summary=?, report_file=? WHERE id=?",
+                "UPDATE run_history SET finished=?, status=?, policy=?, sanitize_hits=?, summary=?, issue_count=?, report_file=? WHERE id=?",
                 (
                     finished,
                     run_status,
                     policy,
                     json.dumps(summary, ensure_ascii=False),
                     json.dumps(summary, ensure_ascii=False),
+                    len(issues),
                     report_file,
                     run_id,
                 ),

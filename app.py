@@ -1771,7 +1771,9 @@ def create_app() -> Flask:
         start = (src.get("start") or "").strip()
         end = (src.get("end") or "").strip()
         if status == "need":
-            where.append("status IN ('error','partial')")
+            # 「需关注」= 报告含问题项 或 运行失败/部分失败（内容维度，兼容旧数据）
+            # "Needs attention" = report has issues OR run failed/partial (content dimension, legacy-safe)
+            where.append("(issue_count>0 OR status IN ('error','partial'))")
         elif status:
             where.append("status=?")
             params.append(status)
@@ -1810,7 +1812,9 @@ def create_app() -> Flask:
             r["duration"] = _duration(r.get("started"), r.get("finished"))
         total_all = (models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"] or 0)
         counts = {row["status"]: row["c"] for row in models.query("SELECT status, COUNT(*) AS c FROM run_history GROUP BY status")}
-        need_count = counts.get("error", 0) + counts.get("partial", 0)
+        need_count = models.query(
+            "SELECT COUNT(*) AS c FROM run_history WHERE issue_count>0 OR status IN ('error','partial')"
+        )[0]["c"]
         return render_template(
             "reports.html", reports=rows, status=status, trigger=trigger, start=start, end=end,
             page=page, pages=pages, total=total, per_page=per_page, total_all=total_all,

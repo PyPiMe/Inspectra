@@ -677,5 +677,6 @@
   "server_detail.binding_created": "Binding saved",
   "server_detail.binding_deleted": "Binding deleted",
   "js.save_failed": "Save failed",
-  "js.delete_failed": "Delete failed"
+  "js.delete_failed": "Delete failed",
+  "reports.need_hint": "Run failed, or the report contains fail/warn items"
 }
