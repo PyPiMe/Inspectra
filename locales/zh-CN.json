@@ -387,6 +387,16 @@
   "reports.only_bad": "只看异常",
   "reports.show_all": "显示全部",
   "reports.issues": "问题",
+  "reports.search_ph": "搜索 服务器/脚本/指标",
+  "reports.export_json": "导出 JSON",
+  "reports.export_csv": "导出 CSV",
+  "reports.no_match": "无匹配项",
+  "reports.col_item": "指标项",
+  "reports.col_value": "巡检值",
+  "reports.col_threshold": "阈值",
+  "reports.col_verdict": "判定",
+  "reports.attention": "关注度",
+  "reports.script_count": "共 {n} 项",
   "reports.analysis_model": "模型分析",
   "reports.analysis_raw": "仅原始结果",
   "reports.batch_delete": "批量删除选中的",
@@ -644,5 +654,6 @@
   "type.script": "脚本",
   "type.server": "服务器",
   "type.server_datasource": "数据源绑定",
-  "type.setting": "设置"
+  "type.setting": "设置",
+  "status.info": "信息"
 }

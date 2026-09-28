@@ -2,10 +2,15 @@
 {% from "_macros.html" import status_badge %}
 {% block title %}{{ t('report_detail.title') }} #{{ run.id }}{% endblock %}
 {% block content %}
+{% set SC = {'OK': 'success', 'WARN': 'warning', 'FAIL': 'danger', 'ERROR': 'danger', 'UNKNOWN': 'secondary', 'INFO': 'info'} %}
+{% set ST = {'OK': t('status.ok'), 'WARN': t('status.warn'), 'FAIL': t('status.fail'), 'ERROR': t('status.error'), 'UNKNOWN': t('status.unknown'), 'INFO': t('status.info')} %}
+{% set default_f = 'bad' if (summary.issues or [])|length else 'all' %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
   <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
   <div>
     {% if run.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=run.id) }}">{{ t('report_detail.download_md') }}</a>{% endif %}
+    {% if detail and detail.apps %}<button type="button" class="btn btn-sm btn-outline-secondary" id="expJson">{{ t('reports.export_json') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="expCsv">{{ t('reports.export_csv') }}</button>{% endif %}
     <form method="post" action="{{ url_for('report_delete', rid=run.id) }}" class="d-inline" onsubmit="return confirm('{{ t('reports.confirm_single') }}')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
     </form>
@@ -21,130 +26,211 @@
 
 <div class="card mb-3"><div class="card-body py-2">
   <div class="row g-2 text-center">
-    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('dashboard.trigger') }}</div>{{ t('trigger.' ~ run.trigger) }}</div>
-    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('reports.analysis') }}</div>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
-    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('reports.servers') }}</div>{{ summary.server_count or 0 }}</div>
-    <div class="col-6 col-md-3"><div class="text-muted small">{{ t('reports.issues') }}</div>
+    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('dashboard.trigger') }}</div>{{ t('trigger.' ~ run.trigger) }}</div>
+    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.analysis') }}</div>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
+    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.duration') }}</div>{{ duration or '-' }}</div>
+    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.servers') }}</div>{{ summary.server_count or 0 }}</div>
+    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.issues') }}</div>
       <strong class="{{ 'text-danger' if (summary.issues|length) else 'text-success' }}">{{ summary.issues|length }}</strong></div>
   </div>
-  {% if summary.apps %}
-  <div class="d-flex flex-wrap gap-1 mt-2 justify-content-center">
-    {% for a in summary.apps %}
-      <span class="badge bg-{{ 'danger' if a.status in ('FAIL','ERROR') else ('warning' if a.status == 'WARN' else ('secondary' if a.status == 'UNKNOWN' else 'success')) }}">{{ a.name }} · {{ a.status }} · {{ a.server_count }}</span>
-    {% endfor %}
+  {% if detail and detail.apps %}
+  {% set cnt = namespace(fail=0, warn=0, unknown=0, ok=0) %}
+  {% for a in detail.apps %}{% for s in a.servers %}
+    {% if s.status in ('FAIL', 'ERROR') %}{% set cnt.fail = cnt.fail + 1 %}
+    {% elif s.status == 'WARN' %}{% set cnt.warn = cnt.warn + 1 %}
+    {% elif s.status == 'UNKNOWN' %}{% set cnt.unknown = cnt.unknown + 1 %}
+    {% else %}{% set cnt.ok = cnt.ok + 1 %}{% endif %}
+  {% endfor %}{% endfor %}
+  <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+    <span class="badge bg-danger">{{ t('status.fail') }} {{ cnt.fail }}</span>
+    <span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ cnt.warn }}</span>
+    <span class="badge bg-secondary">{{ t('status.unknown') }} {{ cnt.unknown }}</span>
+    <span class="badge bg-success">{{ t('status.ok') }} {{ cnt.ok }}</span>
   </div>
   {% endif %}
 </div></div>
 
 {% if run.status == 'running' %}
-<div class="card mb-3" id="runProgress">
-  <div class="card-body">
-    <div id="phase" class="mb-2">{{ t('report_detail.running') }}</div>
-    <div class="progress" style="height: 20px;">
-      <div id="bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div>
-    </div>
-  </div>
-</div>
+<div class="card mb-3" id="runProgress"><div class="card-body">
+  <div id="phase" class="mb-2">{{ t('report_detail.running') }}</div>
+  <div class="progress" style="height: 20px;"><div id="bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div></div>
+</div></div>
 {% endif %}
 
-<div class="row g-3">
-  <div class="col-lg-9 order-2 order-lg-1">
-    <div class="card"><div class="card-body report-md" id="reportBody">
-      {{ content | markdown }}
-    </div></div>
-    <a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
+{% if detail and detail.apps %}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+  <div class="btn-group btn-group-sm" role="group" id="fStatus" data-default="{{ default_f }}">
+    <button type="button" class="btn btn-outline-secondary" data-f="all">{{ t('common.all') }}</button>
+    <button type="button" class="btn btn-outline-danger" data-f="bad">{{ t('reports.only_bad') }}</button>
+    <button type="button" class="btn btn-outline-danger" data-f="FAIL">FAIL</button>
+    <button type="button" class="btn btn-outline-warning" data-f="WARN">WARN</button>
+    <button type="button" class="btn btn-outline-secondary" data-f="UNKNOWN">UNKNOWN</button>
   </div>
-  <div class="col-lg-3 order-1 order-lg-2">
-    <div class="card sticky-top" style="top: .75rem;">
-      <div class="card-header d-flex justify-content-between align-items-center gap-2">
-        <span>{{ t('reports.toc') }}</span>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleOnlyBad">{{ t('reports.only_bad') }}</button>
-      </div>
-      <div class="card-body p-2" id="reportToc" style="max-height: 78vh; overflow:auto;"></div>
-    </div>
-  </div>
+  <input type="search" class="form-control form-control-sm" style="max-width: 16rem;" id="fSearch" placeholder="{{ t('reports.search_ph') }}">
+  <span class="text-muted small" id="fCount"></span>
 </div>
+
+<div id="detailRoot">
+{% set ns = namespace(sid=0) %}
+{% for app in detail.apps %}
+  {% set app_bad = app.servers | map(attribute='results') | sum(start=[]) | selectattr('status', 'in', ['WARN','FAIL','ERROR','UNKNOWN']) | list | length %}
+  <div class="d-flex align-items-center gap-2 mt-3 mb-1 app-block" data-app="{{ app.name|lower }}">
+    <h5 class="mb-0">{{ app.name }}</h5>
+    <span class="badge bg-{{ SC.get(app.status, 'secondary') }}">{{ ST.get(app.status, app.status) }}</span>
+    <span class="text-muted small">{{ app.servers|length }} {{ t('reports.servers') }}</span>
+    {% if app_bad %}<span class="text-danger small">{{ t('reports.issues') }} {{ app_bad }}</span>{% endif %}
+  </div>
+  {% for s in app.servers %}
+    {% set bad = s.results | selectattr('status', 'in', ['WARN','FAIL','ERROR','UNKNOWN']) | list | length %}
+    {% set sid = 'svr' ~ ns.sid %}{% set ns.sid = ns.sid + 1 %}
+    <div class="card mb-2 srv" data-status="{{ s.status }}" data-name="{{ s.name|lower }}" data-bad="{{ bad }}">
+      <div class="card-header d-flex align-items-center gap-2 py-2" role="button" data-bs-toggle="collapse" data-bs-target="#{{ sid }}">
+        <span class="badge bg-{{ SC.get(s.status, 'secondary') }}">{{ ST.get(s.status, s.status) }}</span>
+        <strong>{{ s.name }}</strong>
+        {% if bad %}<span class="badge bg-danger">{{ bad }}</span>{% endif %}
+        {% if s.attention %}<span class="text-muted small ms-2">{{ t('reports.attention') }} {{ s.attention }}</span>{% endif %}
+        <span class="ms-auto text-muted small">{{ t('reports.script_count', n=(s.results|length)) }}</span>
+      </div>
+      <div class="collapse {{ 'show' if bad or s.skipped else '' }}" id="{{ sid }}">
+        <div class="card-body py-2">
+          {% if s.conclusion %}<div class="small">说明：{{ s.conclusion }}</div>{% endif %}
+          {% if s.consequence %}<div class="small">可能后果：{{ s.consequence }}</div>{% endif %}
+          {% if s.suggestion %}<div class="small">处置建议：{{ s.suggestion }}</div>{% endif %}
+          {% if not s.results %}
+            <div class="text-muted small">{% if s.skipped %}（未执行：无 Shell 脚本且无启用的 Prometheus 数据源绑定）{% else %}（无结果）{% endif %}</div>
+          {% endif %}
+          {% set good = [] %}
+          {% for r in s.results %}
+            {% set isbad = (r.status in ['WARN','FAIL','ERROR','UNKNOWN']) or r.error %}
+            {% if isbad or r.meta.DISPLAY %}
+            <div class="script-block mb-2" data-status="{{ r.status }}" data-bad="{{ 1 if isbad else 0 }}"
+                 data-name="{{ (r.script ~ ' ' ~ (r['items'] | map(attribute='name') | join(' ')) ~ ' ' ~ (r['items'] | map(attribute='value') | join(' ')))|lower }}">
+              <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-{{ SC.get(r.status, 'secondary') }}">{{ ST.get(r.status, r.status) }}</span>
+                <strong>{{ r.script }}</strong>
+                <span class="text-muted small">{{ r.source }}</span>
+              </div>
+              {% if r.error %}<div class="small text-danger">错误：{{ r.error }}</div>{% endif %}
+              {% if r['items'] %}
+              <table class="table table-sm table-hover mb-1">
+                <thead><tr><th>{{ t('reports.col_item') }}</th><th>{{ t('reports.col_value') }}</th><th>{{ t('reports.col_threshold') }}</th><th>{{ t('reports.col_verdict') }}</th></tr></thead>
+                <tbody>
+                {% for it in r['items'] %}
+                  <tr class="{{ 'table-danger' if it.status == 'FAIL' else ('table-warning' if it.status == 'WARN' else '') }}">
+                    <td>{{ it.name }}</td>
+                    <td>{{ it.value }}{% if it.unit %} {{ it.unit }}{% endif %}{% if it.excess %}（超出 {{ it.excess }}）{% endif %}</td>
+                    <td>{{ it.threshold or '-' }}</td>
+                    <td><span class="badge bg-{{ SC.get(it.status, 'secondary') }}">{{ ST.get(it.status, it.status or '-') }}</span></td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+              {% else %}
+              <pre class="small bg-light border rounded p-2 mb-1" style="white-space: pre-wrap;">{{ r.raw }}</pre>
+              {% endif %}
+            </div>
+            {% else %}
+              {% set _ = good.append(r.script) %}
+            {% endif %}
+          {% endfor %}
+          {% if good %}<div class="text-muted small">其余 {{ good|length }} 项正常：{{ good|join('、') }}</div>{% endif %}
+        </div>
+      </div>
+    </div>
+  {% endfor %}
+{% endfor %}
+</div>
+<div class="text-muted small mt-2 d-none" id="noMatch">{{ t('reports.no_match') }}</div>
+{% else %}
+<div class="card"><div class="card-body report-md" id="reportBody">{{ content | markdown }}</div></div>
+{% endif %}
+<a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
 {% endblock %}
 
 {% block scripts %}
+{% if detail and detail.apps %}
+<script id="detailData" type="application/json">{{ detail | tojson }}</script>
 <script>
-function pickStatus(text) {
-  if (/失败|异常/.test(text)) return 'danger';
-  if (/警告/.test(text)) return 'warning';
-  if (/未知/.test(text)) return 'secondary';
-  return 'success';
-}
-function enhanceReport() {
-  const root = document.getElementById('reportBody');
-  const toc = document.getElementById('reportToc');
-  if (!root) return;
-  const state = { onlyBad: false };
-  const blocks = [];   // {level, el, nodes:[...], status}
+(function () {
+  const data = JSON.parse(document.getElementById('detailData').textContent);
+  const fbar = document.getElementById('fStatus');
+  const apps = [...document.querySelectorAll('#detailRoot .app-block')];
+  const cards = [...document.querySelectorAll('#detailRoot .srv')];
+  const count = document.getElementById('fCount');
+  const noMatch = document.getElementById('noMatch');
+  const params = new URLSearchParams(location.search);
+  let f = params.get('f') || fbar.dataset.default || 'all';
+  let q = (params.get('q') || '').toLowerCase();
+  const se = document.getElementById('fSearch');
+  if (se && q) se.value = params.get('q');
 
-  let curApp = null;
-  root.querySelectorAll('h3, h4').forEach((h) => {
-    const level = h.tagName === 'H3' ? 3 : 4;
-    const status = pickStatus(h.textContent);
-    h.classList.add('text-' + status);
-    h.style.cursor = 'pointer';
-    if (level === 3) {
-      curApp = { level, el: h, nodes: [], status, children: [] };
-      blocks.push(curApp);
-    } else {
-      const blk = { level, el: h, nodes: [], status };
-      blocks.push(blk);
-      if (curApp) curApp.children.push(blk);
-    }
-  });
-  // collect following siblings per block
-  blocks.forEach((b) => {
-    let n = b.el.nextElementSibling;
-    while (n && !['H3', 'H4'].includes(n.tagName)) { b.nodes.push(n); n = n.nextElementSibling; }
-    b.el.id = 'sec-' + Math.random().toString(36).slice(2, 8);
-  });
-
-  // TOC
-  if (toc) {
-    toc.innerHTML = '';
-    blocks.forEach((b) => {
-      const a = document.createElement('a');
-      a.href = '#' + b.el.id;
-      a.className = 'd-block text-truncate small py-1 border-bottom';
-      a.innerHTML = '<span class="text-' + b.status + '">●</span> ' + b.el.textContent.replace(/\s+/g, ' ').trim();
-      if (b.level === 4) a.classList.add('ps-3');
-      toc.appendChild(a);
-    });
+  function syncUrl() {
+    const u = new URL(location.href);
+    if (f && f !== 'all') u.searchParams.set('f', f); else u.searchParams.delete('f');
+    if (q) u.searchParams.set('q', q); else u.searchParams.delete('q');
+    history.replaceState(null, '', u);
   }
-
-  // fold button on server headings
-  blocks.filter((b) => b.level === 4).forEach((b) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'btn btn-sm btn-outline-secondary ms-2';
-    btn.textContent = __t('js.collapse');
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const hidden = b.nodes[0] && b.nodes[0].style.display === 'none';
-      b.nodes.forEach((x) => { x.style.display = hidden ? '' : 'none'; });
-      btn.textContent = hidden ? __t('js.collapse') : __t('js.expand');
+  function markActive() {
+    fbar.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.f === f));
+  }
+  function apply() {
+    let visible = 0;
+    cards.forEach((c) => {
+      const qok = !q || c.dataset.name.includes(q);
+      let anyScript = false;
+      c.querySelectorAll('.script-block').forEach((b) => {
+        const bq = !q || b.dataset.name.includes(q);
+        const bs = f === 'all' || (f === 'bad' ? b.dataset.bad === '1' : b.dataset.status === f);
+        const vis = bq && bs;
+        b.style.display = vis ? '' : 'none';
+        if (vis) anyScript = true;
+      });
+      const show = (f === 'all') ? qok : anyScript;
+      c.style.display = show ? '' : 'none';
+      const body = document.getElementById(c.querySelector('[data-bs-target]').dataset.bsTarget.slice(1));
+      if (body && window.bootstrap) {
+        const col = bootstrap.Collapse.getOrCreateInstance(body, { toggle: false });
+        if (show && (f !== 'all' || q)) col.show();
+      }
+      if (show) visible++;
     });
-    b.el.appendChild(btn);
-  });
-
-  const toggle = document.getElementById('toggleOnlyBad');
-  if (toggle) toggle.addEventListener('click', () => {
-    state.onlyBad = !state.onlyBad;
-    toggle.classList.toggle('active', state.onlyBad);
-    toggle.textContent = state.onlyBad ? __t('js.show_all') : __t('js.only_bad');
-    blocks.filter((b) => b.level === 4).forEach((b) => {
-      const hide = state.onlyBad && b.status === 'success';
-      b.el.style.display = hide ? 'none' : '';
-      b.nodes.forEach((x) => { x.style.display = hide ? 'none' : ''; });
+    apps.forEach((a) => {
+      let any = false;
+      let n = a.nextElementSibling;
+      while (n && !n.classList.contains('app-block')) { if (n.classList.contains('srv') && n.style.display !== 'none') any = true; n = n.nextElementSibling; }
+      a.style.display = any ? '' : 'none';
     });
+    if (noMatch) noMatch.classList.toggle('d-none', visible > 0);
+    if (count) count.textContent = visible + ' / ' + cards.length;
+    syncUrl();
+  }
+  fbar.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { f = b.dataset.f; markActive(); apply(); }));
+  if (se) se.addEventListener('input', () => { q = se.value.trim().toLowerCase(); apply(); });
+  markActive();
+  apply();
+
+  function download(name, text, type) {
+    const blob = new Blob([text], { type: type || 'application/json' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  }
+  const jb = document.getElementById('expJson');
+  if (jb) jb.addEventListener('click', () => download('report-{{ run.id }}.json', JSON.stringify(data, null, 2)));
+  const cb = document.getElementById('expCsv');
+  if (cb) cb.addEventListener('click', () => {
+    const rows = [['application','server','server_status','script','script_status','item','value','unit','threshold','item_status','error']];
+    data.apps.forEach((a) => a.servers.forEach((s) => s.results.forEach((r) => {
+      if (r.items && r.items.length) {
+        r.items.forEach((it) => rows.push([a.name, s.name, s.status, r.script, r.status, it.name, it.value, it.unit, it.threshold, it.status, r.error || '']));
+      } else {
+        rows.push([a.name, s.name, s.status, r.script, r.status, '', '', '', '', '', r.error || '']);
+      }
+    })));
+    const csv = rows.map((r) => r.map((x) => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n');
+    download('report-{{ run.id }}.csv', '\ufeff' + csv, 'text/csv');
   });
-}
-enhanceReport();
+})();
 </script>
+{% endif %}
 {% if run.status == 'running' %}
 <script>
 (function () {
@@ -159,12 +245,9 @@ enhanceReport();
       if (p.total) {
         const pct = Math.round(p.done / p.total * 100);
         bar.classList.remove('progress-bar-striped', 'progress-bar-animated');
-        bar.style.width = pct + '%';
-        bar.textContent = pct + '%';
+        bar.style.width = pct + '%'; bar.textContent = pct + '%';
         phase.textContent = (p.label || __t('js.executing')) + '（' + p.done + '/' + p.total + '）';
-      } else {
-        phase.textContent = (p.label || __t('js.executing')) + '…';
-      }
+      } else { phase.textContent = (p.label || __t('js.executing')) + '…'; }
       if (d.found && !d.running) { window.location.reload(); return; }
     } catch (e) { /* ignore */ }
     setTimeout(poll, 1500);

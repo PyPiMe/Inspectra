@@ -387,6 +387,16 @@
   "reports.only_bad": "Only issues",
   "reports.show_all": "Show all",
   "reports.issues": "Issues",
+  "reports.search_ph": "Search server/script/metric",
+  "reports.export_json": "Export JSON",
+  "reports.export_csv": "Export CSV",
+  "reports.no_match": "No match",
+  "reports.col_item": "Metric",
+  "reports.col_value": "Value",
+  "reports.col_threshold": "Threshold",
+  "reports.col_verdict": "Verdict",
+  "reports.attention": "Attention",
+  "reports.script_count": "{n} items",
   "reports.analysis_model": "Model analysis",
   "reports.analysis_raw": "Raw only",
   "reports.batch_delete": "Delete selected",
@@ -644,5 +654,6 @@
   "type.script": "Script",
   "type.server": "Server",
   "type.server_datasource": "Data source binding",
-  "type.setting": "Setting"
+  "type.setting": "Setting",
+  "status.info": "Info"
 }

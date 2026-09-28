@@ -480,7 +480,7 @@ def _disp_value(it: dict[str, Any], default_unit: str = "") -> str:
 
 
 def _items_table(items: list[dict[str, Any]], default_unit: str = "") -> list[str]:
-    out = ["| 项 | 值 | 阈值 | 判定 |", "|----|----|------|------|"]
+    out = ["| 指标项 | 巡检值 | 阈值 | 判定 |", "|----|----|------|------|"]
     for it in items:
         thr = it.get("threshold") or it.get("warn") or ""
         out.append(
@@ -527,6 +527,53 @@ def _script_detail_lines(r: dict[str, Any]) -> list[str]:
         out.append(raw.rstrip("\n"))
         out.append("```")
     return out
+
+
+def _build_detail(app_groups: list[dict[str, Any]]) -> dict[str, Any]:
+    """把应用/服务器/脚本/条目结构化，供报告详情页交互式渲染。"""
+    apps: list[dict[str, Any]] = []
+    for a in app_groups:
+        servers: list[dict[str, Any]] = []
+        for s in a["servers"]:
+            results: list[dict[str, Any]] = []
+            for r in s.get("results", []):
+                items = r.get("items") or []
+                meta = r.get("meta") or {}
+                entry: dict[str, Any] = {
+                    "script": r.get("script_name") or "",
+                    "source": r.get("source") or "",
+                    "status": r.get("status") or "",
+                    "error": r.get("error") or "",
+                    "meta": {k: meta.get(k) for k in _META_KEYS if meta.get(k)},
+                    "items": [
+                        {
+                            "name": it.get("name") or "",
+                            "value": str(it.get("value", "")),
+                            "unit": it.get("unit") or "",
+                            "threshold": it.get("threshold") or it.get("warn") or "",
+                            "status": it.get("status") or "",
+                            "excess": _excess_label(it),
+                        }
+                        for it in items
+                    ],
+                }
+                if not items:
+                    entry["raw"] = (r.get("output") or "")[:4000]
+                results.append(entry)
+            servers.append(
+                {
+                    "name": s.get("name") or "",
+                    "status": s.get("status") or "",
+                    "attention": s.get("attention") or "",
+                    "conclusion": s.get("conclusion") or "",
+                    "consequence": s.get("consequence") or "",
+                    "suggestion": s.get("suggestion") or "",
+                    "skipped": bool(s.get("skipped")),
+                    "results": results,
+                }
+            )
+        apps.append({"name": a["name"], "status": a["status"], "servers": servers})
+    return {"apps": apps}
 
 
 def _report_markdown(ctx: dict[str, Any]) -> str:
@@ -1051,6 +1098,10 @@ def run(
                     report_file,
                     run_id,
                 ),
+            )
+            conn.execute(
+                "INSERT OR REPLACE INTO run_results (run_id, detail_json, created_at) VALUES (?,?,?)",
+                (run_id, json.dumps(_build_detail(app_groups), ensure_ascii=False), finished),
             )
         summary["notify_failures"] = notify_failures
         summary["report_file"] = report_file

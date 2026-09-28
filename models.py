@@ -158,6 +158,12 @@ CREATE TABLE IF NOT EXISTS run_history (
     report_file TEXT DEFAULT ''
 );
 
+CREATE TABLE IF NOT EXISTS run_results (
+    run_id INTEGER PRIMARY KEY,
+    detail_json TEXT DEFAULT '{}',
+    created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     ts TEXT,

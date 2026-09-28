@@ -1807,7 +1807,25 @@ def create_app() -> Flask:
         if not row:
             abort(404)
         content = _read_report(row.get("report_file") or "")
-        return render_template("report_detail.html", run=row, content=content, summary=json_or(row.get("summary"), {}))
+        detail = None
+        drow = models.query("SELECT detail_json FROM run_results WHERE run_id=?", (rid,))
+        if drow:
+            try:
+                detail = json.loads(drow[0]["detail_json"] or "{}")
+            except ValueError:
+                detail = None
+        duration = ""
+        try:
+            _s = datetime.fromisoformat(row.get("started") or "")
+            _f = datetime.fromisoformat(row.get("finished") or "")
+            _sec = max(0, int((_f - _s).total_seconds()))
+            duration = f"{_sec // 60}m{_sec % 60}s" if _sec >= 60 else f"{_sec}s"
+        except (ValueError, TypeError):
+            duration = ""
+        return render_template(
+            "report_detail.html", run=row, content=content,
+            summary=json_or(row.get("summary"), {}), detail=detail, duration=duration,
+        )
 
     def _read_report(filename: str) -> str:
         if not filename:
@@ -1829,6 +1847,7 @@ def create_app() -> Flask:
             _delete_report_file(row.get("report_file") or "")
             with models.db() as conn:
                 models.delete(conn, "run_history", rid)
+                conn.execute("DELETE FROM run_results WHERE run_id=?", (rid,))
                 models.write_audit(conn, g.ip, "delete", "report", rid, row.get("report_file") or "", {"deleted": True})
         flash("报告已删除", "success")
         back = (request.form.get("back") or "").strip()
@@ -1855,6 +1874,7 @@ def create_app() -> Flask:
             _delete_report_file(row.get("report_file") or "")
             with models.db() as conn:
                 models.delete(conn, "run_history", row["id"])
+                conn.execute("DELETE FROM run_results WHERE run_id=?", (row["id"],))
                 models.write_audit(
                     conn, g.ip, "delete", "report", row["id"], row.get("report_file") or "",
                     {"deleted": True, "batch_scope": scope},
@@ -2208,6 +2228,7 @@ def create_app() -> Flask:
                 _delete_report_file(row.get("report_file") or "")
                 with models.db() as conn:
                     models.delete(conn, "run_history", row["id"])
+                    conn.execute("DELETE FROM run_results WHERE run_id=?", (row["id"],))
                 count += 1
         return count
 

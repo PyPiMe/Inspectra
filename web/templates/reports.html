@@ -83,7 +83,9 @@
             <strong class="small">{{ r.started|local }}</strong>
             <span class="text-muted small">#{{ r.id }} · {{ t('trigger.' ~ r.trigger) }} · {{ t('reports.mode_model') if r.mode != 'raw' else t('reports.mode_raw') }}</span>
           </div>
-          <div class="small text-muted mt-1">{{ t('reports.servers') }} {{ sm.server_count or 0 }} · {{ t('reports.duration') }} {{ r.duration or '-' }} · {{ t('reports.errors') }} {{ sm.error_count or 0 }} / {{ t('reports.uncertain') }} {{ sm.uncertain_count or 0 }}</div>
+          <div class="small text-muted mt-1">{{ t('reports.servers') }} {{ sm.server_count or 0 }} · {{ t('reports.duration') }} {{ r.duration or '-' }} · {{ t('reports.issues') }} {{ (sm.issues or [])|length }}
+            {% for a in sm.apps or [] %}<span class="badge bg-{{ status_color.get(a.status, 'secondary') }} ms-1">{{ a.name }}</span>{% endfor %}
+          </div>
         </div>
         <div class="text-nowrap">
           {% if r.report_file %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('report_detail', rid=r.id) }}">{{ t('reports.view') }}</a>{% endif %}
