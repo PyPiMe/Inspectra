@@ -11,7 +11,7 @@ import json
 import logging
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 import engine
@@ -62,14 +62,21 @@ def _matches(schedule: dict[str, Any], now: datetime) -> bool:
     )
 
 
-def _same_minute(iso_ts: str | None, now: datetime) -> bool:
+def _same_minute(iso_ts: str | None, now_utc: datetime) -> bool:
+    """比较 last_fired_at（UTC 存储）与当前时间是否同一分钟（按 UTC 比较，避免时区错位）。
+
+    Compare the stored last_fired_at (UTC) with now in UTC to avoid a timezone mismatch.
+    """
     if not iso_ts:
         return False
     try:
         dt = datetime.fromisoformat(iso_ts)
     except ValueError:
         return False
-    return dt.year == now.year and dt.month == now.month and dt.day == now.day and dt.hour == now.hour and dt.minute == now.minute
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    n = now_utc.astimezone(timezone.utc)
+    return (dt.year, dt.month, dt.day, dt.hour, dt.minute) == (n.year, n.month, n.day, n.hour, n.minute)
 
 
 class Scheduler:
@@ -99,7 +106,8 @@ class Scheduler:
             self._stop.wait(self.poll_interval)
 
     def _tick(self) -> None:
-        now = datetime.now()
+        now = datetime.now()                 # 本地时间：用于 cron 字段匹配（Local time for cron matching）
+        now_utc = datetime.now(timezone.utc)  # UTC：用于与 last_fired_at 比较（UTC for last_fired_at comparison）
         if self._last_cleanup_day != now.date():
             self._last_cleanup_day = now.date()
             try:
@@ -111,7 +119,7 @@ class Scheduler:
         for schedule in models.fetch_all("run_schedule", "enabled=1"):
             if not _matches(schedule, now):
                 continue
-            if _same_minute(schedule.get("last_fired_at"), now):
+            if _same_minute(schedule.get("last_fired_at"), now_utc):
                 continue
             # 同任务防重入：该 schedule 是否有进行中的 run
             running = models.query(
