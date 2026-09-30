@@ -2,26 +2,36 @@
 {% from "_macros.html" import pager %}
 {% block title %}{{ t('reports.title') }}{% endblock %}
 {% block content %}
-<h4>{{ t('reports.title') }}</h4>
-<div class="alert alert-secondary small mb-2">{{ t('reports.note') }} <a href="{{ url_for('audit_logs') }}">{{ t('nav.audit') }}</a>。</div>
+<div class="d-flex align-items-center gap-2 flex-wrap">
+  <h4 class="mb-0">{{ t('reports.title') }}</h4>
+  </div>
+<div class="alert alert-secondary small my-2">{{ t('reports.note') }} <a href="{{ url_for('audit_logs') }}">{{ t('nav.audit') }}</a>。</div>
 {% set cn = {'success': t('reports.success'), 'partial': t('reports.partial'), 'error': t('reports.error'), 'running': t('reports.running')} %}
-{% set back_url = url_for('reports', status=status, trigger=trigger, start=start, end=end) %}
-{% set active_mods = (1 if trigger else 0) + (1 if (start or end) else 0) %}
+{% set back_url = url_for('reports', status=status, result=result, trigger=trigger, start=start, end=end) %}
+{% set active_mods = (1 if result else 0) + (1 if trigger else 0) + (1 if (start or end) else 0) %}
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <div class="btn-group btn-group-sm flex-wrap" role="group">
-    {% for st, label in [('need', t('reports.need')),('', t('common.all')),('success', t('reports.success')),('partial', t('reports.partial')),('error', t('reports.error')),('running', t('reports.running'))] %}
-      {% set cnt = need_count if st == 'need' else (total_all if st == '' else counts.get(st, 0)) %}
-      {% set color = 'danger' if st in ('need','error') else ('warning' if st == 'partial' else ('info' if st == 'running' else ('success' if st == 'success' else 'secondary'))) %}
-      <a class="btn btn-{{ color if status == st else 'outline-' + color }}"
-         {% if st == 'need' %}title="{{ t('reports.need_hint') }}" data-bs-toggle="tooltip"{% endif %}
-         href="{{ url_for('reports', status=st, trigger=trigger, start=start, end=end) }}">{{ label }} <span class="badge text-bg-light">{{ cnt }}</span></a>
-    {% endfor %}
+  <div class="btn-group btn-group-sm" role="group">
+    <a class="btn {{ 'btn-danger' if status == 'need' else 'btn-outline-danger' }}"
+       title="{{ t('reports.need_hint') }}" href="{{ url_for('reports', status='need', result=result, trigger=trigger, start=start, end=end) }}">
+      {{ t('reports.need') }} <span class="badge text-bg-light">{{ need_count }}</span></a>
+    <a class="btn {{ 'btn-secondary' if status == '' else 'btn-outline-secondary' }}"
+       href="{{ url_for('reports', status='', result=result, trigger=trigger, start=start, end=end) }}">
+      {{ t('common.all') }} <span class="badge text-bg-light">{{ total_all }}</span></a>
   </div>
 
   <div class="dropdown ms-auto">
     <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">{{ t('common.filter') }}{% if active_mods %} <span class="badge bg-primary">{{ active_mods }}</span>{% endif %}</button>
     <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 23rem;">
+      <div class="mb-2">
+        <div class="small text-muted mb-1">{{ t('reports2.run_result') }}</div>
+        <div class="btn-group btn-group-sm" role="group">
+          <button type="button" class="btn btn-outline-secondary f-result {{ 'active' if not result else '' }}" data-val="">{{ t('common.all') }}</button>
+          {% for st in ['success','partial','error','running'] %}
+            <button type="button" class="btn btn-outline-secondary f-result {{ 'active' if result == st else '' }}" data-val="{{ st }}">{{ cn.get(st, st) }}</button>
+          {% endfor %}
+        </div>
+      </div>
       <div class="mb-2">
         <div class="small text-muted mb-1">{{ t('reports.trigger') }}</div>
         <div class="btn-group btn-group-sm" role="group">
@@ -51,11 +61,12 @@
   </div>
 </div>
 
-{% if trigger or start or end %}
+{% if result or trigger or start or end %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
   <span class="small text-muted">{{ t('logs.applied') }}</span>
-  {% if trigger %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, trigger='', start=start, end=end) }}">{{ t('reports.trigger') }} {{ t('trigger.' ~ trigger) }} ×</a>{% endif %}
-  {% if start or end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, trigger=trigger, start='', end='') }}">{{ t('reports.time_range') }} {% if start and end %}{{ start.replace('T',' ')[:16] }} ~ {{ end.replace('T',' ')[:16] }}{% elif start %}≥ {{ start.replace('T',' ')[:16] }}{% else %}≤ {{ end.replace('T',' ')[:16] }}{% endif %} ×</a>{% endif %}
+  {% if result %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, result='', trigger=trigger, start=start, end=end) }}">{{ t('reports2.run_result') }} {{ cn.get(result, result) }} ×</a>{% endif %}
+  {% if trigger %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, result=result, trigger='', start=start, end=end) }}">{{ t('reports.trigger') }} {{ t('trigger.' ~ trigger) }} ×</a>{% endif %}
+  {% if start or end %}<a class="badge text-bg-secondary text-decoration-none" href="{{ url_for('reports', status=status, result=result, trigger=trigger, start='', end='') }}">{{ t('reports.time_range') }} {% if start and end %}{{ start.replace('T',' ')[:16] }} ~ {{ end.replace('T',' ')[:16] }}{% elif start %}≥ {{ start.replace('T',' ')[:16] }}{% else %}≤ {{ end.replace('T',' ')[:16] }}{% endif %} ×</a>{% endif %}
 </div>
 {% endif %}
 
@@ -73,31 +84,77 @@
   <div class="form-check m-0"><input class="form-check-input" type="checkbox" id="uiSelectAll"><label class="form-check-label small" for="uiSelectAll">{{ t('common.select_page') }}</label></div>
 </div>
 
+{% if grouped is defined %}
+{% set TYPECN = {'app': t('reports2.type_app'), 'group': t('reports2.type_group'), 'server': t('reports2.type_server'), 'all': t('reports2.type_all'), 'unassigned': t('reports2.unassigned')} %}
+<div class="mb-2">
+{% for g in grouped %}
+  {% set gid = 'grp' ~ loop.index %}
+  <div class="card mb-2">
+    <div class="card-header d-flex align-items-center gap-2 flex-wrap" role="button" data-bs-toggle="collapse" data-bs-target="#{{ gid }}">
+      <span class="text-muted">▸</span>
+      <span class="badge bg-light text-dark border">{{ TYPECN.get(g.type, '') }}</span>
+      <strong>{{ t('reports2.all_servers') if g.name == '__ALL__' else (t('reports2.unassigned') if g.name == '__UNASSIGNED__' else g.name) }}</strong>
+      <span class="badge bg-danger">{{ t('reports.need') }} {{ g.count }}</span>
+      {% if g.latest.fail_count %}<span class="badge bg-danger">{{ t('status.fail') }} {{ g.latest.fail_count }}</span>{% endif %}
+      {% if g.latest.warn_count %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ g.latest.warn_count }}</span>{% endif %}
+      <span class="text-muted ms-auto">{{ t('reports2.latest') }} {{ g.latest.started|local }}</span>
+    </div>
+    <div class="collapse p-2" id="{{ gid }}">
+      {% for r in g.runs %}
+      <div class="card rep-card mb-2" {% if r.report_file %}data-href="{{ url_for('report_detail', rid=r.id) }}"{% endif %} style="cursor:{% if r.report_file %}pointer{% else %}default{% endif %};">
+        <div class="card-body py-2 d-flex align-items-center gap-3">
+          <input class="form-check-input mt-0 row-cb" type="checkbox" value="{{ r.id }}">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <span class="text-{{ status_color.get(r.status, 'secondary') }}">●</span>
+              <strong>{{ r.started|local }}</strong>
+              <span class="text-muted">#{{ r.id }} · {{ t('trigger.' ~ r.trigger) }} · {{ t('reports.mode_model') if r.mode != 'raw' else t('reports.mode_raw') }}</span>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+              {% if r.fail_count %}<span class="badge bg-danger">{{ t('status.fail') }} {{ r.fail_count }}</span>{% endif %}
+              {% if r.warn_count %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ r.warn_count }}</span>{% endif %}
+            </div>
+          </div>
+          {% if r.report_file %}<span class="text-muted fs-5">&rsaquo;</span>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      {% if g.count > g.runs|length %}<div class="text-muted px-2 py-1">{{ t('reports2.show_recent', n=(g.runs|length), total=g.count) }}</div>{% endif %}
+    </div>
+  </div>
+{% else %}
+  <div class="text-muted">{{ t('reports.empty') }}</div>
+{% endfor %}
+</div>
+{% else %}
 <div class="row g-2">
-{% for r in reports %}{% set sm = r.summary_obj %}
+{% for r in reports %}{% set sm = r.summary_obj %}{% set ic = r.issue_count or (sm.issues or [])|length %}
   <div class="col-12">
-    <div class="card">
+    <div class="card rep-card"
+         {% if r.report_file %}data-href="{{ url_for('report_detail', rid=r.id) }}"{% endif %}>
       <div class="card-body py-2 d-flex align-items-center gap-3">
-        <input class="form-check-input row-cb mt-0" type="checkbox" value="{{ r.id }}">
+        <input class="form-check-input mt-0 row-cb" type="checkbox" value="{{ r.id }}">
         <div class="flex-grow-1">
           <div class="d-flex align-items-center gap-2 flex-wrap">
-            <span class="badge bg-{{ status_color.get(r.status, 'secondary') }}">{{ cn.get(r.status, r.status) }}</span>
-            <strong class="small">{{ r.started|local }}</strong>
-            <span class="text-muted small">#{{ r.id }} · {{ t('trigger.' ~ r.trigger) }} · {{ t('reports.mode_model') if r.mode != 'raw' else t('reports.mode_raw') }}</span>
+            {% if r.status != 'success' %}<span class="text-{{ status_color.get(r.status, 'secondary') }}">●</span>
+            <span class="text-muted">{{ t('reports2.gen_result') }} {{ cn.get(r.status, r.status) }}</span>{% endif %}
+            <strong>{{ r.started|local }}</strong>
+            <span class="text-muted">#{{ r.id }} · {{ t('trigger.' ~ r.trigger) }} · {{ t('reports.mode_model') if r.mode != 'raw' else t('reports.mode_raw') }}</span>
           </div>
-          <div class="small text-muted mt-1">{{ t('reports.servers') }} {{ sm.server_count or 0 }} · {{ t('reports.duration') }} {{ r.duration or '-' }} · {{ t('reports.issues') }} {{ (sm.issues or [])|length }}
-            {% for a in sm.apps or [] %}<span class="badge bg-{{ status_color.get(a.status, 'secondary') }} ms-1">{{ a.name }}</span>{% endfor %}
+          <div class="d-flex align-items-center gap-2 flex-wrap mt-1">
+            {% set iss = sm.issues or [] %}
+            {% set fc = iss | selectattr('status', 'in', ['FAIL', 'ERROR']) | list | length %}
+            {% set wc = iss | selectattr('status', 'equalto', 'WARN') | list | length %}
+            {% if fc %}<span class="badge bg-danger">{{ t('status.fail') }} {{ fc }}</span>{% endif %}
+            {% if wc %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ wc }}</span>{% endif %}
+            {% if not fc and not wc %}<span class="badge bg-success">{{ t('reports2.no_issue') }}</span>{% endif %}
+            <span class="text-muted">{{ t('reports.servers') }} {{ sm.server_count or 0 }} · {{ t('reports.duration') }} {{ r.duration or '-' }}</span>
+            {% set applist = sm.apps or [] %}
+            {% for a in applist[:2] %}<span class="badge bg-{{ status_color.get(a.status, 'secondary') }}">{{ a.name }}</span>{% endfor %}
+            {% if applist|length > 2 %}<span class="text-muted">{{ t('reports2.app_more', n=(applist|length - 2)) }}</span>{% endif %}
           </div>
         </div>
-        <div class="text-nowrap">
-          {% if r.report_file %}<a class="btn btn-sm btn-outline-primary" href="{{ url_for('report_detail', rid=r.id) }}">{{ t('reports.view') }}</a>{% endif %}
-          {% if r.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=r.id) }}">{{ t('common.download') }}</a>{% endif %}
-          <form class="ui-single-del d-inline" method="post" action="{{ url_for('report_delete', rid=r.id) }}" data-confirm="{{ t('reports.confirm_single') }}">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <input type="hidden" name="back" value="{{ back_url }}">
-            <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
-          </form>
-        </div>
+        {% if r.report_file %}<span class="text-muted fs-5">&rsaquo;</span>{% endif %}
       </div>
     </div>
   </div>
@@ -105,10 +162,12 @@
   <div class="col-12 text-muted">{{ t('reports.empty') }}</div>
 {% endfor %}
 </div>
-{{ pager('reports', {'status': status, 'trigger': trigger, 'start': start, 'end': end}, page, pages, total, per_page) }}
+{{ pager('reports', {'status': status, 'result': result, 'trigger': trigger, 'start': start, 'end': end}, page, pages, total, per_page) }}
+{% endif %}
 
 <form id="fFilterForm" method="get" action="{{ url_for('reports') }}" class="d-none">
   <input type="hidden" name="status" value="{{ status }}">
+  <input type="hidden" name="result" id="fResult" value="{{ result }}">
   <input type="hidden" name="trigger" id="fTrigger" value="{{ trigger }}">
   <input type="hidden" name="start" id="fStart" value="{{ start }}">
   <input type="hidden" name="end" id="fEnd" value="{{ end }}">
@@ -119,6 +178,7 @@
   <input type="hidden" name="scope" id="uiBatchScope" value="selected">
   <input type="hidden" name="back" value="{{ back_url }}">
   <input type="hidden" name="status" value="{{ status }}">
+  <input type="hidden" name="result" value="{{ result }}">
   <input type="hidden" name="trigger" value="{{ trigger }}">
   <input type="hidden" name="start" value="{{ start }}">
   <input type="hidden" name="end" value="{{ end }}">
@@ -144,8 +204,11 @@
   }
   if (selAll) selAll.addEventListener('change', () => { cbs.forEach((c) => { c.checked = selAll.checked; }); refresh(); });
   cbs.forEach((c) => c.addEventListener('change', refresh));
-  document.querySelectorAll('.ui-single-del').forEach((f) => {
-    f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm || '?')) e.preventDefault(); });
+  document.querySelectorAll('.rep-card[data-href]').forEach((c) => {
+    c.addEventListener('click', (e) => {
+      if (e.target.closest('input,button,a,form,label')) return;
+      location.href = c.dataset.href;
+    });
   });
   function submitBatch(scope, msg, skipConfirm) {
     if (!skipConfirm && !confirm(msg)) return;
@@ -179,6 +242,7 @@
 
 (function () {
   const form = document.getElementById('fFilterForm');
+  const fResult = document.getElementById('fResult');
   const fTrig = document.getElementById('fTrigger');
   const fStart = document.getElementById('fStart');
   const fEnd = document.getElementById('fEnd');
@@ -186,6 +250,7 @@
   const to = document.getElementById('fTo');
   const pad = (n) => String(n).padStart(2, '0');
   const fmt = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  document.querySelectorAll('.f-result').forEach((b) => b.addEventListener('click', () => { fResult.value = b.dataset.val; form.submit(); }));
   document.querySelectorAll('.f-trigger').forEach((b) => b.addEventListener('click', () => { fTrig.value = b.dataset.val; form.submit(); }));
   document.querySelectorAll('.f-preset').forEach((b) => b.addEventListener('click', () => {
     const k = b.dataset.range;
@@ -199,7 +264,7 @@
     form.submit();
   }));
   document.getElementById('fApply').addEventListener('click', () => { if (from.value) fStart.value = from.value; if (to.value) fEnd.value = to.value; form.submit(); });
-  document.getElementById('fClear').addEventListener('click', () => { fTrig.value = ''; fStart.value = ''; fEnd.value = ''; form.submit(); });
+  document.getElementById('fClear').addEventListener('click', () => { fResult.value = ''; fTrig.value = ''; fStart.value = ''; fEnd.value = ''; form.submit(); });
   from.value = fStart.value || '';
   to.value = fEnd.value || '';
 })();

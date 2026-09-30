@@ -197,7 +197,6 @@ def _duration(started: str | None, finished: str | None) -> str:
         return ""
 
 
-
 def page_args() -> tuple[int, int]:
     """从 query string 取分页参数：page、per_page（限 20/50/100，默认 20）。"""
     page = max(1, parse_int(request.args.get("page"), 1))
@@ -1770,6 +1769,7 @@ def create_app() -> Flask:
         trigger = (src.get("trigger") or "").strip()
         start = (src.get("start") or "").strip()
         end = (src.get("end") or "").strip()
+        result = (src.get("result") or "").strip()
         if status == "need":
             # 「需关注」= 报告含问题项 或 运行失败/部分失败（内容维度，兼容旧数据）
             # "Needs attention" = report has issues OR run failed/partial (content dimension, legacy-safe)
@@ -1777,6 +1777,9 @@ def create_app() -> Flask:
         elif status:
             where.append("status=?")
             params.append(status)
+        if result in ("success", "partial", "error", "running"):
+            where.append("status=?")
+            params.append(result)
         if trigger in ("manual", "schedule"):
             where.append("trigger=?")
             params.append(trigger)
@@ -1790,38 +1793,96 @@ def create_app() -> Flask:
 
     @app.route("/reports")
     def reports():
-        if "status" in request.args:
-            status = request.args.get("status") or ""
-        else:
-            status = "need"
+        # 两个独立维度：内容（status=need/all）与运行结果（result）
+        # Two independent dimensions: content (status=need/all) and run result (result)
+        status = (request.args.get("status") if "status" in request.args else "need") or ""
+        result = request.args.get("result") or ""
         trigger = request.args.get("trigger") or ""
         start = request.args.get("start") or ""
         end = request.args.get("end") or ""
-        page, per_page = page_args()
-        fargs = dict(request.args)
-        fargs["status"] = status
-        where, params = _report_filter(fargs)
+        where, params = [], []
+        if status == "need":
+            where.append("(issue_count>0 OR status IN ('error','partial'))")
+        if result in ("success", "partial", "error", "running"):
+            where.append("status=?")
+            params.append(result)
+        if trigger in ("manual", "schedule"):
+            where.append("trigger=?")
+            params.append(trigger)
+        if local_input_to_utc(start):
+            where.append("started>=?")
+            params.append(local_input_to_utc(start))
+        if local_input_to_utc(end):
+            where.append("started<=?")
+            params.append(local_input_to_utc(end))
         clause = (" WHERE " + " AND ".join(where)) if where else ""
+        total_all = (models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"] or 0)
+        counts = {row["status"]: row["c"] for row in models.query("SELECT status, COUNT(*) AS c FROM run_history GROUP BY status")}
+        need_count = models.query(
+            "SELECT COUNT(*) AS c FROM run_history WHERE issue_count>0 OR status IN ('error','partial')"
+        )[0]["c"]
+
+        def _decorate(r):
+            sm = json_or(r.get("summary"), {})
+            r["summary_obj"] = sm
+            r["duration"] = _duration(r.get("started"), r.get("finished"))
+            iss = sm.get("issues") or []
+            r["fail_count"] = sum(1 for it in iss if (it.get("status") or "").upper() in ("FAIL", "ERROR"))
+            r["warn_count"] = sum(1 for it in iss if (it.get("status") or "").upper() == "WARN")
+            return r
+
+        # 「需关注」按“巡检大目标类型”分组：应用巡检→按应用；分组巡检→按分组；服务器巡检→按服务器
+        # "Needs attention" grouped by the run's target type: application / group / server
+        if status == "need":
+            all_rows = [_decorate(dict(r)) for r in models.query(f"SELECT * FROM run_history{clause} ORDER BY id DESC", tuple(params))]
+            _apps = {int(a["id"]): a["name"] for a in models.fetch_all("applications")}
+            _groups = {int(g["id"]): g["name"] for g in models.fetch_all("groups")}
+            _servers = {int(s["id"]): (s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in models.fetch_all("servers")}
+
+            def _keys(r):
+                tj = json_or(r.get("targets_json"), {})
+                if tj.get("applications"):
+                    return [(_apps.get(int(i), f"#{i}"), "app") for i in tj["applications"]]
+                if tj.get("groups"):
+                    return [(_groups.get(int(i), f"#{i}"), "group") for i in tj["groups"]]
+                if tj.get("servers"):
+                    return [(_servers.get(int(i), f"#{i}"), "server") for i in tj["servers"]]
+                if tj.get("all"):
+                    return [("__ALL__", "all")]
+                return [("__UNASSIGNED__", "unassigned")]
+
+            buckets: dict[str, dict] = {}
+            for r in all_rows:
+                for k, typ in _keys(r):
+                    b = buckets.setdefault(k, {"name": k, "type": typ, "runs": []})
+                    b["runs"].append(r)
+            grouped = [
+                {"name": b["name"], "type": b["type"], "runs": b["runs"][:5],
+                 "count": len(b["runs"]), "latest": b["runs"][0]}
+                for b in buckets.values()
+            ]
+            grouped.sort(key=lambda g: -(g["latest"].get("id") or 0))
+            return render_template(
+                "reports.html", grouped=grouped, status=status, result=result, trigger=trigger, start=start, end=end,
+                total=len(all_rows), total_all=total_all, counts=counts, need_count=need_count,
+                status_cn={"success": "成功", "partial": "部分失败", "error": "失败", "running": "运行中"},
+                status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
+            )
+
+        page, per_page = page_args()
         rows, total, page, pages = paginate(
             f"SELECT * FROM run_history{clause} ORDER BY id DESC",
             f"SELECT COUNT(*) AS c FROM run_history{clause}",
             params, page, per_page,
         )
         for r in rows:
-            r["summary_obj"] = json_or(r.get("summary"), {})
-            r["duration"] = _duration(r.get("started"), r.get("finished"))
-        total_all = (models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"] or 0)
-        counts = {row["status"]: row["c"] for row in models.query("SELECT status, COUNT(*) AS c FROM run_history GROUP BY status")}
-        need_count = models.query(
-            "SELECT COUNT(*) AS c FROM run_history WHERE issue_count>0 OR status IN ('error','partial')"
-        )[0]["c"]
+            _decorate(r)
         return render_template(
-            "reports.html", reports=rows, status=status, trigger=trigger, start=start, end=end,
+            "reports.html", reports=rows, status=status, result=result, trigger=trigger, start=start, end=end,
             page=page, pages=pages, total=total, per_page=per_page, total_all=total_all,
             counts=counts, need_count=need_count,
             status_cn={"success": "成功", "partial": "部分失败", "error": "失败", "running": "运行中"},
             status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
-            trigger_cn={"manual": "手动", "schedule": "定时"},
         )
 
     @app.route("/reports/<int:rid>/download")

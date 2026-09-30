@@ -1,150 +1,214 @@
 {% extends "base.html" %}
 {% from "_macros.html" import status_badge %}
-{% block title %}{{ t('report_detail.title') }} #{{ run.id }}{% endblock %}
+{% block title %}{{ t('reports.title') }} #{{ run.id }}{% endblock %}
 {% block content %}
 {% set SC = {'OK': 'success', 'WARN': 'warning', 'FAIL': 'danger', 'ERROR': 'danger', 'UNKNOWN': 'secondary', 'INFO': 'info'} %}
 {% set ST = {'OK': t('status.ok'), 'WARN': t('status.warn'), 'FAIL': t('status.fail'), 'ERROR': t('status.error'), 'UNKNOWN': t('status.unknown'), 'INFO': t('status.info')} %}
 {% set default_f = 'bad' if (summary.issues or [])|length else 'all' %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
+  <div class="d-flex gap-2">
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">&larr; {{ t('reports.title') }}</a>
+      </div>
   <div>
     {% if run.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=run.id) }}">{{ t('report_detail.download_md') }}</a>{% endif %}
-    {% if detail and detail.apps %}<button type="button" class="btn btn-sm btn-outline-secondary" id="expJson">{{ t('reports.export_json') }}</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" id="expCsv">{{ t('reports.export_csv') }}</button>{% endif %}
+    {% if detail and detail.apps %}<button type="button" class="btn btn-sm btn-outline-secondary" id="expJson">{{ t('reports2.export_json') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" id="expCsv">{{ t('reports2.export_csv') }}</button>{% endif %}
     <form method="post" action="{{ url_for('report_delete', rid=run.id) }}" class="d-inline" onsubmit="return confirm('{{ t('reports.confirm_single') }}')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
     </form>
   </div>
 </div>
 
-<h4 class="d-flex align-items-center gap-2 flex-wrap">
-  <span>{{ t('report_detail.title') }}</span>
-  {{ status_badge(run.status) }}
-  <span class="text-muted small">{{ run.started|local }}</span>
-  <span class="text-muted small ms-auto">#{{ run.id }}</span>
-</h4>
+<div class="row g-3">
+  <div class="col-12" id="contentCol">
+    <h4 class="d-flex align-items-center gap-2 flex-wrap">
+      <span>{{ t('reports.title') }}</span>
+      {{ status_badge(run.status) }}
+      <span class="text-muted small">{{ run.started|local }}</span>
+      <span class="text-muted small ms-auto">#{{ run.id }}</span>
+    </h4>
 
-<div class="card mb-3"><div class="card-body py-2">
-  <div class="row g-2 text-center">
-    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('dashboard.trigger') }}</div>{{ t('trigger.' ~ run.trigger) }}</div>
-    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.analysis') }}</div>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
-    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.duration') }}</div>{{ duration or '-' }}</div>
-    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.servers') }}</div>{{ summary.server_count or 0 }}</div>
-    <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.issues') }}</div>
-      <strong class="{{ 'text-danger' if (summary.issues|length) else 'text-success' }}">{{ summary.issues|length }}</strong></div>
-  </div>
-  {% if detail and detail.apps %}
-  {% set cnt = namespace(fail=0, warn=0, unknown=0, ok=0) %}
-  {% for a in detail.apps %}{% for s in a.servers %}
-    {% if s.status in ('FAIL', 'ERROR') %}{% set cnt.fail = cnt.fail + 1 %}
-    {% elif s.status == 'WARN' %}{% set cnt.warn = cnt.warn + 1 %}
-    {% elif s.status == 'UNKNOWN' %}{% set cnt.unknown = cnt.unknown + 1 %}
-    {% else %}{% set cnt.ok = cnt.ok + 1 %}{% endif %}
-  {% endfor %}{% endfor %}
-  <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
-    <span class="badge bg-danger">{{ t('status.fail') }} {{ cnt.fail }}</span>
-    <span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ cnt.warn }}</span>
-    <span class="badge bg-secondary">{{ t('status.unknown') }} {{ cnt.unknown }}</span>
-    <span class="badge bg-success">{{ t('status.ok') }} {{ cnt.ok }}</span>
-  </div>
-  {% endif %}
-</div></div>
-
-{% if run.status == 'running' %}
-<div class="card mb-3" id="runProgress"><div class="card-body">
-  <div id="phase" class="mb-2">{{ t('report_detail.running') }}</div>
-  <div class="progress" style="height: 20px;"><div id="bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div></div>
-</div></div>
-{% endif %}
-
-{% if detail and detail.apps %}
-<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-  <div class="btn-group btn-group-sm" role="group" id="fStatus" data-default="{{ default_f }}">
-    <button type="button" class="btn btn-outline-danger" data-f="bad">{{ t('reports.abnormal') }}</button>
-    <button type="button" class="btn btn-outline-secondary" data-f="all">{{ t('common.all') }}</button>
-    <button type="button" class="btn btn-outline-danger" data-f="FAIL">{{ t('status.fail') }}</button>
-    <button type="button" class="btn btn-outline-warning" data-f="WARN">{{ t('status.warn') }}</button>
-    <button type="button" class="btn btn-outline-secondary" data-f="UNKNOWN">{{ t('status.unknown') }}</button>
-  </div>
-  <input type="search" class="form-control form-control-sm" style="max-width: 16rem;" id="fSearch" placeholder="{{ t('reports.search_ph') }}">
-  <span class="text-muted small" id="fCount"></span>
-</div>
-
-<div id="detailRoot">
-{% set ns = namespace(sid=0) %}
-{% for app in detail.apps %}
-  {% set app_bad = app.servers | map(attribute='results') | sum(start=[]) | selectattr('status', 'in', ['WARN','FAIL','ERROR','UNKNOWN']) | list | length %}
-  <div class="d-flex align-items-center gap-2 mt-3 mb-1 app-block" data-app="{{ app.name|lower }}">
-    <h5 class="mb-0">{{ app.name }}</h5>
-    <span class="badge bg-{{ SC.get(app.status, 'secondary') }}">{{ ST.get(app.status, app.status) }}</span>
-    <span class="text-muted small">{{ app.servers|length }} {{ t('reports.servers') }}</span>
-    {% if app_bad %}<span class="text-danger small">{{ t('reports.issues') }} {{ app_bad }}</span>{% endif %}
-  </div>
-  {% for s in app.servers %}
-    {% set bad = s.results | selectattr('status', 'in', ['WARN','FAIL','ERROR','UNKNOWN']) | list | length %}
-    {% set sid = 'svr' ~ ns.sid %}{% set ns.sid = ns.sid + 1 %}
-    <div class="card mb-2 srv" data-status="{{ s.status }}" data-name="{{ s.name|lower }}" data-bad="{{ bad }}">
-      <div class="card-header d-flex align-items-center gap-2 py-2" role="button" data-bs-toggle="collapse" data-bs-target="#{{ sid }}">
-        <span class="badge bg-{{ SC.get(s.status, 'secondary') }}">{{ ST.get(s.status, s.status) }}</span>
-        <strong>{{ s.name }}</strong>
-        {% if bad %}<span class="badge bg-danger">{{ bad }}</span>{% endif %}
-        {% if s.attention %}<span class="text-muted small ms-2">{{ t('reports.attention') }} {{ s.attention }}</span>{% endif %}
-        <span class="ms-auto text-muted small">{{ t('reports.script_count', n=(s.results|length)) }}</span>
+    <div class="card mb-3"><div class="card-body py-2">
+      <div class="row g-2 text-center">
+        <div class="col-6 col-md-2"><div class="text-muted small">{{ t('dashboard.trigger') }}</div>{{ t('trigger.' ~ run.trigger) }}</div>
+        <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.analysis') }}</div>{{ t('reports.analysis_model') if run.mode != 'raw' else t('reports.analysis_raw') }}</div>
+        <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.duration') }}</div>{{ duration or '-' }}</div>
+        <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports.servers') }}</div>{{ summary.server_count or 0 }}</div>
+        <div class="col-6 col-md-2"><div class="text-muted small">{{ t('reports2.issues_detail') }}</div>
+          {% set iss = summary.issues or [] %}
+          {% set ifc = iss | selectattr('status', 'in', ['FAIL', 'ERROR']) | list | length %}
+          {% set iwc = iss | selectattr('status', 'equalto', 'WARN') | list | length %}
+          {% set iuc = iss | selectattr('status', 'equalto', 'UNKNOWN') | list | length %}
+          {% if ifc %}<span class="badge bg-danger">{{ t('status.fail') }} {{ ifc }}</span>{% endif %}
+          {% if iwc %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ iwc }}</span>{% endif %}
+          {% if iuc %}<span class="badge bg-secondary">{{ t('status.unknown') }} {{ iuc }}</span>{% endif %}
+          {% if not ifc and not iwc and not iuc %}<span class="badge bg-success">{{ t('reports2.no_issue') }}</span>{% endif %}</div>
       </div>
-      <div class="collapse {{ 'show' if bad or s.skipped else '' }}" id="{{ sid }}">
-        <div class="card-body py-2">
-          {% if s.conclusion %}<div class="small">说明：{{ s.conclusion }}</div>{% endif %}
-          {% if s.consequence %}<div class="small">可能后果：{{ s.consequence }}</div>{% endif %}
-          {% if s.suggestion %}<div class="small">处置建议：{{ s.suggestion }}</div>{% endif %}
-          {% if not s.results %}
-            <div class="text-muted small">{% if s.skipped %}（未执行：无 Shell 脚本且无启用的 Prometheus 数据源绑定）{% else %}（无结果）{% endif %}</div>
-          {% endif %}
-          {% set good = [] %}
-          {% for r in s.results %}
-            {% set isbad = (r.status in ['WARN','FAIL','ERROR','UNKNOWN']) or r.error %}
-            {% if isbad or r.meta.DISPLAY %}
-            <div class="script-block mb-2" data-status="{{ r.status }}" data-bad="{{ 1 if isbad else 0 }}"
-                 data-name="{{ (r.script ~ ' ' ~ (r['items'] | map(attribute='name') | join(' ')) ~ ' ' ~ (r['items'] | map(attribute='value') | join(' ')))|lower }}">
-              <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-{{ SC.get(r.status, 'secondary') }}">{{ ST.get(r.status, r.status) }}</span>
-                <strong>{{ r.script }}</strong>
-                <span class="text-muted small">{{ r.source }}</span>
-              </div>
-              {% if r.error %}<div class="small text-danger">错误：{{ r.error }}</div>{% endif %}
-              {% if r['items'] %}
-              <table class="table table-sm table-hover mb-1">
-                <thead><tr><th>{{ t('reports.col_item') }}</th><th>{{ t('reports.col_value') }}</th><th>{{ t('reports.col_threshold') }}</th><th>{{ t('reports.col_verdict') }}</th></tr></thead>
-                <tbody>
-                {% for it in r['items'] %}
-                  <tr class="{{ 'table-danger' if it.status == 'FAIL' else ('table-warning' if it.status == 'WARN' else '') }}">
-                    <td>{{ it.name }}</td>
-                    <td>{{ it.value }}{% if it.unit %} {{ it.unit }}{% endif %}{% if it.excess %}（超出 {{ it.excess }}）{% endif %}</td>
-                    <td>{{ it.threshold or '-' }}</td>
-                    <td><span class="badge bg-{{ SC.get(it.status, 'secondary') }}">{{ ST.get(it.status, it.status or '-') }}</span></td>
-                  </tr>
-                {% endfor %}
-                </tbody>
-              </table>
-              {% else %}
-              <pre class="small bg-light border rounded p-2 mb-1" style="white-space: pre-wrap;">{{ r.raw }}</pre>
-              {% endif %}
-            </div>
-            {% else %}
-              {% set _ = good.append(r.script) %}
-            {% endif %}
-          {% endfor %}
-          {% if good %}<div class="text-muted small">其余 {{ good|length }} 项正常：{{ good|join('、') }}</div>{% endif %}
-        </div>
+      {% if detail and detail.apps %}
+      {% set cnt = namespace(fail=0, warn=0, unknown=0, ok=0) %}
+      {% for a in detail.apps %}{% for s in a.servers %}
+        {% if s.status in ('FAIL', 'ERROR') %}{% set cnt.fail = cnt.fail + 1 %}
+        {% elif s.status == 'WARN' %}{% set cnt.warn = cnt.warn + 1 %}
+        {% elif s.status == 'UNKNOWN' %}{% set cnt.unknown = cnt.unknown + 1 %}
+        {% else %}{% set cnt.ok = cnt.ok + 1 %}{% endif %}
+      {% endfor %}{% endfor %}
+      <div class="d-flex flex-wrap gap-2 justify-content-center mt-2">
+        <span class="badge bg-danger">{{ t('status.fail') }} {{ cnt.fail }}</span>
+        <span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ cnt.warn }}</span>
+        <span class="badge bg-secondary">{{ t('status.unknown') }} {{ cnt.unknown }}</span>
+        <span class="badge bg-success">{{ t('status.ok') }} {{ cnt.ok }}</span>
       </div>
+      {% if detail.apps|length > 1 %}
+      <div class="d-flex flex-wrap gap-1 justify-content-center mt-2">
+        {% for a in detail.apps %}<span class="badge bg-{{ SC.get(a.status, 'secondary') }}">{{ a.name }} · {{ ST.get(a.status, a.status) }}</span>{% endfor %}
+      </div>
+      {% endif %}
+      {% endif %}
+    </div></div>
+
+    {% if run.status == 'running' %}
+    <div class="card mb-3" id="runProgress"><div class="card-body">
+      <div id="phase" class="mb-2">{{ t('report_detail.running') }}</div>
+      <div class="progress" style="height: 20px;"><div id="bar" class="progress-bar progress-bar-striped progress-bar-animated bg-primary" style="width: 100%"></div></div>
+    </div></div>
+    {% endif %}
+
+    {% if detail and detail.apps %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <div class="btn-group btn-group-sm" role="group" id="fStatus" data-default="{{ default_f }}">
+        <button type="button" class="btn btn-outline-danger" data-f="bad">{{ t('reports.abnormal') }}</button>
+        <button type="button" class="btn btn-outline-info" data-f="info">{{ t('reports2.info_section') }}</button>
+        <button type="button" class="btn btn-outline-secondary" data-f="all">{{ t('common.all') }}</button>
+        <button type="button" class="btn btn-outline-danger" data-f="FAIL">{{ t('status.fail') }}</button>
+        <button type="button" class="btn btn-outline-warning" data-f="WARN">{{ t('status.warn') }}</button>
+        <button type="button" class="btn btn-outline-secondary" data-f="UNKNOWN">{{ t('status.unknown') }}</button>
+      </div>
+      <input type="search" class="form-control form-control-sm" style="max-width: 15rem;" id="fSearch" placeholder="{{ t('reports.search_ph') }}">
+      <span class="text-muted small" id="fCount"></span>
     </div>
-  {% endfor %}
-{% endfor %}
+
+    <div id="detailRoot">
+    {% set ns = namespace(sid=0) %}
+    {% for app in detail.apps %}
+      {% set app_fail = app.servers | map(attribute='results') | sum(start=[]) | selectattr('status', 'in', ['FAIL', 'ERROR']) | list | length %}
+      {% set app_warn = app.servers | map(attribute='results') | sum(start=[]) | selectattr('status', 'equalto', 'WARN') | list | length %}
+      <div class="d-flex align-items-center gap-2 mt-3 mb-1 app-block" data-app="{{ app.name|lower }}">
+        <h5 class="mb-0">{{ app.name }}</h5>
+        <span class="badge bg-{{ SC.get(app.status, 'secondary') }}">{{ ST.get(app.status, app.status) }}</span>
+        <span class="text-muted small">{{ app.servers|length }} {{ t('reports.servers') }}</span>
+        {% if app_fail %}<span class="badge bg-danger">{{ t('status.fail') }} {{ app_fail }}</span>{% endif %}
+        {% if app_warn %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ app_warn }}</span>{% endif %}
+      </div>
+      {% for s in app.servers %}
+        {% set bad = s.results | selectattr('status', 'in', ['WARN','FAIL','ERROR','UNKNOWN']) | list | length %}
+        {% set disp = s.results | selectattr('meta.DISPLAY') | list | length %}
+        {% set sfail = s.results | selectattr('status', 'in', ['FAIL', 'ERROR']) | list | length %}
+        {% set swarn = s.results | selectattr('status', 'equalto', 'WARN') | list | length %}
+        {% set sid = 'svr' ~ ns.sid %}{% set ns.sid = ns.sid + 1 %}
+        <div class="card mb-2 srv" data-status="{{ s.status }}" data-name="{{ s.name|lower }}" data-bad="{{ bad }}" data-disp="{{ disp }}" data-fail="{{ sfail }}" data-warn="{{ swarn }}">
+          <div class="card-header d-flex align-items-center gap-2 py-2" role="button" data-bs-toggle="collapse" data-bs-target="#{{ sid }}">
+            <span class="text-muted">▸</span>
+            <span class="badge bg-{{ SC.get(s.status, 'secondary') }}">{{ ST.get(s.status, s.status) }}</span>
+            <strong>{{ s.name }}</strong>
+            {% if sfail %}<span class="badge bg-danger">{{ sfail }}</span>{% endif %}
+            {% if swarn %}<span class="badge bg-warning text-dark">{{ swarn }}</span>{% endif %}
+            {% if s.attention %}<span class="text-muted small ms-2">{{ t('reports.attention') }} {{ s.attention }}</span>{% endif %}
+            <span class="ms-auto text-muted small">{{ t('reports.script_count', n=(s.results|length)) }}</span>
+          </div>
+          <div class="collapse {{ 'show' if bad or s.skipped else '' }}" id="{{ sid }}">
+            <div class="card-body py-2">
+              {% if s.conclusion %}<div class="small">{{ t('report2.conclusion') }}：{{ s.conclusion }}</div>{% endif %}
+              {% if s.consequence %}<div class="small">{{ t('report2.consequence') }}：{{ s.consequence }}</div>{% endif %}
+              {% if s.suggestion %}<div class="small">{{ t('report2.suggestion') }}：{{ s.suggestion }}</div>{% endif %}
+              {% if not s.results %}
+                <div class="text-muted small">{% if s.skipped %}{{ t('report2.not_executed') }}{% else %}{{ t('report2.no_result') }}{% endif %}</div>
+              {% endif %}
+              {% set good = [] %}
+              {% for r in s.results %}
+                {% set isbad = (r.status in ['WARN','FAIL','ERROR','UNKNOWN']) or r.error %}
+                {% if isbad %}
+                <div class="script-block mb-2" data-status="{{ r.status }}" data-bad="1" data-disp="0"
+                     data-name="{{ (r.script ~ ' ' ~ (r['items'] | map(attribute='name') | join(' ')) ~ ' ' ~ (r['items'] | map(attribute='value') | join(' ')))|lower }}">
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="badge bg-{{ SC.get(r.status, 'secondary') }}">{{ ST.get(r.status, r.status) }}</span>
+                    <strong>{{ r.script }}</strong>
+                    <span class="text-muted small">{{ r.source }}</span>
+                    {% if r['items']|length > 1 %}<button type="button" class="btn btn-sm btn-outline-secondary py-0 ms-auto row-toggle"></button>{% endif %}
+                  </div>
+                  {% if r.error %}<div class="small text-danger">{{ t('report2.error') }}：{{ r.error }}</div>{% endif %}
+                  {% if r['items'] %}
+                  <table class="table table-sm table-hover mb-1">
+                    <thead><tr><th>{{ t('reports.col_item') }}</th><th>{{ t('reports.col_value') }}</th><th>{{ t('reports.col_threshold') }}</th><th>{{ t('reports.col_verdict') }}</th></tr></thead>
+                    <tbody>
+                    {% for it in r['items'] %}
+                      <tr class="{{ 'table-danger' if it.status == 'FAIL' else ('table-warning' if it.status == 'WARN' else '') }}" data-row-bad="{{ 1 if it.status in ('WARN','FAIL') else 0 }}">
+                        <td>{{ it.name }}</td>
+                        <td>{{ it.value }}{% if it.unit %} {{ it.unit }}{% endif %}{% if it.excess %}（{{ t('report2.exceed') }} {{ it.excess }}）{% endif %}</td>
+                        <td>{{ it.threshold or '-' }}</td>
+                        <td><span class="badge bg-{{ SC.get(it.status, 'secondary') }}">{{ ST.get(it.status, it.status or '-') }}</span></td>
+                      </tr>
+                    {% endfor %}
+                    </tbody>
+                  </table>
+                  {% else %}
+                  <pre class="small bg-light border rounded p-2 mb-1" style="white-space: pre-wrap;">{{ r.raw }}</pre>
+                  {% endif %}
+                </div>
+                {% elif r.meta.DISPLAY %}
+                  {% set _ = disp %}
+                {% else %}
+                  {% set _ = good.append(r.script) %}
+                {% endif %}
+              {% endfor %}
+
+              {% set disps = s.results | selectattr('meta.DISPLAY') | list %}
+              {% if disps %}
+              <div class="disp-label text-muted small border-top pt-2 mt-2 mb-1">{{ t('reports2.info_section') }}</div>
+              {% for r in disps %}
+              <div class="script-block mb-2" data-status="{{ r.status }}" data-bad="0" data-disp="1"
+                   data-name="{{ (r.script ~ ' ' ~ (r['items'] | map(attribute='name') | join(' ')))|lower }}">
+                <div class="d-flex align-items-center gap-2">
+                  <strong>{{ r.script }}</strong>
+                  <span class="text-muted small">{{ r.source }}</span>
+                </div>
+                {% if r['items'] %}
+                <table class="table table-sm mb-1">
+                  <thead><tr><th>{{ t('reports.col_item') }}</th><th>{{ t('reports.col_value') }}</th><th>{{ t('reports.col_threshold') }}</th><th>{{ t('reports.col_verdict') }}</th></tr></thead>
+                  <tbody>
+                  {% for it in r['items'] %}
+                    <tr><td>{{ it.name }}</td><td>{{ it.value }}{% if it.unit %} {{ it.unit }}{% endif %}</td><td>{{ it.threshold or '-' }}</td>
+                    <td><span class="badge bg-{{ SC.get(it.status, 'secondary') }}">{{ ST.get(it.status, it.status or '-') }}</span></td></tr>
+                  {% endfor %}
+                  </tbody>
+                </table>
+                {% else %}
+                <pre class="small bg-light border rounded p-2 mb-1" style="white-space: pre-wrap;">{{ r.raw }}</pre>
+                {% endif %}
+              </div>
+              {% endfor %}
+              {% endif %}
+
+              {% if good %}<div class="good-line text-muted small">{{ t('report2.remaining_ok', n=good|length) }}：{{ good|join('、') }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% endfor %}
+    </div>
+    <div class="text-muted small mt-2 d-none" id="noMatch">{{ t('reports.no_match') }}</div>
+    {% else %}
+    <div class="card"><div class="card-body report-md" id="reportBody">{{ content | markdown }}</div></div>
+    {% endif %}
+    <a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('reports.title') }}</a>
+  </div>
+
+  <div class="col-lg-4" id="tocCol">
+    <div class="card sticky-top" style="top:.75rem;">
+      <div class="card-header py-2">{{ t('reports2.toc') }}</div>
+      <div class="card-body p-2" id="toc" style="max-height:82vh; overflow:auto;"></div>
+    </div>
+  </div>
 </div>
-<div class="text-muted small mt-2 d-none" id="noMatch">{{ t('reports.no_match') }}</div>
-{% else %}
-<div class="card"><div class="card-body report-md" id="reportBody">{{ content | markdown }}</div></div>
-{% endif %}
-<a class="btn btn-outline-secondary mt-2" href="{{ url_for('reports') }}">&larr; {{ t('report_detail.back_list') }}</a>
 {% endblock %}
 
 {% block scripts %}
@@ -154,15 +218,17 @@
 (function () {
   const data = JSON.parse(document.getElementById('detailData').textContent);
   const fbar = document.getElementById('fStatus');
-  const apps = [...document.querySelectorAll('#detailRoot .app-block')];
   const cards = [...document.querySelectorAll('#detailRoot .srv')];
+  const apps = [...document.querySelectorAll('#detailRoot .app-block')];
   const count = document.getElementById('fCount');
   const noMatch = document.getElementById('noMatch');
+  const toc = document.getElementById('toc');
   const params = new URLSearchParams(location.search);
   let f = params.get('f') || fbar.dataset.default || 'all';
   let q = (params.get('q') || '').toLowerCase();
   const se = document.getElementById('fSearch');
-  if (se && q) se.value = params.get('q');
+  if (se && params.get('q')) se.value = params.get('q');
+  const isTodo = (st) => ['WARN', 'FAIL', 'ERROR', 'UNKNOWN'].includes(st);
 
   function syncUrl() {
     const u = new URL(location.href);
@@ -170,60 +236,181 @@
     if (q) u.searchParams.set('q', q); else u.searchParams.delete('q');
     history.replaceState(null, '', u);
   }
-  function markActive() {
-    fbar.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.f === f));
+  function scriptVis(b) {
+    if (q && !b.dataset.name.includes(q)) return false;
+    const bad = b.dataset.bad === '1', disp = b.dataset.disp === '1';
+    if (f === 'info') return disp;
+    if (f === 'all') return bad || disp;
+    if (f === 'bad') return bad;
+    return bad && b.dataset.status === f;
+  }
+  function collapseOf(c) {
+    const target = c.querySelector('[data-bs-target]');
+    return target ? document.getElementById(target.dataset.bsTarget.slice(1)) : null;
+  }
+  function buildToc(visible) {
+    if (!toc) return;
+    toc.innerHTML = '';
+    const addServer = (c) => {
+      const fail = Number(c.dataset.fail), warn = Number(c.dataset.warn);
+      const cl = c.querySelector('.card-header .badge').className.match(/bg-(\w+)/);
+      const a = document.createElement('a');
+      a.href = '#';
+      a.className = 'd-flex align-items-center gap-1 py-1 ps-3 border-bottom text-decoration-none text-truncate';
+      a.title = c.dataset.name;
+      a.innerHTML = '<span class="text-' + (cl ? cl[1] : 'secondary') + '">●</span> <span class="text-truncate">' + c.querySelector('strong').textContent + '</span>'
+        + (fail ? ' <span class="badge bg-danger">' + fail + '</span>' : '')
+        + (warn ? ' <span class="badge bg-warning text-dark">' + warn + '</span>' : '');
+      a.addEventListener('click', (e) => {
+        e.preventDefault();
+        const body = collapseOf(c);
+        if (body && window.bootstrap) {
+          const col = bootstrap.Collapse.getOrCreateInstance(body, { toggle: false });
+          if (body.classList.contains('show')) {
+            col.hide();
+          } else {
+            col.show();
+            setTimeout(() => c.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+          }
+        } else {
+          c.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+      toc.appendChild(a);
+    };
+    apps.forEach((ap) => {
+      let any = false;
+      let n = ap.nextElementSibling;
+      const servers = [];
+      while (n && !n.classList.contains('app-block')) { if (n.classList.contains('srv') && visible.has(n)) { any = true; servers.push(n); } n = n.nextElementSibling; }
+      if (!any) return;
+      const t = document.createElement('a');
+      t.href = '#'; t.className = 'd-block fw-bold py-1 border-bottom text-decoration-none';
+      t.textContent = ap.querySelector('h5').textContent;
+      t.addEventListener('click', (e) => {
+        e.preventDefault();
+        const bodies = servers.map(collapseOf).filter(Boolean);
+        const anyShown = bodies.some((b) => b.classList.contains('show'));
+        if (window.bootstrap) {
+          bodies.forEach((b) => {
+            const col = bootstrap.Collapse.getOrCreateInstance(b, { toggle: false });
+            if (anyShown) col.hide(); else col.show();
+          });
+        }
+        ap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      toc.appendChild(t);
+      servers.forEach(addServer);
+    });
   }
   function apply() {
-    let visible = 0;
+    const visible = new Set();
     cards.forEach((c) => {
-      const qok = !q || c.dataset.name.includes(q);
-      let anyScript = false;
+      let any = false;
       c.querySelectorAll('.script-block').forEach((b) => {
-        const bq = !q || b.dataset.name.includes(q);
-        const bs = f === 'all' || (f === 'bad' ? b.dataset.bad === '1' : b.dataset.status === f);
-        const vis = bq && bs;
+        const vis = scriptVis(b);
         b.style.display = vis ? '' : 'none';
-        if (vis) anyScript = true;
+        if (vis) any = true;
       });
-      const show = (f === 'all') ? qok : anyScript;
+      const showDisp = c.querySelectorAll('.script-block[data-disp="1"]').length > 0;
+      c.querySelectorAll('.disp-label').forEach((g) => {
+        const visDisp = (f === 'all' || f === 'info') && showDisp && [...c.querySelectorAll('.script-block[data-disp="1"]')].some((b) => b.style.display !== 'none');
+        g.style.display = visDisp ? '' : 'none';
+      });
+      const qName = !q || c.dataset.name.includes(q);
+      let show;
+      if (f === 'all') show = qName;
+      else show = any;
       c.style.display = show ? '' : 'none';
-      const body = document.getElementById(c.querySelector('[data-bs-target]').dataset.bsTarget.slice(1));
-      if (body && window.bootstrap) {
-        const col = bootstrap.Collapse.getOrCreateInstance(body, { toggle: false });
-        if (show && (f !== 'all' || q)) col.show();
+      // 展开策略：异常视图/状态视图展开；全部视图仅异常服务器展开
+      if (show) {
+        const body = collapseOf(c);
+        if (body && window.bootstrap) {
+          const col = bootstrap.Collapse.getOrCreateInstance(body, { toggle: false });
+          if (f === 'all') { if (Number(c.dataset.bad) > 0) col.show(); else col.hide(); }
+          else col.show();
+        }
       }
-      if (show) visible++;
+      c.querySelectorAll('.good-line').forEach((g) => { g.style.display = (f === 'all' && qName) ? '' : 'none'; });
+      if (show) visible.add(c);
     });
     apps.forEach((a) => {
       let any = false;
       let n = a.nextElementSibling;
-      while (n && !n.classList.contains('app-block')) { if (n.classList.contains('srv') && n.style.display !== 'none') any = true; n = n.nextElementSibling; }
+      while (n && !n.classList.contains('app-block')) { if (n.classList.contains('srv') && visible.has(n)) any = true; n = n.nextElementSibling; }
       a.style.display = any ? '' : 'none';
     });
-    if (noMatch) noMatch.classList.toggle('d-none', visible > 0);
-    if (count) count.textContent = visible + ' / ' + cards.length;
+    buildToc(visible);
+    if (noMatch) noMatch.classList.toggle('d-none', visible.size > 0);
+    if (count) count.textContent = visible.size + ' / ' + cards.length;
+    // 可见服务器 <=1 时隐藏目录，正文转全宽
+    const tocCol = document.getElementById('tocCol');
+    const contentCol = document.getElementById('contentCol');
+    if (tocCol && contentCol) {
+      const hide = visible.size <= 1;
+      tocCol.classList.toggle('d-none', hide);
+      contentCol.classList.toggle('col-lg-8', !hide);
+    }
     syncUrl();
   }
-  fbar.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { f = b.dataset.f; markActive(); apply(); }));
+  fbar.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    f = b.dataset.f;
+    fbar.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    apply();
+  }));
+  fbar.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x.dataset.f === f));
   if (se) se.addEventListener('input', () => { q = se.value.trim().toLowerCase(); apply(); });
-  markActive();
+
+  // 异常脚本：默认只看异常行
+  document.querySelectorAll('.script-block[data-bad="1"] .row-toggle').forEach((btn) => {
+    const blk = btn.closest('.script-block');
+    btn.dataset.on = '1';
+    btn.textContent = __t('js.all_rows');
+    blk.querySelectorAll('tbody tr').forEach((tr) => { if (tr.dataset.rowBad !== '1') tr.style.display = 'none'; });
+    const th = blk.querySelector('thead'); if (th) th.style.display = 'none';
+  });
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.row-toggle');
+    if (!btn) return;
+    const blk = btn.closest('.script-block');
+    const only = btn.dataset.on !== '1';
+    btn.dataset.on = only ? '1' : '0';
+    btn.classList.toggle('active', only);
+    btn.textContent = only ? __t('js.all_rows') : __t('js.only_bad_rows');
+    blk.querySelectorAll('tbody tr').forEach((tr) => {
+      tr.style.display = (only && tr.dataset.rowBad !== '1') ? 'none' : '';
+    });
+    const th = blk.querySelector('thead'); if (th) th.style.display = only ? 'none' : '';
+  });
+
   apply();
 
   function download(name, text, type) {
     const blob = new Blob([text], { type: type || 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href);
   }
+  function pass(status, isdisp) {
+    if (f === 'all') return true;
+    if (f === 'info') return !!isdisp;
+    if (f === 'bad') return isTodo(status);
+    return status === f;
+  }
   const jb = document.getElementById('expJson');
-  if (jb) jb.addEventListener('click', () => download('report-{{ run.id }}.json', JSON.stringify(data, null, 2)));
+  if (jb) jb.addEventListener('click', () => {
+    const out = { apps: [] };
+    data.apps.forEach((a) => {
+      const servers = a.servers.map((s) => ({ ...s, results: s.results.filter((r) => pass(r.status, r.meta && r.meta.DISPLAY)) })).filter((s) => s.results.length);
+      if (servers.length) out.apps.push({ ...a, servers });
+    });
+    download('report-{{ run.id }}.json', JSON.stringify(out, null, 2));
+  });
   const cb = document.getElementById('expCsv');
   if (cb) cb.addEventListener('click', () => {
     const rows = [['application','server','server_status','script','script_status','item','value','unit','threshold','item_status','error']];
     data.apps.forEach((a) => a.servers.forEach((s) => s.results.forEach((r) => {
-      if (r.items && r.items.length) {
-        r.items.forEach((it) => rows.push([a.name, s.name, s.status, r.script, r.status, it.name, it.value, it.unit, it.threshold, it.status, r.error || '']));
-      } else {
-        rows.push([a.name, s.name, s.status, r.script, r.status, '', '', '', '', '', r.error || '']);
-      }
+      if (!pass(r.status, r.meta && r.meta.DISPLAY)) return;
+      if (r.items && r.items.length) r.items.forEach((it) => rows.push([a.name, s.name, s.status, r.script, r.status, it.name, it.value, it.unit, it.threshold, it.status, r.error || '']));
+      else rows.push([a.name, s.name, s.status, r.script, r.status, '', '', '', '', '', r.error || '']);
     })));
     const csv = rows.map((r) => r.map((x) => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n');
     download('report-{{ run.id }}.csv', '\ufeff' + csv, 'text/csv');

@@ -148,3 +148,12 @@ body { font-size: 14px; }
 }
 .editor-area.wrap { white-space: pre-wrap; word-break: break-word; }
 
+
+/* 新版报告列表卡片：可点击的悬浮反馈 */
+.rep-card { cursor: pointer; transition: box-shadow .15s, background-color .15s; }
+.rep-card:hover { background-color: #f8f9fa; box-shadow: 0 .25rem .75rem rgba(0,0,0,.15); }
+.rep-card .card-body { cursor: inherit; }
+.srv .card-header:hover { background-color: #f8f9fa; }
+
+/* 报告详情锚点定位：避免被顶部/粘性元素遮挡 */
+.srv, .app-block { scroll-margin-top: 1rem; }
