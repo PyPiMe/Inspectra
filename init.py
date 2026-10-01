@@ -126,10 +126,11 @@ echo "idle_seconds=${idle%.*}"
     {
         "name": "Java 进程检查",
         "filename": "java-process.sh",
-        "desc": "通用检查：java 进程数量（为 0 FAIL）与总 RSS",
+        "desc": "通用检查：java 进程数量（为 0 FAIL）与总 RSS / Generic: java process count (0 => FAIL) and total RSS",
         "content": """#!/usr/bin/env bash
 # NAME: Java 进程检查
 # UNIT: mixed
+# Generic: java process count (0 => FAIL) and total RSS
 n=$(pgrep -x java 2>/dev/null | wc -l)
 echo "java_proc_count=$n threshold=<1 unit=count"
 rss=$(ps -C java -o rss= 2>/dev/null | awk '{s+=$1} END{print s+0}')
@@ -139,10 +140,11 @@ echo "java_rss_kb=$rss unit=KB"
     {
         "name": "VIP 归属",
         "filename": "vip-holder.sh",
-        "desc": "反代节点：判断本机是否持有 VIP（master/backup），并检查 keepalived/nginx 服务；VIP 地址取自 keepalived 配置",
+        "desc": "反代节点：判断本机是否持有 VIP（master/backup），并检查 keepalived/nginx 服务；VIP 地址取自 keepalived 配置 / Reverse-proxy node: detect local VIP holder (master/backup) and check keepalived/nginx; VIP from keepalived config",
         "content": """#!/usr/bin/env bash
 # NAME: VIP 归属
 # UNIT: mixed
+# Reverse-proxy node: detect local VIP holder (master/backup) and check keepalived/nginx services
 conf=/etc/keepalived/keepalived.conf
 vip=$(grep -A5 -i 'virtual_ipaddress' "$conf" 2>/dev/null | grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}' | head -1)
 [ -n "$vip" ] || vip=$(grep -oE '([0-9]{1,3}\\.){3}[0-9]{1,3}' "$conf" 2>/dev/null | head -1)
@@ -160,10 +162,11 @@ echo "nginx_active=$(systemctl is-active nginx 2>/dev/null) threshold=!=active"
     {
         "name": "Redis 健康",
         "filename": "redis-health.sh",
-        "desc": "按进程自动发现本机 redis-server 实例：存活/role/内存占比/命中率/淘汰/阻塞/RDB/主从；密码取实例 conf 的 requirepass（REDISCLI_AUTH 传入）",
+        "desc": "按进程自动发现本机 redis-server 实例：存活/role/内存占比/命中率/淘汰/阻塞/RDB/主从；密码取实例 conf 的 requirepass（REDISCLI_AUTH 传入） / Auto-discover local redis-server instances: alive/role/mem%/hit-ratio/evicted/blocked/RDB/replication; read requirepass from the instance conf (via REDISCLI_AUTH)",
         "content": """#!/usr/bin/env bash
 # NAME: Redis 健康
 # UNIT: mixed
+# Auto-discover redis-server instances; read requirepass from conf via REDISCLI_AUTH
 set -u
 count=0
 for p in $(pgrep -x redis-server 2>/dev/null); do
@@ -209,6 +212,70 @@ for p in $(pgrep -x redis-server 2>/dev/null); do
   [ -n "$pass" ] && unset REDISCLI_AUTH
 done
 echo "redis_instance_count=$count"
+""",
+    },    {
+        "name": "Docker 容器检查",
+        "filename": "docker-containers.sh",
+        "desc": "只读检查 Docker 容器：运行/重启/健康；重启策略=always 的容器未运行则 FAIL（依赖 webops 的只读 sudo docker 授权） / Read-only Docker check: up/restarts/health; FAIL if a restart=always container is not running (needs webops read-only sudo docker)",
+        "content": """#!/usr/bin/env bash
+# NAME: Docker 容器检查
+# UNIT: mixed
+# 依赖：webops 对 docker 的只读 sudo 授权（ps / ps -a / inspect）
+# Requires read-only sudo docker for webops (ps / ps -a / inspect)
+sudo="sudo -n"
+if ! $sudo /usr/bin/docker ps >/dev/null 2>&1; then
+  echo "docker_available=0 threshold=!=1 unit=bool"
+  exit 0
+fi
+echo "docker_available=1 threshold=!=1 unit=bool"
+names=$($sudo /usr/bin/docker ps -a 2>/dev/null | awk 'NR>1 && NF{print $NF}')
+running=0; total=0; always_total=0; always_up=0
+for n in $names; do
+  info=$($sudo /usr/bin/docker inspect "$n" --format '{{.State.Status}}|{{.RestartCount}}|{{.HostConfig.RestartPolicy.Name}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null)
+  [ -n "$info" ] || continue
+  total=$((total+1))
+  status=$(echo "$info" | cut -d'|' -f1)
+  restarts=$(echo "$info" | cut -d'|' -f2)
+  policy=$(echo "$info" | cut -d'|' -f3)
+  health=$(echo "$info" | cut -d'|' -f4)
+  [ "$status" = "running" ] && running=$((running+1))
+  if [ "$policy" = "always" ]; then
+    always_total=$((always_total+1))
+    up=0; [ "$status" = "running" ] && up=1
+    [ "$up" = "1" ] && always_up=$((always_up+1))
+    echo "docker_${n}_up=$up threshold=!=1 unit=bool"
+    echo "docker_${n}_restarts=$restarts unit=times warn=>5"
+    [ "$health" != "none" ] && echo "docker_${n}_health=$health"
+  fi
+done
+echo "docker_running=$running unit=count"
+echo "docker_total=$total unit=count"
+echo "docker_always_total=$always_total unit=count"
+echo "docker_always_up=$always_up unit=count"
+""",
+    },
+    {
+        "name": "Nginx 检查(SSH)",
+        "filename": "nginx-check.sh",
+        "desc": "通用主机 Nginx 兜底：进程、80/443 监听、stub_status（不依赖 systemd/nginx CLI） / Generic host Nginx fallback: process, 80/443 listen, stub_status (no systemd/nginx CLI)",
+        "content": """#!/usr/bin/env bash
+# NAME: Nginx 检查(SSH)
+# UNIT: mixed
+# Generic host Nginx fallback: process / 80,443 listen / stub_status
+procs=$(pgrep -x nginx 2>/dev/null | wc -l)
+echo "nginx_proc=$procs threshold=<1 unit=count"
+if ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE ':(80|443)$'; then echo "nginx_listen=1 threshold=!=1 unit=bool"; else echo "nginx_listen=0 threshold=!=1 unit=bool"; fi
+for url in http://127.0.0.1:8080/status http://127.0.0.1/status http://127.0.0.1/nginx_status; do
+  if command -v curl >/dev/null 2>&1; then body=$(timeout 4 curl -s --max-time 3 "$url" 2>/dev/null)
+  elif command -v python3 >/dev/null 2>&1; then body=$(timeout 4 python3 -c "import sys,urllib.request;sys.stdout.write(urllib.request.urlopen('$url',timeout=3).read().decode())" 2>/dev/null)
+  else body=""; fi
+  if [ -n "$body" ]; then
+    active=$(echo "$body" | awk -F: '/Active connections/{gsub(/ /,"",$2);print $2}')
+    echo "nginx_stub_status=1 threshold=!=1 unit=bool"
+    [ -n "$active" ] && echo "nginx_active=$active unit=conn"
+    break
+  fi
+done
 """,
     },
 ]
@@ -450,8 +517,10 @@ max by (id)(pve_cpu_usage_ratio{$guest}) * 100
         "desc": "指定虚拟机内存使用率，超 90% FAIL",
         "content": """# NAME: PVE 虚拟机内存使用率
 # MODE: instant
-# THRESHOLD: >90
 # UNIT: %
+# DISPLAY: true
+# PVE 内存=total-free，把 page cache 计入已用，会系统性虚高；真实内存请以 OS(SSH) 为准。
+# PVE guest memory = total-free (counts page cache as used) and is unreliable; prefer OS/SSH memory.
 max by (id)(pve_memory_usage_bytes{$guest}) / max by (id)(pve_memory_size_bytes{$guest}) * 100
 """,
     },
@@ -526,6 +595,7 @@ nginx_up{$instance}
 # MODE: instant
 # UNIT: mixed
 # DISPLAY: true
+# Info-only: nginx overview panel
 label_replace(nginx_up{$instance}, "item", "存活(1=正常)", "__name__", ".*")
 or label_replace(nginx_connections_active{$instance}, "item", "活跃连接", "__name__", ".*")
 or label_replace(nginx_connections_reading{$instance}, "item", "读取中连接", "__name__", ".*")
@@ -631,11 +701,12 @@ sum(vl_data_size_bytes{$instance}) / sum(vl_total_disk_space_bytes{$instance}) *
     {
         "name": "Keepalived 概览",
         "filename": "keepalived-overview.promql",
-        "desc": "Keepalived 服务/VRRP 状态/健康检查脚本（信息展示，不判定）",
+        "desc": "Keepalived 服务/VRRP 状态/健康检查脚本（信息展示，不判定） / Info-only: keepalived up / VRRP state / script status",
         "content": """# NAME: Keepalived 概览
 # MODE: instant
 # UNIT: mixed
 # DISPLAY: true
+# Info-only: keepalived up / VRRP state / script status
 label_replace(keepalived_up{$instance}, "item", "Keepalived存活", "job", ".*")
 or label_replace(keepalived_vrrp_state{$instance}, "item", "VRRP状态(2=MASTER)", "iname", ".*")
 or label_replace(keepalived_script_status{$instance}, "item", "健康检查", "name", ".*")
@@ -644,11 +715,12 @@ or label_replace(keepalived_script_status{$instance}, "item", "健康检查", "n
     {
         "name": "Keepalived 主备",
         "filename": "keepalived-master.promql",
-        "desc": "全集群 MASTER 数量（0 表示 VIP 无人持有），<1 FAIL；建议绑定到 VIP（不依赖 $instance）",
+        "desc": "全集群 MASTER 数量（0 表示 VIP 无人持有），<1 FAIL；建议绑定到 VIP（不依赖 $instance） / Cluster MASTER count (0 = VIP not held); <1 FAIL; bind to VIP",
         "content": """# NAME: Keepalived 主备
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: count
+# Cluster MASTER count; <1 FAIL; bind to VIP
 label_replace(count(keepalived_vrrp_state{job="keepalived"} == 2), "item", "master_count", "job", ".*")
 """,
     },
