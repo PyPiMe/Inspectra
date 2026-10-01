@@ -1,0 +1,4 @@
+# NAME: 系统负载(1m)
+# MODE: instant
+# UNIT: load
+node_load1{$instance}

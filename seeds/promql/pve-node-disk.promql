@@ -1,0 +1,5 @@
+# NAME: PVE 节点磁盘使用率
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+pve_disk_usage_bytes{id=~"node/.*",$instance} / pve_disk_size_bytes{id=~"node/.*",$instance} * 100

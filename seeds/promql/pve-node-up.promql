@@ -1,0 +1,5 @@
+# NAME: PVE 节点存活
+# MODE: instant
+# THRESHOLD: <1
+# UNIT: bool
+pve_up{id=~"node/.*",$instance}

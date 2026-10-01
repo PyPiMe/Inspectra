@@ -215,6 +215,46 @@ def paginate(rows_sql: str, count_sql: str, params: list[Any], page: int, per_pa
     return rows, total, page, pages
 
 
+def _localize_script(row: dict[str, Any]) -> dict[str, Any]:
+    """Attach localized display fields (lname/ldesc) and dirty flag to a script row."""
+    name, desc = i18n.localize_script(row)
+    row["lname"] = name
+    row["ldesc"] = desc
+    if row.get("seed_key"):
+        content = backup.read_script(row)
+        row["dirty"] = bool(content) and content_hash(content) != (row.get("seed_hash") or "")
+    else:
+        row["dirty"] = False
+    return row
+
+
+def _localize_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [_localize_script(r) for r in rows]
+
+
+def _picker_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Localized script rows for the checkbox pickers (overwrite name/desc for display)."""
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        r["name"], r["desc"] = i18n.localize_script(r)
+        out.append(r)
+    return out
+
+
+def content_hash(text: str) -> str:
+    import hashlib
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
+
+
+def _seed_item(seed_key: str) -> dict[str, Any] | None:
+    """Look up a built-in seed by key from init.SEEDS (imported lazily to avoid cycles)."""
+    import init
+    for item in init.SEEDS:
+        if item["key"] == seed_key:
+            return item
+    return None
+
+
 _file_handler: logging.Handler | None = None
 _console_handler: logging.Handler | None = None
 _NOISY_LOGGERS = ("werkzeug", "paramiko", "cryptography", "urllib3", "requests")
@@ -689,9 +729,9 @@ def create_app() -> Flask:
             all_groups=models.fetch_all("groups"),
             credentials=credentials,
             cred_names={c["key"]: c["name"] for c in credentials},
-            scripts=models.fetch_all("scripts", "kind='shell'"),
+            scripts=_picker_scripts(models.fetch_all("scripts", "kind='shell'")),
             datasources=models.fetch_all("datasources"),
-            prom_scripts=models.fetch_all("scripts", "kind='promql'"),
+            prom_scripts=_picker_scripts(models.fetch_all("scripts", "kind='promql'")),
             conn_types=conn_types,
             q=q, group_id=group_id, enabled=enabled,
             page=page, pages=pages, total=total, per_page=per_page,
@@ -710,9 +750,9 @@ def create_app() -> Flask:
             groups=models.fetch_all("groups"),
             credentials=credentials,
             cred_names={c["key"]: c["name"] for c in credentials},
-            shell_scripts=models.fetch_all("scripts", "kind='shell'"),
+            shell_scripts=_picker_scripts(models.fetch_all("scripts", "kind='shell'")),
             datasources=models.fetch_all("datasources"),
-            prom_scripts=models.fetch_all("scripts", "kind='promql'"),
+            prom_scripts=_picker_scripts(models.fetch_all("scripts", "kind='promql'")),
             bindings=bindings,
             conn_type=server_conn_type(server, bool(bindings)),
         )
@@ -780,7 +820,7 @@ def create_app() -> Flask:
             server=models.fetch_one("servers", sid),
             bindings=models.fetch_all("server_datasources", "server_id=?", (sid,)),
             datasources=models.fetch_all("datasources"),
-            prom_scripts=models.fetch_all("scripts", "kind='promql'"),
+            prom_scripts=_picker_scripts(models.fetch_all("scripts", "kind='promql'")),
         )
 
     @app.route("/servers/<int:sid>/bindings/save", methods=["POST"])
@@ -1171,10 +1211,16 @@ def create_app() -> Flask:
             params, page, per_page,
         )
         for r in rows:
+            content = backup.read_script(r)
             try:
-                r["meta_warn"] = bool(collectors.meta_warnings(backup.read_script(r), r.get("kind") or "shell"))
+                r["meta_warn"] = bool(collectors.meta_warnings(content, r.get("kind") or "shell"))
             except Exception:  # noqa: BLE001
                 r["meta_warn"] = False
+            r["lname"], r["ldesc"] = i18n.localize_script(r)
+            if r.get("seed_key"):
+                r["dirty"] = bool(content) and content_hash(content) != (r.get("seed_hash") or "")
+            else:
+                r["dirty"] = False
         return render_template(
             "scripts.html",
             scripts=rows, name=name, kind=kind, desc=desc, sort=sort,
@@ -1217,12 +1263,60 @@ def create_app() -> Flask:
         if not script:
             abort(404)
         content = backup.read_script(script)
+        script["lname"], script["ldesc"] = i18n.localize_script(script)
+        script["dirty"] = bool(script.get("seed_key")) and bool(content) and content_hash(content) != (script.get("seed_hash") or "")
         return render_template(
             "script_detail.html",
             script=script,
             content=content,
             meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell"),
         )
+
+    @app.route("/scripts/<int:sid>/restore", methods=["POST"])
+    def scripts_restore(sid: int):
+        script = models.fetch_one("scripts", sid)
+        if not script or not script.get("seed_key"):
+            abort(404)
+        item = _seed_item(script["seed_key"])
+        if not item:
+            flash("未找到对应的内置脚本定义", "danger")
+            return redirect(url_for("script_detail", sid=sid))
+        data = {
+            "name": item["name"]["zh-CN"],
+            "filename": item["file"].split("/", 1)[1],
+            "kind": item["kind"],
+            "desc": item["desc"]["zh-CN"],
+            "seed_key": item["key"],
+            "seed_hash": content_hash(item["content"]),
+            "i18n_json": json.dumps(
+                {"zh-CN": {"name": item["name"]["zh-CN"], "desc": item["desc"]["zh-CN"]},
+                 "en": {"name": item["name"]["en"], "desc": item["desc"]["en"]}},
+                ensure_ascii=False,
+            ),
+            "updated_at": models.utcnow(),
+        }
+        save_object("script", sid, data, g.ip, data["name"], script_content=item["content"])
+        flash(i18n.t("scripts.restored"), "success")
+        return redirect(url_for("script_detail", sid=sid))
+
+    @app.route("/scripts/<int:sid>/save_as", methods=["POST"])
+    def scripts_save_as(sid: int):
+        src = models.fetch_one("scripts", sid)
+        if not src:
+            abort(404)
+        content = backup.read_script(src)
+        _, base_desc = i18n.localize_script(src)
+        new_name = (request.form.get("name") or "").strip() or ((src.get("name") or "script") + " copy")
+        data = {
+            "name": new_name,
+            "filename": src.get("filename") or "",
+            "kind": src.get("kind") or "shell",
+            "desc": base_desc or src.get("desc") or "",
+            "updated_at": models.utcnow(),
+        }
+        new_id = save_object("script", None, data, g.ip, new_name, script_content=content)
+        flash(i18n.t("scripts.saved_as"), "success")
+        return redirect(url_for("script_detail", sid=new_id))
 
     @app.route("/scripts/save", methods=["POST"])
     def scripts_save():
@@ -1569,7 +1663,7 @@ def create_app() -> Flask:
             servers=models.fetch_all("servers"),
             groups=models.fetch_all("groups"),
             datasources=models.fetch_all("datasources"),
-            scripts=models.fetch_all("scripts"),
+            scripts=_picker_scripts(models.fetch_all("scripts")),
             applications=[a for a in models.fetch_all("applications") if a.get("enabled", 1)],
             app_servers=engine.application_servers(),
             enabled_count=sum(1 for s in all_rows if s.get("enabled")),
@@ -1709,7 +1803,7 @@ def create_app() -> Flask:
             server_items=server_items,
             groups=groups,
             datasources=models.fetch_all("datasources"),
-            scripts=models.fetch_all("scripts"),
+            scripts=_picker_scripts(models.fetch_all("scripts")),
             script_targets=engine.script_server_bindings(),
             applications=[a for a in models.fetch_all("applications") if a.get("enabled", 1)],
             app_servers=engine.application_servers(),

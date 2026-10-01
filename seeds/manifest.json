@@ -1,0 +1,665 @@
+[
+  {
+    "key": "shell:01-disk-usage.sh",
+    "kind": "shell",
+    "file": "shell/01-disk-usage.sh",
+    "name": {
+      "zh-CN": "磁盘使用率",
+      "en": "Disk usage"
+    },
+    "desc": {
+      "zh-CN": "输出各挂载点使用率（key=value），超 90% 标 WARN",
+      "en": "Per-mount usage (key=value); WARN above 90%"
+    }
+  },
+  {
+    "key": "shell:02-memory-load.sh",
+    "kind": "shell",
+    "file": "shell/02-memory-load.sh",
+    "name": {
+      "zh-CN": "内存与负载",
+      "en": "Memory & load"
+    },
+    "desc": {
+      "zh-CN": "输出内存使用率与 1/5/15 分钟负载",
+      "en": "Memory usage and 1/5/15-min load average"
+    }
+  },
+  {
+    "key": "shell:03-services.sh",
+    "kind": "shell",
+    "file": "shell/03-services.sh",
+    "name": {
+      "zh-CN": "关键服务状态",
+      "en": "Key services"
+    },
+    "desc": {
+      "zh-CN": "检查关键 systemd 服务是否 active",
+      "en": "Check whether key systemd services are active"
+    }
+  },
+  {
+    "key": "shell:04-cpu-usage.sh",
+    "kind": "shell",
+    "file": "shell/04-cpu-usage.sh",
+    "name": {
+      "zh-CN": "CPU 使用率(SSH)",
+      "en": "CPU usage (SSH)"
+    },
+    "desc": {
+      "zh-CN": "基于 /proc/stat 1s 采样计算 CPU 使用率，>=90% 标 WARN",
+      "en": "CPU usage from /proc/stat (1s sample); WARN at >=90%"
+    }
+  },
+  {
+    "key": "shell:05-network-rate.sh",
+    "kind": "shell",
+    "file": "shell/05-network-rate.sh",
+    "name": {
+      "zh-CN": "网络流量速率",
+      "en": "Network throughput"
+    },
+    "desc": {
+      "zh-CN": "基于 /proc/net/dev 1s 采样，逐网卡 RX/TX 字节/秒（排除 lo）",
+      "en": "Per-NIC RX/TX bytes/s from /proc/net/dev (1s sample, excluding lo)"
+    }
+  },
+  {
+    "key": "shell:06-disk-io.sh",
+    "kind": "shell",
+    "file": "shell/06-disk-io.sh",
+    "name": {
+      "zh-CN": "磁盘 IO 速率",
+      "en": "Disk I/O rate"
+    },
+    "desc": {
+      "zh-CN": "基于 /proc/diskstats 1s 采样，逐磁盘 读/写 字节/秒",
+      "en": "Per-disk read/write bytes/s from /proc/diskstats (1s sample)"
+    }
+  },
+  {
+    "key": "shell:07-uptime.sh",
+    "kind": "shell",
+    "file": "shell/07-uptime.sh",
+    "name": {
+      "zh-CN": "系统运行时长",
+      "en": "System uptime"
+    },
+    "desc": {
+      "zh-CN": "输出系统已运行秒数与空闲秒数",
+      "en": "System uptime and idle seconds"
+    }
+  },
+  {
+    "key": "shell:java-process.sh",
+    "kind": "shell",
+    "file": "shell/java-process.sh",
+    "name": {
+      "zh-CN": "Java 进程检查",
+      "en": "Java process check"
+    },
+    "desc": {
+      "zh-CN": "通用检查：java 进程数量（为 0 FAIL）与总 RSS",
+      "en": "Generic: java process count (0 => FAIL) and total RSS"
+    }
+  },
+  {
+    "key": "shell:vip-holder.sh",
+    "kind": "shell",
+    "file": "shell/vip-holder.sh",
+    "name": {
+      "zh-CN": "VIP 归属",
+      "en": "VIP holder"
+    },
+    "desc": {
+      "zh-CN": "反代节点：判断本机是否持有 VIP（master/backup），并检查 keepalived/nginx 服务；VIP 地址取自 keepalived 配置",
+      "en": "Reverse-proxy node: detect local VIP holder (master/backup) and check keepalived/nginx; VIP from keepalived config"
+    }
+  },
+  {
+    "key": "shell:redis-health.sh",
+    "kind": "shell",
+    "file": "shell/redis-health.sh",
+    "name": {
+      "zh-CN": "Redis 健康",
+      "en": "Redis health"
+    },
+    "desc": {
+      "zh-CN": "按进程自动发现本机 redis-server 实例：存活/role/内存占比/命中率/淘汰/阻塞/RDB/主从；密码取实例 conf 的 requirepass（REDISCLI_AUTH 传入）",
+      "en": "Auto-discover local redis-server instances: alive/role/mem%/hit-ratio/evicted/blocked/RDB/replication; read requirepass from the instance conf (via REDISCLI_AUTH)"
+    }
+  },
+  {
+    "key": "shell:docker-containers.sh",
+    "kind": "shell",
+    "file": "shell/docker-containers.sh",
+    "name": {
+      "zh-CN": "Docker 容器检查",
+      "en": "Docker container check"
+    },
+    "desc": {
+      "zh-CN": "只读检查 Docker 容器：运行/重启/健康；重启策略=always 的容器未运行则 FAIL（依赖 webops 的只读 sudo docker 授权）",
+      "en": "Read-only Docker check: up/restarts/health; FAIL if a restart=always container is not running (needs webops read-only sudo docker)"
+    }
+  },
+  {
+    "key": "shell:nginx-check.sh",
+    "kind": "shell",
+    "file": "shell/nginx-check.sh",
+    "name": {
+      "zh-CN": "Nginx 检查(SSH)",
+      "en": "Nginx check (SSH)"
+    },
+    "desc": {
+      "zh-CN": "通用主机 Nginx 兜底：进程、80/443 监听、stub_status（不依赖 systemd/nginx CLI）",
+      "en": "Generic host Nginx fallback: process, 80/443 listen, stub_status (no systemd/nginx CLI)"
+    }
+  },
+  {
+    "key": "promql:disk-usage.promql",
+    "kind": "promql",
+    "file": "promql/disk-usage.promql",
+    "name": {
+      "zh-CN": "磁盘使用率",
+      "en": "Disk usage"
+    },
+    "desc": {
+      "zh-CN": "非 tmpfs/overlay 文件系统使用率，超 90% FAIL",
+      "en": "Non tmpfs/overlay filesystem usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:memory-usage.promql",
+    "kind": "promql",
+    "file": "promql/memory-usage.promql",
+    "name": {
+      "zh-CN": "内存使用率",
+      "en": "Memory usage"
+    },
+    "desc": {
+      "zh-CN": "内存使用率，超 90% FAIL",
+      "en": "Memory usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:cpu-usage.promql",
+    "kind": "promql",
+    "file": "promql/cpu-usage.promql",
+    "name": {
+      "zh-CN": "CPU 使用率",
+      "en": "CPU usage"
+    },
+    "desc": {
+      "zh-CN": "5m 平均 CPU 使用率，超 90% FAIL",
+      "en": "5m average CPU usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:load1.promql",
+    "kind": "promql",
+    "file": "promql/load1.promql",
+    "name": {
+      "zh-CN": "系统负载(1m)",
+      "en": "Load (1m)"
+    },
+    "desc": {
+      "zh-CN": "1 分钟平均负载（仅展示，不设阈值）",
+      "en": "1-minute load average (info only, no threshold)"
+    }
+  },
+  {
+    "key": "promql:uptime.promql",
+    "kind": "promql",
+    "file": "promql/uptime.promql",
+    "name": {
+      "zh-CN": "运行时长",
+      "en": "Uptime"
+    },
+    "desc": {
+      "zh-CN": "系统已运行秒数",
+      "en": "System uptime in seconds"
+    }
+  },
+  {
+    "key": "promql:failed-services.promql",
+    "kind": "promql",
+    "file": "promql/failed-services.promql",
+    "name": {
+      "zh-CN": "失败服务数",
+      "en": "Failed services"
+    },
+    "desc": {
+      "zh-CN": "处于 failed 状态的 systemd 单元数，>0 FAIL",
+      "en": "Failed systemd units; >0 FAIL"
+    }
+  },
+  {
+    "key": "promql:disk-write-rate.promql",
+    "kind": "promql",
+    "file": "promql/disk-write-rate.promql",
+    "name": {
+      "zh-CN": "磁盘写入速率",
+      "en": "Disk write rate"
+    },
+    "desc": {
+      "zh-CN": "5m 区间磁盘写入字节/秒（range 示例）",
+      "en": "5m disk write bytes/s (range example)"
+    }
+  },
+  {
+    "key": "promql:up.promql",
+    "kind": "promql",
+    "file": "promql/up.promql",
+    "name": {
+      "zh-CN": "目标存活(up)",
+      "en": "Target up"
+    },
+    "desc": {
+      "zh-CN": "该实例所有抓取任务存活（任一 job down 即 FAIL）",
+      "en": "All scrape jobs on the instance up (any job down => FAIL)"
+    }
+  },
+  {
+    "key": "promql:pve-node-up.promql",
+    "kind": "promql",
+    "file": "promql/pve-node-up.promql",
+    "name": {
+      "zh-CN": "PVE 节点存活",
+      "en": "PVE node up"
+    },
+    "desc": {
+      "zh-CN": "PVE 各节点在线状态",
+      "en": "PVE node online state"
+    }
+  },
+  {
+    "key": "promql:pve-cluster-up.promql",
+    "kind": "promql",
+    "file": "promql/pve-cluster-up.promql",
+    "name": {
+      "zh-CN": "PVE 集群存活",
+      "en": "PVE cluster up"
+    },
+    "desc": {
+      "zh-CN": "PVE 集群在线状态",
+      "en": "PVE cluster online state"
+    }
+  },
+  {
+    "key": "promql:pve-node-cpu.promql",
+    "kind": "promql",
+    "file": "promql/pve-node-cpu.promql",
+    "name": {
+      "zh-CN": "PVE 节点 CPU 使用率",
+      "en": "PVE node CPU"
+    },
+    "desc": {
+      "zh-CN": "PVE 节点 CPU 使用率，超 90% FAIL",
+      "en": "PVE node CPU usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:pve-node-memory.promql",
+    "kind": "promql",
+    "file": "promql/pve-node-memory.promql",
+    "name": {
+      "zh-CN": "PVE 节点内存使用率",
+      "en": "PVE node memory"
+    },
+    "desc": {
+      "zh-CN": "PVE 节点内存使用率，超 90% FAIL",
+      "en": "PVE node memory usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:pve-node-disk.promql",
+    "kind": "promql",
+    "file": "promql/pve-node-disk.promql",
+    "name": {
+      "zh-CN": "PVE 节点磁盘使用率",
+      "en": "PVE node disk"
+    },
+    "desc": {
+      "zh-CN": "PVE 节点根盘使用率，超 90% FAIL",
+      "en": "PVE node root disk usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:pve-storage-usage.promql",
+    "kind": "promql",
+    "file": "promql/pve-storage-usage.promql",
+    "name": {
+      "zh-CN": "PVE 存储池使用率",
+      "en": "PVE storage usage"
+    },
+    "desc": {
+      "zh-CN": "PVE 各存储池使用率，超 90% FAIL",
+      "en": "PVE storage pool usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:pve-node-uptime.promql",
+    "kind": "promql",
+    "file": "promql/pve-node-uptime.promql",
+    "name": {
+      "zh-CN": "PVE 节点运行时长",
+      "en": "PVE node uptime"
+    },
+    "desc": {
+      "zh-CN": "PVE 节点最短运行时长（秒）",
+      "en": "Minimum PVE node uptime (seconds)"
+    }
+  },
+  {
+    "key": "promql:pve-not-backed-up.promql",
+    "kind": "promql",
+    "file": "promql/pve-not-backed-up.promql",
+    "name": {
+      "zh-CN": "PVE 未备份虚拟机数",
+      "en": "PVE not backed up"
+    },
+    "desc": {
+      "zh-CN": "超过备份周期的虚拟机数量，>0 FAIL",
+      "en": "VMs past the backup window; >0 FAIL"
+    }
+  },
+  {
+    "key": "promql:pve-ha-fence.promql",
+    "kind": "promql",
+    "file": "promql/pve-ha-fence.promql",
+    "name": {
+      "zh-CN": "PVE HA 故障转移(fence)",
+      "en": "PVE HA fence"
+    },
+    "desc": {
+      "zh-CN": "存在 fence 状态的 HA 资源时 FAIL",
+      "en": "FAIL when any HA resource is fenced"
+    }
+  },
+  {
+    "key": "promql:pve-subscription.promql",
+    "kind": "promql",
+    "file": "promql/pve-subscription.promql",
+    "name": {
+      "zh-CN": "PVE 订阅异常",
+      "en": "PVE subscription"
+    },
+    "desc": {
+      "zh-CN": "订阅 invalid/expired/suspended 时 FAIL（不含 notfound/new）",
+      "en": "FAIL on invalid/expired/suspended subscription (not notfound/new)"
+    }
+  },
+  {
+    "key": "promql:pve-net-in.promql",
+    "kind": "promql",
+    "file": "promql/pve-net-in.promql",
+    "name": {
+      "zh-CN": "PVE 网络入站速率",
+      "en": "PVE network in"
+    },
+    "desc": {
+      "zh-CN": "该实例上所有虚拟机/容器 5m 入站速率（B/s，仅展示）",
+      "en": "5m inbound rate of all VMs/CTs on the instance (B/s, info)"
+    }
+  },
+  {
+    "key": "promql:pve-net-out.promql",
+    "kind": "promql",
+    "file": "promql/pve-net-out.promql",
+    "name": {
+      "zh-CN": "PVE 网络出站速率",
+      "en": "PVE network out"
+    },
+    "desc": {
+      "zh-CN": "该实例上所有虚拟机/容器 5m 出站速率（B/s，仅展示）",
+      "en": "5m outbound rate of all VMs/CTs on the instance (B/s, info)"
+    }
+  },
+  {
+    "key": "promql:pve-vm-cpu.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-cpu.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机 CPU 使用率",
+      "en": "PVE VM CPU"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机 CPU 使用率，超 90% FAIL（需服务器填虚拟化标识）",
+      "en": "Target VM CPU usage; >90% FAIL (server must set a VM ident)"
+    }
+  },
+  {
+    "key": "promql:pve-vm-memory.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-memory.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机内存使用率",
+      "en": "PVE VM memory"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机内存使用率，超 90% FAIL",
+      "en": "Target VM memory usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:pve-vm-net-in.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-net-in.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机网络入站速率",
+      "en": "PVE VM net in"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机 5m 入站速率（B/s，仅展示）",
+      "en": "Target VM 5m inbound rate (B/s, info)"
+    }
+  },
+  {
+    "key": "promql:pve-vm-net-out.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-net-out.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机网络出站速率",
+      "en": "PVE VM net out"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机 5m 出站速率（B/s，仅展示）",
+      "en": "Target VM 5m outbound rate (B/s, info)"
+    }
+  },
+  {
+    "key": "promql:pve-vm-disk-write.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-disk-write.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机磁盘写入速率",
+      "en": "PVE VM disk write"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机 5m 磁盘写入速率（B/s，仅展示）",
+      "en": "Target VM 5m disk write rate (B/s, info)"
+    }
+  },
+  {
+    "key": "promql:pve-vm-uptime.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-uptime.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机运行时长",
+      "en": "PVE VM uptime"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机运行时长（秒）",
+      "en": "Target VM uptime (seconds)"
+    }
+  },
+  {
+    "key": "promql:pve-vm-ha.promql",
+    "kind": "promql",
+    "file": "promql/pve-vm-ha.promql",
+    "name": {
+      "zh-CN": "PVE 虚拟机 HA 状态",
+      "en": "PVE VM HA"
+    },
+    "desc": {
+      "zh-CN": "指定虚拟机 HA 未处于 started 时 FAIL",
+      "en": "FAIL when the target VM HA is not in started state"
+    }
+  },
+  {
+    "key": "promql:nginx-up.promql",
+    "kind": "promql",
+    "file": "promql/nginx-up.promql",
+    "name": {
+      "zh-CN": "Nginx 存活",
+      "en": "Nginx up"
+    },
+    "desc": {
+      "zh-CN": "nginx-exporter 在线状态",
+      "en": "nginx-exporter online state"
+    }
+  },
+  {
+    "key": "promql:nginx-overview.promql",
+    "kind": "promql",
+    "file": "promql/nginx-overview.promql",
+    "name": {
+      "zh-CN": "Nginx 概览",
+      "en": "Nginx overview"
+    },
+    "desc": {
+      "zh-CN": "Nginx 汇总：up/活跃/读写等待连接/累计请求与连接/QPS/新建连接速率",
+      "en": "Nginx summary: up/active/reading/writing/waiting/counters/QPS/new-connection rate"
+    }
+  },
+  {
+    "key": "promql:nginx-qps.promql",
+    "kind": "promql",
+    "file": "promql/nginx-qps.promql",
+    "name": {
+      "zh-CN": "Nginx QPS",
+      "en": "Nginx QPS"
+    },
+    "desc": {
+      "zh-CN": "Nginx 5m 平均 QPS，超阈值 FAIL（默认 >100，可改）",
+      "en": "Nginx 5m average QPS; FAIL above threshold (default >100)"
+    }
+  },
+  {
+    "key": "promql:nginx-conn-rate.promql",
+    "kind": "promql",
+    "file": "promql/nginx-conn-rate.promql",
+    "name": {
+      "zh-CN": "Nginx 新建连接速率",
+      "en": "Nginx conn rate"
+    },
+    "desc": {
+      "zh-CN": "Nginx 5m 新建连接速率，超阈值 FAIL（默认 >100，可改）",
+      "en": "Nginx 5m new-connection rate; FAIL above threshold (default >100)"
+    }
+  },
+  {
+    "key": "promql:nginx-active-threshold.promql",
+    "kind": "promql",
+    "file": "promql/nginx-active-threshold.promql",
+    "name": {
+      "zh-CN": "Nginx 活跃连接数",
+      "en": "Nginx active connections"
+    },
+    "desc": {
+      "zh-CN": "Nginx 当前活跃连接数，超阈值 FAIL（默认 >500，可改）",
+      "en": "Nginx current active connections; FAIL above threshold (default >500)"
+    }
+  },
+  {
+    "key": "promql:keepalived-up.promql",
+    "kind": "promql",
+    "file": "promql/keepalived-up.promql",
+    "name": {
+      "zh-CN": "Keepalived 存活",
+      "en": "Keepalived up"
+    },
+    "desc": {
+      "zh-CN": "keepalived-exporter 在线状态",
+      "en": "keepalived-exporter online state"
+    }
+  },
+  {
+    "key": "promql:keepalived-script.promql",
+    "kind": "promql",
+    "file": "promql/keepalived-script.promql",
+    "name": {
+      "zh-CN": "Keepalived 脚本检查",
+      "en": "Keepalived script"
+    },
+    "desc": {
+      "zh-CN": "健康检查脚本状态，<1 FAIL",
+      "en": "Health-check script status; <1 FAIL"
+    }
+  },
+  {
+    "key": "promql:http-status-up.promql",
+    "kind": "promql",
+    "file": "promql/http-status-up.promql",
+    "name": {
+      "zh-CN": "HTTP 站点可用",
+      "en": "HTTP site up"
+    },
+    "desc": {
+      "zh-CN": "http_status 探活：需把绑定 prom_instance 设为站点 URL（如 https://example.com）",
+      "en": "http_status probe: set the binding prom_instance to the site URL (e.g. https://example.com)"
+    }
+  },
+  {
+    "key": "promql:anubis-proxy-rate.promql",
+    "kind": "promql",
+    "file": "promql/anubis-proxy-rate.promql",
+    "name": {
+      "zh-CN": "Anubis 代理请求速率",
+      "en": "Anubis proxy rate"
+    },
+    "desc": {
+      "zh-CN": "Anubis 代理请求 5m 速率（req/s，仅展示）",
+      "en": "Anubis proxied requests 5m rate (req/s, info)"
+    }
+  },
+  {
+    "key": "promql:victorialogs-disk.promql",
+    "kind": "promql",
+    "file": "promql/victorialogs-disk.promql",
+    "name": {
+      "zh-CN": "VictoriaLogs 磁盘使用率",
+      "en": "VictoriaLogs disk"
+    },
+    "desc": {
+      "zh-CN": "VictoriaLogs 数据占用/总磁盘，超 90% FAIL",
+      "en": "VictoriaLogs data/total disk usage; >90% FAIL"
+    }
+  },
+  {
+    "key": "promql:keepalived-overview.promql",
+    "kind": "promql",
+    "file": "promql/keepalived-overview.promql",
+    "name": {
+      "zh-CN": "Keepalived 概览",
+      "en": "Keepalived overview"
+    },
+    "desc": {
+      "zh-CN": "Keepalived 服务/VRRP 状态/健康检查脚本（信息展示，不判定）",
+      "en": "Info-only: keepalived up / VRRP state / health-check script status"
+    }
+  },
+  {
+    "key": "promql:keepalived-master.promql",
+    "kind": "promql",
+    "file": "promql/keepalived-master.promql",
+    "name": {
+      "zh-CN": "Keepalived 主备",
+      "en": "Keepalived master"
+    },
+    "desc": {
+      "zh-CN": "全集群 MASTER 数量（0 表示 VIP 无人持有），<1 FAIL；建议绑定到 VIP（不依赖 $instance）",
+      "en": "Cluster MASTER count (0 = VIP not held); <1 FAIL; bind to the VIP (not tied to $instance)"
+    }
+  }
+]

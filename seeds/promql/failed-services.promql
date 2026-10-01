@@ -1,0 +1,5 @@
+# NAME: 失败服务数
+# MODE: instant
+# THRESHOLD: >0
+# UNIT: count
+count(node_systemd_unit_state{state="failed",$instance} == 1)

@@ -1,0 +1,5 @@
+# NAME: PVE 节点 CPU 使用率
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+pve_cpu_usage_ratio{id=~"node/.*",$instance} * 100

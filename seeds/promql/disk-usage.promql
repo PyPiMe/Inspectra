@@ -1,0 +1,5 @@
+# NAME: 磁盘使用率
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+100 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",$instance} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay",$instance} * 100)

@@ -1,0 +1,6 @@
+# NAME: 磁盘写入速率
+# MODE: range
+# WINDOW: 5m
+# STEP: 1m
+# UNIT: B/s
+rate(node_disk_written_bytes_total{$instance}[5m])

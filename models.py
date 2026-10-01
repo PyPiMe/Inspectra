@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS scripts (
     filename TEXT DEFAULT '',
     kind TEXT DEFAULT 'shell',
     desc TEXT DEFAULT '',
+    seed_key TEXT DEFAULT '',
+    seed_hash TEXT DEFAULT '',
+    i18n_json TEXT DEFAULT '{}',
     created_at TEXT,
     updated_at TEXT
 );
@@ -219,7 +222,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     "applications": ["name", "desc", "enabled", "created_at", "updated_at"],
     "application_members": ["application_id", "member_type", "member_id"],
     "servers": ["group_id", "hostname", "ip", "port", "user", "vault_key", "scripts_json", "vm_ident", "enabled", "created_at", "updated_at"],
-    "scripts": ["name", "filename", "kind", "desc", "created_at", "updated_at"],
+    "scripts": ["name", "filename", "kind", "desc", "seed_key", "seed_hash", "i18n_json", "created_at", "updated_at"],
     "datasources": ["name", "base_url", "auth_type", "secret_env", "verify_tls", "timeout", "labels_json", "enabled", "created_at"],
     "server_datasources": ["server_id", "datasource_id", "prom_instance", "labels_json", "scripts_json", "enabled"],
     "models": ["label", "provider", "model_id", "base_url", "api_key_env", "temperature", "top_p", "enabled", "extra_json", "data_policy", "sanitize_overrides", "created_at"],
@@ -349,6 +352,11 @@ def _migrate(conn: sqlite3.Connection) -> None:
     dscols = {r["name"] for r in conn.execute("PRAGMA table_info(datasources)").fetchall()}
     if "labels_json" not in dscols:
         conn.execute("ALTER TABLE datasources ADD COLUMN labels_json TEXT DEFAULT '{}'")
+    # Built-in script tracking + per-language name/desc (seed_key/seed_hash/i18n_json)
+    spcols = {r["name"] for r in conn.execute("PRAGMA table_info(scripts)").fetchall()}
+    for col, ddl in (("seed_key", "TEXT DEFAULT ''"), ("seed_hash", "TEXT DEFAULT ''"), ("i18n_json", "TEXT DEFAULT '{}'")):
+        if col not in spcols:
+            conn.execute(f"ALTER TABLE scripts ADD COLUMN {col} {ddl}")
     _backfill_audit_versions(conn)
 
 

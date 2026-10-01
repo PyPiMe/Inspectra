@@ -1,0 +1,5 @@
+# NAME: HTTP 站点可用
+# MODE: instant
+# THRESHOLD: <1
+# UNIT: bool
+up{job="http_status",$instance}

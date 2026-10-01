@@ -1,0 +1,5 @@
+# NAME: 内存使用率
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+(1 - node_memory_MemAvailable_bytes{$instance} / node_memory_MemTotal_bytes{$instance}) * 100

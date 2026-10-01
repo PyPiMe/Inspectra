@@ -1,11 +1,29 @@
 {% extends "base.html" %}
-{% block title %}{{ script.name or t('scripts.new') }}{% endblock %}
+{% block title %}{{ script.lname or script.name or t('scripts.new') }}{% endblock %}
 {% block content %}
 <h4 class="d-flex align-items-center gap-2 flex-wrap">
-  <span>{{ script.name or t('scripts.new') }}</span>
+  <span>{{ script.lname or script.name or t('scripts.new') }}</span>
   <span class="badge bg-secondary" id="kindBadge">{{ script.kind or 'shell' }}</span>
+  {% if script.seed_key %}<span class="badge bg-light text-secondary border">{{ t('scripts.builtin') }}</span>{% endif %}
+  {% if script.dirty %}<span class="badge bg-warning text-dark">{{ t('scripts.modified') }}</span>{% endif %}
   {% if script.id %}<span class="text-muted small ms-auto">#{{ script.id }}</span>{% endif %}
 </h4>
+
+{% if script.seed_key %}
+<div class="alert alert-secondary small mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <span>{{ t('scripts.builtin_hint') }}{% if script.dirty %} <span class="text-warning fw-semibold">{{ t('scripts.modified_hint') }}</span>{% endif %}</span>
+  <span class="d-flex gap-2">
+    <form method="post" action="{{ url_for('scripts_restore', sid=script.id) }}" class="d-inline" onsubmit="return confirm('{{ t('scripts.confirm_restore') }}')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm btn-outline-warning" {% if not script.dirty %}disabled{% endif %}>{{ t('scripts.restore') }}</button>
+    </form>
+    <form method="post" action="{{ url_for('scripts_save_as', sid=script.id) }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm btn-outline-secondary">{{ t('scripts.save_as') }}</button>
+    </form>
+  </span>
+</div>
+{% endif %}
 
 <div class="alert alert-secondary small mb-2">
   <span id="specShell">{{ t('script_detail.shell_spec') | safe }}</span>

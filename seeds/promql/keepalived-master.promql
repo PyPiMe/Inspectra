@@ -1,0 +1,6 @@
+# NAME: Keepalived 主备
+# MODE: instant
+# THRESHOLD: <1
+# UNIT: count
+# Cluster MASTER count; <1 FAIL; bind to VIP
+label_replace(count(keepalived_vrrp_state{job="keepalived"} == 2), "item", "master_count", "job", ".*")

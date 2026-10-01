@@ -1,0 +1,7 @@
+# NAME: PVE 虚拟机内存使用率
+# MODE: instant
+# UNIT: %
+# DISPLAY: true
+# PVE 内存=total-free，把 page cache 计入已用，会系统性虚高；真实内存请以 OS(SSH) 为准。
+# PVE guest memory = total-free (counts page cache as used) and is unreliable; prefer OS/SSH memory.
+max by (id)(pve_memory_usage_bytes{$guest}) / max by (id)(pve_memory_size_bytes{$guest}) * 100

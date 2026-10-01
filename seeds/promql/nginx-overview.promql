@@ -1,0 +1,13 @@
+# NAME: Nginx 概览
+# MODE: instant
+# UNIT: mixed
+# DISPLAY: true
+# Info-only: nginx overview panel
+label_replace(nginx_up{$instance}, "item", "存活(1=正常)", "__name__", ".*")
+or label_replace(nginx_connections_active{$instance}, "item", "活跃连接", "__name__", ".*")
+or label_replace(nginx_connections_reading{$instance}, "item", "读取中连接", "__name__", ".*")
+or label_replace(nginx_connections_writing{$instance}, "item", "写入中连接", "__name__", ".*")
+or label_replace(nginx_connections_waiting{$instance}, "item", "等待连接", "__name__", ".*")
+or label_replace(nginx_connections_accepted{$instance}, "item", "累计接受连接", "__name__", ".*")
+or label_replace(nginx_connections_handled{$instance}, "item", "累计处理连接", "__name__", ".*")
+or label_replace(nginx_http_requests_total{$instance}, "item", "累计请求数", "__name__", ".*")

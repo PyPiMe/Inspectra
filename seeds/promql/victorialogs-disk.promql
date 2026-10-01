@@ -1,0 +1,5 @@
+# NAME: VictoriaLogs 磁盘使用率
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+sum(vl_data_size_bytes{$instance}) / sum(vl_total_disk_space_bytes{$instance}) * 100

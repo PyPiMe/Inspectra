@@ -1,0 +1,5 @@
+# NAME: PVE 未备份虚拟机数
+# MODE: instant
+# THRESHOLD: >0
+# UNIT: count
+max(pve_not_backed_up_total{$instance})

@@ -46,10 +46,14 @@
   <tbody>
   {% for s in scripts %}
     <tr>
-      <td><a href="{{ url_for('script_detail', sid=s.id) }}">{{ s.name }}</a>{% if s.meta_warn %} <span class="badge bg-warning text-dark" title="{{ t('scripts.meta_warning') }}">!</span>{% endif %}</td>
+      <td><a href="{{ url_for('script_detail', sid=s.id) }}">{{ s.lname }}</a>
+        {% if s.meta_warn %} <span class="badge bg-warning text-dark" title="{{ t('scripts.meta_warning') }}">!</span>{% endif %}
+        {% if s.seed_key %}<span class="badge bg-light text-secondary border" title="{{ t('scripts.builtin') }}">{{ t('scripts.builtin') }}</span>{% endif %}
+        {% if s.dirty %}<span class="badge bg-warning text-dark" title="{{ t('scripts.modified_hint') }}">{{ t('scripts.modified') }}</span>{% endif %}
+      </td>
       <td><span class="badge bg-{{ 'primary' if s.kind=='shell' else 'info' }}">{{ s.kind }}</span></td>
       <td>{{ s.filename }}</td>
-      <td class="small">{{ s.desc }}</td>
+      <td class="small">{{ s.ldesc }}</td>
       <td class="small">{{ s.updated_at|local }}</td>
       <td class="text-nowrap">
         <a class="btn btn-sm btn-outline-primary" href="{{ url_for('script_detail', sid=s.id) }}">{{ t('common.edit') }}</a>

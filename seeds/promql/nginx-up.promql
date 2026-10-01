@@ -1,0 +1,5 @@
+# NAME: Nginx 存活
+# MODE: instant
+# THRESHOLD: <1
+# UNIT: bool
+nginx_up{$instance}

@@ -1,0 +1,4 @@
+# NAME: PVE 虚拟机运行时长
+# MODE: instant
+# UNIT: s
+max by (id)(pve_uptime_seconds{$guest})

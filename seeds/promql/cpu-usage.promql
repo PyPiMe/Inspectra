@@ -1,0 +1,5 @@
+# NAME: CPU 使用率
+# MODE: instant
+# THRESHOLD: >90
+# UNIT: %
+100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle",$instance}[5m])) * 100)

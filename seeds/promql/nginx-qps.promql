@@ -1,0 +1,5 @@
+# NAME: Nginx QPS
+# MODE: instant
+# THRESHOLD: >100
+# UNIT: req/s
+sum by (instance)(rate(nginx_http_requests_total{$instance}[5m]))

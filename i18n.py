@@ -96,6 +96,36 @@ def t(key: str, **kw: Any) -> str:
     return key
 
 
+def localize_script(row: dict[str, Any], lang: str | None = None) -> tuple[str, str]:
+    """Resolve a script's display (name, desc) for the current language.
+
+    - Built-in (has seed_key): i18n_json[current] -> en -> zh-CN; a user-renamed
+      built-in falls back to the literal name/desc.
+    - User script: i18n_json[current] -> literal name/desc (author's base).
+    解析脚本展示名称/说明：内置缺语言回退 en，用户脚本回退作者字面值。
+    """
+    lang = lang or current()
+    try:
+        ij = json.loads(row.get("i18n_json") or "{}")
+    except (ValueError, TypeError):
+        ij = {}
+    if not isinstance(ij, dict):
+        ij = {}
+    base_name = row.get("name") or ""
+    base_desc = row.get("desc") or ""
+    zh = ij.get(BASE_LANG) if isinstance(ij.get(BASE_LANG), dict) else None
+    if row.get("seed_key") and zh:
+        if base_name != (zh.get("name") or base_name) or base_desc != (zh.get("desc") or base_desc):
+            return base_name, base_desc
+        entry = ij.get(lang) or ij.get("en") or zh
+        if isinstance(entry, dict):
+            return entry.get("name") or base_name, entry.get("desc") or base_desc
+    entry = ij.get(lang)
+    if isinstance(entry, dict):
+        return entry.get("name") or base_name, entry.get("desc") or base_desc
+    return base_name, base_desc
+
+
 def js_dict() -> dict[str, str]:
     """供前端注入的 JS 词条（key 以 `js.` 开头）。"""
     out: dict[str, str] = {}

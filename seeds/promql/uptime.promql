@@ -1,0 +1,4 @@
+# NAME: 运行时长
+# MODE: instant
+# UNIT: s
+time() - node_boot_time_seconds{$instance}

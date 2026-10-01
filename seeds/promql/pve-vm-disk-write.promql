@@ -1,0 +1,4 @@
+# NAME: PVE 虚拟机磁盘写入速率
+# MODE: instant
+# UNIT: B/s
+max by (id)(rate(pve_disk_written_bytes_total{$guest}[5m]))
