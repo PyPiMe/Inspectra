@@ -115,6 +115,9 @@ body { font-size: 14px; }
 .chat-bot .chat-bubble table { border-collapse: collapse; }
 .chat-bot .chat-bubble th, .chat-bot .chat-bubble td { border: 1px solid #dee2e6; padding: .2rem .4rem; }
 
+/* 脚本详情：置顶操作条 */
+.script-toolbar { z-index: 1020; box-shadow: 0 .25rem .5rem rgba(0, 0, 0, .03); }
+
 /* 脚本编辑器（原生增强） */
 .code-editor { display: flex; height: 62vh; background: #f8f9fa; }
 .editor-gutter {

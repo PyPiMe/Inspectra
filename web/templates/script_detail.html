@@ -4,33 +4,12 @@
 <h4 class="d-flex align-items-center gap-2 flex-wrap">
   <span>{{ script.lname or script.name or t('scripts.new') }}</span>
   <span class="badge bg-secondary" id="kindBadge">{{ script.kind or 'shell' }}</span>
-  {% if script.seed_key %}<span class="badge bg-light text-secondary border">{{ t('scripts.builtin') }}</span>{% endif %}
-  {% if script.dirty %}<span class="badge bg-warning text-dark">{{ t('scripts.modified') }}</span>{% endif %}
+  {% if script.seed_key %}<span class="badge bg-light text-secondary border" title="{{ t('scripts.builtin_hint') }}">{{ t('scripts.builtin') }}</span>{% endif %}
+  {% if script.dirty %}<span class="badge bg-warning text-dark" title="{{ t('scripts.modified_hint') }}">{{ t('scripts.modified') }}</span>{% endif %}
   {% if script.id %}<span class="text-muted small ms-auto">#{{ script.id }}</span>{% endif %}
 </h4>
-
-{% if script.seed_key %}
-<div class="alert alert-secondary small mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
-  <span>{{ t('scripts.builtin_hint') }}{% if script.dirty %} <span class="text-warning fw-semibold">{{ t('scripts.modified_hint') }}</span>{% endif %}</span>
-  <span class="d-flex gap-2">
-    <form method="post" action="{{ url_for('scripts_restore', sid=script.id) }}" class="d-inline" onsubmit="return confirm('{{ t('scripts.confirm_restore') }}')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-sm btn-outline-warning" {% if not script.dirty %}disabled{% endif %}>{{ t('scripts.restore') }}</button>
-    </form>
-    <form method="post" action="{{ url_for('scripts_save_as', sid=script.id) }}" class="d-inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <button class="btn btn-sm btn-outline-secondary">{{ t('scripts.save_as') }}</button>
-    </form>
-  </span>
-</div>
-{% endif %}
-
-<div class="alert alert-secondary small mb-2">
-  <span id="specShell">{{ t('script_detail.shell_spec') | safe }}</span>
-  <span id="specPromql" class="d-none">{{ t('script_detail.promql_spec') | safe }}</span>
-</div>
 {% if meta_warnings %}
-<div class="alert alert-warning small mb-2">
+<div class="alert alert-warning py-1 px-2 small mb-2">
   <strong>{{ t('scripts.meta_warning') }}</strong>：{{ meta_warnings | join('；') }}
 </div>
 {% endif %}
@@ -39,17 +18,39 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   {% if script.id %}<input type="hidden" name="id" value="{{ script.id }}">{% endif %}
 
+  {# Sticky action bar: save / back / validate live where you can always reach them. #}
+  <div class="script-toolbar sticky-top bg-body border-bottom py-2 mb-3 d-flex align-items-center gap-2 flex-wrap">
+    <button class="btn btn-primary" type="submit">{{ t('common.save') }}</button>
+    <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
+    <button type="button" class="btn btn-outline-primary" id="validateBtn">{{ t('script_detail.validate') }}</button>
+    <span id="validateResult" class="small text-muted">{{ t('script_detail.editor_hint') }}</span>
+    <span class="d-flex align-items-center gap-2 ms-auto">
+      {% if script.seed_key %}
+      <span class="btn-group">
+        <button type="submit" form="restoreForm" class="btn btn-outline-warning" {% if not script.dirty %}disabled{% endif %}>{{ t('scripts.restore') }}</button>
+        <button type="submit" form="saveAsForm" class="btn btn-outline-secondary">{{ t('scripts.save_as') }}</button>
+      </span>
+      {% endif %}
+      <span id="dirtyFlag" class="badge bg-warning text-dark d-none">{{ t('script_detail.unsaved') }}</span>
+    </span>
+  </div>
+
   <div class="row g-3">
     <div class="col-lg-8">
       <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <span>{{ t('script_detail.content') }}</span>
+          <span class="d-flex align-items-center gap-2 flex-wrap">
+            <span>{{ t('script_detail.content') }}</span>
+            {% if script.seed_key %}
+            <span class="small text-muted fw-normal">{{ t('scripts.builtin_hint') }}</span>
+            {% endif %}
+          </span>
           <span class="btn-group btn-group-sm">
             <button type="button" class="btn btn-outline-secondary" id="fontDec" title="{{ t('script_detail.font_dec_title') }}">A-</button>
             <button type="button" class="btn btn-outline-secondary" id="fontInc" title="{{ t('script_detail.font_inc_title') }}">A+</button>
             <button type="button" class="btn btn-outline-secondary" id="wrapToggle">{{ t('js.wrap_off') }}</button>
             <button type="button" class="btn btn-outline-secondary" id="insertTpl">{{ t('script_detail.insert_tpl') }}</button>
-            <button type="button" class="btn btn-outline-primary" id="validateBtn">{{ t('script_detail.validate') }}</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#specModal">?</button>
           </span>
         </div>
         <div class="card-body p-0">
@@ -58,52 +59,82 @@
             <textarea class="editor-area" name="content" id="content" spellcheck="false" wrap="off">{{ content }}</textarea>
           </div>
         </div>
-        <div class="card-footer py-1"><span id="validateResult" class="small text-muted">{{ t('script_detail.editor_hint') }}</span></div>
+        <div class="card-footer py-1"><span class="small text-muted">{{ t('script_detail.editor_hint') }}</span></div>
       </div>
     </div>
 
     <div class="col-lg-4">
-      <div class="card mb-3"><div class="card-header">{{ t('script_detail.basic') }}</div><div class="card-body row g-2">
-        <div class="col-12"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ script.name }}" required></div>
-        <div class="col-6"><label class="form-label">{{ t('common.type') }}</label>
-          <select class="form-select" name="kind" id="kind">
-            <option value="shell" {{ 'selected' if script.kind=='shell' else '' }}>shell</option>
-            <option value="promql" {{ 'selected' if script.kind=='promql' else '' }}>promql</option>
-          </select>
-        </div>
-        <div class="col-6"><label class="form-label">{{ t('scripts.filename') }}</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
-        <div class="col-12"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ script.desc }}"></div>
-      </div></div>
+      {# Keep the side fields in view while editing a long script. #}
+      <div class="position-sticky" style="top: 4.5rem;">
+        <div class="card mb-3"><div class="card-header">{{ t('script_detail.basic') }}</div><div class="card-body row g-2">
+          <div class="col-12"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ script.name }}" required></div>
+          <div class="col-6"><label class="form-label">{{ t('common.type') }}</label>
+            <select class="form-select" name="kind" id="kind">
+              <option value="shell" {{ 'selected' if script.kind=='shell' else '' }}>shell</option>
+              <option value="promql" {{ 'selected' if script.kind=='promql' else '' }}>promql</option>
+            </select>
+          </div>
+          <div class="col-6"><label class="form-label">{{ t('scripts.filename') }}</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
+          <div class="col-12"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ script.desc }}"></div>
+        </div></div>
 
-      <div class="card mb-3 d-none" id="metaCard"><div class="card-header">{{ t('script_detail.meta_card') }}</div><div class="card-body row g-2">
-        <div class="col-12"><label class="form-label">NAME</label><input class="form-control form-control-sm" id="metaName"></div>
-        <div class="col-6"><label class="form-label">MODE</label>
-          <select class="form-select form-select-sm" id="metaMode"><option value="instant">instant</option><option value="range">range</option></select>
-        </div>
-        <div class="col-6"><label class="form-label">UNIT</label><input class="form-control form-control-sm" id="metaUnit" placeholder="{{ t('script_detail.unit_ph') }}"></div>
-        <div class="col-6 meta-range"><label class="form-label">WINDOW</label><input class="form-control form-control-sm" id="metaWindow" placeholder="5m"></div>
-        <div class="col-6 meta-range"><label class="form-label">STEP</label><input class="form-control form-control-sm" id="metaStep" placeholder="1m"></div>
-        <div class="col-12"><label class="form-label">THRESHOLD</label><input class="form-control form-control-sm" id="metaThreshold" placeholder="{{ t('script_detail.threshold_ph') }}"></div>
-        <div class="col-12"><button type="button" class="btn btn-sm btn-outline-secondary w-100" id="syncHeaderBtn">{{ t('script_detail.sync_header') }}</button></div>
-      </div></div>
+        <div class="card mb-3 d-none" id="metaCard"><div class="card-header">{{ t('script_detail.meta_card') }}</div><div class="card-body row g-2">
+          <div class="col-12"><label class="form-label">NAME</label><input class="form-control form-control-sm" id="metaName"></div>
+          <div class="col-6"><label class="form-label">MODE</label>
+            <select class="form-select form-select-sm" id="metaMode"><option value="instant">instant</option><option value="range">range</option></select>
+          </div>
+          <div class="col-6"><label class="form-label">UNIT</label><input class="form-control form-control-sm" id="metaUnit" placeholder="{{ t('script_detail.unit_ph') }}"></div>
+          <div class="col-6 meta-range"><label class="form-label">WINDOW</label><input class="form-control form-control-sm" id="metaWindow" placeholder="5m"></div>
+          <div class="col-6 meta-range"><label class="form-label">STEP</label><input class="form-control form-control-sm" id="metaStep" placeholder="1m"></div>
+          <div class="col-12"><label class="form-label">THRESHOLD</label><input class="form-control form-control-sm" id="metaThreshold" placeholder="{{ t('script_detail.threshold_ph') }}"></div>
+          <div class="col-12"><button type="button" class="btn btn-sm btn-outline-secondary w-100" id="syncHeaderBtn">{{ t('script_detail.sync_header') }}</button></div>
+        </div></div>
+      </div>
     </div>
   </div>
 
-  <div class="mt-3">
-    <button class="btn btn-primary">{{ t('common.save') }}</button>
-    <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
-  </div>
 </form>
 
-{% if script.id %}
-<div class="mt-2">
-  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">{{ t('common.history') }}</a>
+{# Bottom action row (outside the main form to avoid nested forms; Save uses form="scriptForm"). #}
+<div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
+  <button class="btn btn-primary" type="submit" form="scriptForm">{{ t('common.save') }}</button>
+  <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
+  {% if script.id %}
+  <a class="btn btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">{{ t('common.history') }}</a>
   <form method="post" action="{{ url_for('scripts_clone', sid=script.id) }}" class="d-inline">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-sm btn-outline-secondary">{{ t('scripts.clone') }}</button>
+    <button class="btn btn-outline-secondary">{{ t('scripts.clone') }}</button>
   </form>
+  {% endif %}
 </div>
+
+{% if script.id %}
+{% if script.seed_key %}
+{# External forms referenced by the header buttons (avoids nested forms). #}
+<form id="restoreForm" method="post" action="{{ url_for('scripts_restore', sid=script.id) }}" class="d-none" onsubmit="return confirm('{{ t('scripts.confirm_restore') }}')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+</form>
+<form id="saveAsForm" method="post" action="{{ url_for('scripts_save_as', sid=script.id) }}" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+</form>
 {% endif %}
+{% endif %}
+
+{# Script spec moved off the page into an on-demand modal. #}
+<div class="modal fade" id="specModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ t('script_detail.spec_title') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body small">
+        <span id="specShell">{{ t('script_detail.shell_spec') | safe }}</span>
+        <span id="specPromql" class="d-none">{{ t('script_detail.promql_spec') | safe }}</span>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -115,8 +146,23 @@ const kindBadge = document.getElementById('kindBadge');
 const metaCard = document.getElementById('metaCard');
 const resultEl = document.getElementById('validateResult');
 const form = document.getElementById('scriptForm');
+const dirtyFlag = document.getElementById('dirtyFlag');
 let fontSize = 13;
 let wrapOn = false;
+let dirty = false;
+
+// Unsaved-changes guard: badge + browser prompt on leave; cleared on submit.
+function markDirty() {
+  if (dirty) return;
+  dirty = true;
+  if (dirtyFlag) dirtyFlag.classList.remove('d-none');
+}
+form.addEventListener('input', markDirty);
+form.addEventListener('change', markDirty);
+form.addEventListener('submit', () => { dirty = false; });
+window.addEventListener('beforeunload', (e) => {
+  if (dirty) { e.preventDefault(); e.returnValue = ''; }
+});
 
 const SHELL_TPL = `#!/usr/bin/env bash
 # ${__t('js.tpl_comment')}
@@ -150,6 +196,7 @@ area.addEventListener('keydown', (e) => {
       if (area.value.slice(before, before + 2) === '  ') { area.setRangeText('', before, before + 2, 'preserve'); }
     }
     updateGutter();
+    markDirty();
   }
 });
 
@@ -174,6 +221,7 @@ document.getElementById('insertTpl').addEventListener('click', () => {
   const s = area.selectionStart, en = area.selectionEnd;
   area.setRangeText(tpl, s, en, 'end');
   updateGutter();
+  markDirty();
   scheduleValidate();
 });
 
@@ -229,6 +277,7 @@ function syncHeader() {
   const body = splitHeader(area.value).body.join('\n').replace(/^\n+/, '');
   area.value = generateHeader() + (body ? '\n' + body : '\n');
   updateGutter();
+  markDirty();
 }
 function parseHeader() {
   const lines = area.value.split('\n');
@@ -263,7 +312,17 @@ function applyKind() {
   document.getElementById('specPromql').classList.toggle('d-none', !isPromql);
   if (isPromql) parseHeader();
 }
-kindSel.addEventListener('change', () => { applyKind(); scheduleValidate(); });
+let lastKind = kindSel.value;
+kindSel.addEventListener('change', () => {
+  // Changing kind does not convert the body; confirm before switching a non-empty script.
+  if (kindSel.value !== lastKind && area.value.trim() && !confirm(__t('js.confirm_change_kind'))) {
+    kindSel.value = lastKind;
+    return;
+  }
+  lastKind = kindSel.value;
+  applyKind();
+  scheduleValidate();
+});
 
 applyKind();
 applyFont();
