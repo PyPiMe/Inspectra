@@ -62,15 +62,7 @@ def client_ip() -> str:
 
 
 def now_local_str(iso_ts: str | None) -> str:
-    if not iso_ts:
-        return ""
-    try:
-        dt = datetime.fromisoformat(iso_ts)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return iso_ts or ""
+    return models.local_str(iso_ts)
 
 
 def parse_int(value: Any, default: int = 0) -> int:
@@ -216,10 +208,11 @@ def paginate(rows_sql: str, count_sql: str, params: list[Any], page: int, per_pa
 
 
 def _localize_script(row: dict[str, Any]) -> dict[str, Any]:
-    """Attach localized display fields (lname/ldesc) and dirty flag to a script row."""
-    name, desc = i18n.localize_script(row)
+    """Attach localized display fields (lname/ldesc/lmeta) and dirty flag to a script row."""
+    name, desc, meta = i18n.localize_script(row)
     row["lname"] = name
     row["ldesc"] = desc
+    row["lmeta"] = meta
     if row.get("seed_key"):
         content = backup.read_script(row)
         row["dirty"] = bool(content) and content_hash(content) != (row.get("seed_hash") or "")
@@ -236,9 +229,133 @@ def _picker_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Localized script rows for the checkbox pickers (overwrite name/desc for display)."""
     out: list[dict[str, Any]] = []
     for r in rows:
-        r["name"], r["desc"] = i18n.localize_script(r)
+        r["name"], r["desc"], _ = i18n.localize_script(r)
         out.append(r)
     return out
+
+
+def _i18n_form_values(cur_row: dict[str, Any] | None, lang: str, base: dict[str, str], field_map: dict[str, str]) -> dict:
+    """Build i18n_json from base fields + translation-panel inputs (`tr_<lang>_<field>`).
+
+    基座字段写入当前语言；翻译面板 `tr_<lang>_<field>` 写入其它语言。field_map: 表单后缀 -> 存储键。
+    """
+    ij: dict[str, dict] = {k: dict(v) for k, v in i18n.parse_i18n(cur_row or {}).items()}
+    entry = ij.setdefault(lang, {})
+    for suffix, stored in field_map.items():
+        if suffix in base and base[suffix] is not None:
+            entry[stored] = base[suffix]
+    for key, raw in request.form.items():
+        if not key.startswith("tr_"):
+            continue
+        prefix, _, last = key.rpartition("_")
+        if last not in field_map:
+            continue
+        other = prefix[3:]
+        if not other or other == lang:
+            continue
+        stored = field_map[last]
+        val = (raw or "").strip()
+        sub = ij.setdefault(other, {})
+        if val:
+            sub[stored] = val
+        else:
+            sub.pop(stored, None)
+        if not sub:
+            ij.pop(other, None)
+    if not any(ij.get(lang, {}).values()):
+        ij.pop(lang, None)
+    return ij
+
+
+def _localize_named_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach localized lname/ldesc for applications/groups. 应用/分组本地化展示名。"""
+    for r in rows:
+        r["lname"], r["ldesc"] = i18n.localize_named(r)
+    return rows
+
+
+def _picker_named(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Localized name/desc in place, for checkbox/select pickers. 选择器用本地化名称。"""
+    for r in rows:
+        r["name"], r["desc"] = i18n.localize_named(r)
+    return rows
+
+
+def _script_row_map(ids) -> dict[int, dict[str, Any]]:
+    ids = sorted({int(x) for x in ids if x})
+    if not ids:
+        return {}
+    q = ",".join("?" for _ in ids)
+    return {int(r["id"]): r for r in models.query(f"SELECT * FROM scripts WHERE id IN ({q})", ids)}
+
+
+def _application_name_map(ids) -> dict[int, str]:
+    """Map application ids to localized names. 应用 id → 本地化名。"""
+    ids = sorted({int(x) for x in ids if x})
+    if not ids:
+        return {}
+    q = ",".join("?" for _ in ids)
+    rows = models.query(f"SELECT * FROM applications WHERE id IN ({q})", ids)
+    return {int(r["id"]): i18n.localize_named(r)[0] for r in rows}
+
+
+def _app_label(app_ids, name_map: dict[int, str]) -> str:
+    names = [name_map.get(int(i), f"#{i}") for i in (app_ids or [])]
+    return "、".join(names) if names else i18n.t("reports2.unassigned")
+
+
+def _localize_detail(detail: dict[str, Any] | None):
+    """Rewrite report-detail app/script names by the viewer language. 报告详情应用/脚本名按查看语言解析。"""
+    if not detail or not detail.get("apps"):
+        return detail
+    sids = [r.get("script_id") for a in detail["apps"] for s in a.get("servers", []) for r in s.get("results", [])]
+    aids = [a.get("application_id") for a in detail["apps"] if a.get("application_id")]
+    rows = _script_row_map(sids)
+    amap = _application_name_map(aids)
+    for a in detail["apps"]:
+        aid = a.get("application_id")
+        a["name"] = amap.get(int(aid), a.get("name")) if aid else i18n.t("reports2.unassigned")
+        for s in a.get("servers", []):
+            for r in s.get("results", []):
+                sid = r.get("script_id")
+                row = rows.get(int(sid)) if sid else None
+                if row:
+                    r["script"] = i18n.localize_script(row)[0]
+                    for it in r.get("items") or []:
+                        k = it.get("key")
+                        if k:
+                            it["name"] = i18n.localize_item(row, k)
+    return detail
+
+
+def _localize_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
+    """Localize summary app/script names by the viewer language. 摘要应用/脚本名按查看语言解析。"""
+    if not summary:
+        return summary or {}
+    issues = summary.get("issues") or []
+    rows = _script_row_map([it.get("script_id") for it in issues])
+    aid_set = {i for it in issues for i in (it.get("app_ids") or [])}
+    aid_set |= {a.get("id") for a in (summary.get("apps") or []) if a.get("id")}
+    amap = _application_name_map(aid_set)
+    for it in issues:
+        sid = it.get("script_id")
+        row = rows.get(int(sid)) if sid else None
+        if row:
+            it["script"] = i18n.localize_script(row)[0]
+            if it.get("item_key"):
+                it["item"] = i18n.localize_item(row, it["item_key"])
+        if it.get("app_ids"):
+            it["app"] = _app_label(it["app_ids"], amap)
+        elif it.get("app") == "未归属":
+            it["app"] = i18n.t("reports2.unassigned")
+    for a in summary.get("apps") or []:
+        aid = a.get("id")
+        if aid:
+            a["name"] = amap.get(int(aid), a.get("name"))
+        elif a.get("name") == "未归属":
+            a["name"] = i18n.t("reports2.unassigned")
+    summary["issues"] = issues
+    return summary
 
 
 def content_hash(text: str) -> str:
@@ -253,6 +370,132 @@ def _seed_item(seed_key: str) -> dict[str, Any] | None:
         if item["key"] == seed_key:
             return item
     return None
+
+
+def _t_or(key: str, fallback: str) -> str:
+    """i18n.t with a fallback when the key is missing. 带回退的翻译。"""
+    val = i18n.t(key)
+    return val if val != key else fallback
+
+
+_EXTRA_TEMPLATE_KEYS = [
+    "model.extra_none", "model.extra_deepseek_no_thinking",
+    "model.extra_effort_low", "model.extra_effort_high", "model.extra_openai_json",
+]
+
+
+def _localized_presets() -> tuple[dict[str, dict[str, str]], list[dict[str, str]]]:
+    """Model presets/templates with localized labels for the current language. 模型预设本地化标签。"""
+    presets = {
+        k: {**v, "label": _t_or("model.provider_" + k, v.get("label") or k)}
+        for k, v in model_client.PROVIDER_PRESETS.items()
+    }
+    templates = []
+    for i, tp in enumerate(model_client.EXTRA_JSON_TEMPLATES):
+        key = _EXTRA_TEMPLATE_KEYS[i] if i < len(_EXTRA_TEMPLATE_KEYS) else ""
+        templates.append({**tp, "label": _t_or(key, tp.get("label") or "") if key else tp.get("label")})
+    return presets, templates
+
+
+def _status_label(st: Any) -> str:
+    st = (st or "").upper()
+    if not st:
+        return ""
+    key = "status." + st.lower()
+    val = i18n.t(key)
+    return st if val == key else val
+
+
+def _render_report_md(run: dict[str, Any], summary: dict[str, Any], detail: dict[str, Any] | None) -> str:
+    """Render report markdown from structured data in the current language.
+
+    按当前语言由结构化数据（summary/detail）生成报告 Markdown。
+    """
+    t = i18n.t
+    site = models.get_setting("site_title", "PyPiMeOps") or "PyPiMeOps"
+    lines: list[str] = [t("report_md.title", site=site, id=run.get("id")), ""]
+    trig_key = "report_md.trigger_" + (run.get("trigger") or "")
+    trig = t(trig_key)
+    lines.append(t("report_md.trigger", trigger=(run.get("trigger") if trig == trig_key else trig)))
+    mode = summary.get("mode") or run.get("mode") or ""
+    lines.append(t("report_md.mode", mode=t("notify.mode_raw" if mode == "raw" else "notify.mode_model")))
+    lines.append(t("report_md.started", t=models.local_str(run.get("started"))))
+    lines.append(t("report_md.finished", t=models.local_str(run.get("finished"))))
+    dur = _duration(run.get("started"), run.get("finished"))
+    if dur:
+        lines.append(t("report_md.duration", t=dur))
+    if mode != "raw" and run.get("policy"):
+        lines.append(t("report_md.policy", policy=run.get("policy")))
+    targets = summary.get("targets_label") or ""
+    if targets:
+        lines.append(t("report_md.targets", targets=targets))
+    if summary.get("selected_count") is not None:
+        line = t("report_md.servers", selected=summary.get("selected_count", 0), executed=summary.get("executed_count", 0))
+        if summary.get("skipped_count"):
+            line += t("report_md.skipped", skipped=summary.get("skipped_count"))
+        lines.append(line)
+
+    apps = (detail or {}).get("apps") or []
+
+    def _bad(servers: list[dict[str, Any]]) -> int:
+        return sum(
+            1 for s in servers for r in (s.get("results") or [])
+            if (r.get("status") or "").upper() in ("FAIL", "ERROR", "WARN", "UNKNOWN")
+        )
+
+    lines += ["", t("report_md.summary_header"), "",
+              f"| {t('report_md.th_app')} | {t('report_md.th_status')} | {t('report_md.th_servers')} | {t('report_md.th_issues')} |",
+              "|------|------|--------|------|"]
+    for a in apps:
+        lines.append(f"| {a.get('name')} | {_status_label(a.get('status'))} | {len(a.get('servers') or [])} | {_bad(a.get('servers') or [])} |")
+    lines += ["", t("report_md.detail_header")]
+    for a in apps:
+        lines += ["", t("report_md.app", name=a.get("name"), status=_status_label(a.get("status"))), ""]
+        lines += [f"| {t('report_md.th_servers')} | {t('report_md.th_status')} | {t('report_md.th_issues')} |",
+                  "|--------|------|------|"]
+        for s in a.get("servers") or []:
+            n = _bad([s]) if s.get("results") else (1 if s.get("skipped") else 0)
+            lines.append(f"| {s.get('name')} | {_status_label(s.get('status'))} | {n} |")
+        for s in a.get("servers") or []:
+            lines += ["", t("report_md.server", name=s.get("name"), status=_status_label(s.get("status")))]
+            if s.get("conclusion"):
+                lines.append(t("report_md.conclusion", v=s["conclusion"]))
+            if s.get("consequence"):
+                lines.append(t("report_md.consequence", v=s["consequence"]))
+            if s.get("suggestion"):
+                lines.append(t("report_md.suggestion", v=s["suggestion"]))
+            if s.get("attention"):
+                lines.append(t("report_md.attention", v=s["attention"]))
+            results = s.get("results") or []
+            if not results:
+                lines.append(t("report_md.skipped_note") if s.get("skipped") else t("report_md.no_result"))
+                continue
+            good: list[str] = []
+            for r in results:
+                st = (r.get("status") or "").upper()
+                items = r.get("items") or []
+                if st in ("FAIL", "ERROR", "WARN", "UNKNOWN") or (r.get("meta") or {}).get("DISPLAY"):
+                    lines += ["", t("report_md.script", name=r.get("script") or ""), "",
+                              t("report_md.script_status", status=_status_label(st), source=r.get("source") or "")]
+                    if items:
+                        lines += ["", f"| {t('report_md.th_item')} | {t('report_md.th_value')} | {t('report_md.th_threshold')} | {t('report_md.th_verdict')} |",
+                                  "|------|------|------|------|"]
+                        for it in items:
+                            verdict = _status_label((it.get("status") or "").upper())
+                            if it.get("excess"):
+                                verdict += f" ({it['excess']})"
+                            val = (str(it.get("value", "")) + (" " + it["unit"] if it.get("unit") else "")).strip()
+                            lines.append(f"| {it.get('name')} | {val} | {it.get('threshold') or ''} | {verdict} |")
+                    elif r.get("raw"):
+                        lines += ["", "```text", (r.get("raw") or "").rstrip(), "```"]
+                    elif r.get("error"):
+                        lines.append(r.get("error"))
+                else:
+                    good.append(r.get("script") or "")
+            if good:
+                lines += ["", t("report_md.other_ok", n=len(good), names="、".join(good))]
+    lines.append("")
+    return "\n".join(lines)
 
 
 _file_handler: logging.Handler | None = None
@@ -477,6 +720,7 @@ def create_app() -> Flask:
     @app.context_processor
     def _inject():
         settings = models.get_settings()
+        _presets, _templates = _localized_presets()
         return {
             "csrf_token": g.get("csrf", ""),
             "client_ip": g.get("ip", ""),
@@ -486,8 +730,8 @@ def create_app() -> Flask:
             "whitelist_ack": settings.get("whitelist_ack") == "true",
             "engine_running": engine.is_running(),
             "nav_active": request.endpoint or "",
-            "PROVIDER_PRESETS": model_client.PROVIDER_PRESETS,
-            "EXTRA_JSON_TEMPLATES": model_client.EXTRA_JSON_TEMPLATES,
+            "PROVIDER_PRESETS": _presets,
+            "EXTRA_JSON_TEMPLATES": _templates,
             "json_or": json_or,
             "now_local_str": now_local_str,
             "languages": i18n.languages(),
@@ -496,6 +740,7 @@ def create_app() -> Flask:
         }
 
     app.jinja_env.globals["t"] = i18n.t
+    app.jinja_env.globals["tn"] = i18n.tn
 
     @app.template_filter("local")
     def _local(ts: str) -> str:
@@ -539,13 +784,13 @@ def create_app() -> Flask:
         runs = models.query("SELECT * FROM run_history ORDER BY id DESC LIMIT 10")
         servers = models.fetch_all("servers")
         latest = runs[0] if runs else None
-        summary = json_or((latest or {}).get("summary"), {})
-        applications = [a for a in models.fetch_all("applications") if a.get("enabled", 1)]
+        summary = _localize_summary(json_or((latest or {}).get("summary"), {}))
+        applications = _localize_named_rows([a for a in models.fetch_all("applications") if a.get("enabled", 1)])
         apps_health = summary.get("apps") or []
         if not apps_health:
             amap = engine.application_servers()
             apps_health = [
-                {"name": a["name"], "status": "-", "server_count": len(amap.get(int(a["id"]), []))}
+                {"name": a["lname"] or a["name"], "status": "-", "server_count": len(amap.get(int(a["id"]), []))}
                 for a in applications
             ]
         status_counts: dict[str, int] = {}
@@ -589,7 +834,7 @@ def create_app() -> Flask:
         gid = parse_int(request.form.get("id")) or None
         name = (request.form.get("name") or "").strip()
         if not name:
-            flash("分组名称必填", "danger")
+            flash(i18n.t("groups.err_name_required"), "danger")
             return redirect(url_for("groups"))
         data = {
             "name": name,
@@ -600,20 +845,20 @@ def create_app() -> Flask:
         try:
             json.loads(data["prom_labels_json"])
         except ValueError:
-            flash("组级标签需为合法 JSON", "danger")
+            flash(i18n.t("groups.err_labels_json"), "danger")
             return redirect(url_for("groups"))
         save_object("group", gid, data, g.ip, name)
-        flash("分组已保存", "success")
+        flash(i18n.t("groups.saved"), "success")
         return redirect(url_for("groups"))
 
     @app.route("/groups/<int:gid>/delete", methods=["POST"])
     def groups_delete(gid: int):
         refs = references_to("group", gid)
         if refs:
-            flash("存在引用，无法删除：" + "、".join(refs), "danger")
+            flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
             return redirect(url_for("groups"))
         delete_object("group", gid, g.ip)
-        flash("分组已删除", "success")
+        flash(i18n.t("groups.deleted"), "success")
         return redirect(url_for("groups"))
 
     @app.route("/groups/<int:gid>/history")
@@ -659,7 +904,7 @@ def create_app() -> Flask:
         aid = parse_int(request.form.get("id")) or None
         name = (request.form.get("name") or "").strip()
         if not name:
-            flash("应用名称必填", "danger")
+            flash(i18n.t("applications.err_name_required"), "danger")
             return redirect(url_for("applications"))
         server_ids = parse_ids(request.form.getlist("member_servers"))
         group_ids = parse_ids(request.form.getlist("member_groups"))
@@ -683,13 +928,13 @@ def create_app() -> Flask:
             detail={"name": name, "servers": server_ids, "groups": group_ids},
             after_write=_write_members,
         )
-        flash("应用已保存", "success")
+        flash(i18n.t("applications.saved"), "success")
         return redirect(url_for("applications"))
 
     @app.route("/applications/<int:aid>/delete", methods=["POST"])
     def applications_delete(aid: int):
         delete_object("application", aid, g.ip)
-        flash("应用已删除", "success")
+        flash(i18n.t("applications.deleted"), "success")
         return redirect(url_for("applications"))
 
     @app.route("/applications/<int:aid>/history")
@@ -725,8 +970,8 @@ def create_app() -> Flask:
         return render_template(
             "servers.html",
             servers=rows,
-            groups={int(r["id"]): r for r in models.fetch_all("groups")},
-            all_groups=models.fetch_all("groups"),
+            groups={int(r["id"]): r for r in _picker_named(models.fetch_all("groups"))},
+            all_groups=_picker_named(models.fetch_all("groups")),
             credentials=credentials,
             cred_names={c["key"]: c["name"] for c in credentials},
             scripts=_picker_scripts(models.fetch_all("scripts", "kind='shell'")),
@@ -747,7 +992,7 @@ def create_app() -> Flask:
         return render_template(
             "server_detail.html",
             server=server,
-            groups=models.fetch_all("groups"),
+            groups=_picker_named(models.fetch_all("groups")),
             credentials=credentials,
             cred_names={c["key"]: c["name"] for c in credentials},
             shell_scripts=_picker_scripts(models.fetch_all("scripts", "kind='shell'")),
@@ -975,7 +1220,7 @@ def create_app() -> Flask:
     def datasources_delete(did: int):
         refs = references_to("datasource", did)
         if refs:
-            flash("存在引用，无法删除：" + "、".join(refs), "danger")
+            flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
             return redirect(url_for("datasources"))
         delete_object("datasource", did, g.ip)
         flash("数据源已删除", "success")
@@ -1169,7 +1414,7 @@ def create_app() -> Flask:
     def credentials_delete(key: str):
         refs = references_to("credential", key)
         if refs:
-            flash("存在引用，无法删除：" + "、".join(refs), "danger")
+            flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
             return redirect(url_for("credentials"))
         with models.db() as conn:
             entry = vault.get_entry(conn, key)
@@ -1216,7 +1461,7 @@ def create_app() -> Flask:
                 r["meta_warn"] = bool(collectors.meta_warnings(content, r.get("kind") or "shell"))
             except Exception:  # noqa: BLE001
                 r["meta_warn"] = False
-            r["lname"], r["ldesc"] = i18n.localize_script(r)
+            r["lname"], r["ldesc"], r["lmeta"] = i18n.localize_script(r)
             if r.get("seed_key"):
                 r["dirty"] = bool(content) and content_hash(content) != (r.get("seed_hash") or "")
             else:
@@ -1242,7 +1487,7 @@ def create_app() -> Flask:
             "updated_at": models.utcnow(),
         }
         new_id = save_object("script", None, data, g.ip, new_name, script_content=content)
-        flash(f"已复制脚本「{src.get('name')}」", "success")
+        flash(i18n.t("scripts.cloned", name=src.get("name") or ""), "success")
         return redirect(url_for("script_detail", sid=new_id))
 
     @app.route("/scripts/help")
@@ -1255,6 +1500,9 @@ def create_app() -> Flask:
             "script_detail.html",
             script={"id": 0, "name": "", "filename": "", "kind": "shell", "desc": ""},
             content="",
+            i18n_map={},
+            languages=i18n.languages(),
+            current_lang=i18n.current(),
         )
 
     @app.route("/scripts/<int:sid>")
@@ -1263,12 +1511,15 @@ def create_app() -> Flask:
         if not script:
             abort(404)
         content = backup.read_script(script)
-        script["lname"], script["ldesc"] = i18n.localize_script(script)
+        script["lname"], script["ldesc"], script["lmeta"] = i18n.localize_script(script)
         script["dirty"] = bool(script.get("seed_key")) and bool(content) and content_hash(content) != (script.get("seed_hash") or "")
         return render_template(
             "script_detail.html",
             script=script,
             content=content,
+            i18n_map=i18n.parse_i18n(script),
+            languages=i18n.languages(),
+            current_lang=i18n.current(),
             meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell"),
         )
 
@@ -1281,6 +1532,13 @@ def create_app() -> Flask:
         if not item:
             flash("未找到对应的内置脚本定义", "danger")
             return redirect(url_for("script_detail", sid=sid))
+        entry_zh = {"name": item["name"]["zh-CN"], "desc": item["desc"]["zh-CN"]}
+        entry_en = {"name": item["name"]["en"], "desc": item["desc"]["en"]}
+        items = item.get("items") or {}
+        if items.get("zh-CN"):
+            entry_zh["items"] = items["zh-CN"]
+        if items.get("en"):
+            entry_en["items"] = items["en"]
         data = {
             "name": item["name"]["zh-CN"],
             "filename": item["file"].split("/", 1)[1],
@@ -1288,11 +1546,7 @@ def create_app() -> Flask:
             "desc": item["desc"]["zh-CN"],
             "seed_key": item["key"],
             "seed_hash": content_hash(item["content"]),
-            "i18n_json": json.dumps(
-                {"zh-CN": {"name": item["name"]["zh-CN"], "desc": item["desc"]["zh-CN"]},
-                 "en": {"name": item["name"]["en"], "desc": item["desc"]["en"]}},
-                ensure_ascii=False,
-            ),
+            "i18n_json": json.dumps({"zh-CN": entry_zh, "en": entry_en}, ensure_ascii=False),
             "updated_at": models.utcnow(),
         }
         save_object("script", sid, data, g.ip, data["name"], script_content=item["content"])
@@ -1305,7 +1559,7 @@ def create_app() -> Flask:
         if not src:
             abort(404)
         content = backup.read_script(src)
-        _, base_desc = i18n.localize_script(src)
+        _, base_desc, _ = i18n.localize_script(src)
         new_name = (request.form.get("name") or "").strip() or ((src.get("name") or "script") + " copy")
         data = {
             "name": new_name,
@@ -1325,7 +1579,7 @@ def create_app() -> Flask:
         kind = request.form.get("kind") or "shell"
         content = request.form.get("content") or ""
         if not name:
-            flash("脚本名称必填", "danger")
+            flash(i18n.t("scripts.err_name_required"), "danger")
             return redirect(url_for("scripts"))
         if kind == "shell":
             import subprocess
@@ -1337,41 +1591,53 @@ def create_app() -> Flask:
             try:
                 proc = subprocess.run(["bash", "-n", tmp], capture_output=True, text=True)
                 if proc.returncode != 0:
-                    flash(f"bash -n 校验失败：{proc.stderr.strip()}", "danger")
+                    flash(i18n.t("scripts.err_bash_n", err=proc.stderr.strip()), "danger")
                     return redirect(url_for("scripts"))
             finally:
                 os.unlink(tmp)
         else:
             errors = collectors.validate_promql(content)
             if errors:
-                flash("PromQL 校验失败：" + "；".join(errors), "danger")
+                flash(i18n.t("scripts.err_promql", err="；".join(errors)), "danger")
                 return redirect(url_for("scripts"))
         warns = collectors.meta_warnings(content, kind)
         meta_level = models.get_setting("require_script_metadata", "warn")
         if warns and meta_level == "enforce":
-            flash("元数据不完整，已阻止保存（强制模式）：" + "；".join(warns), "danger")
+            flash(i18n.t("scripts.err_meta_enforce", err="；".join(warns)), "danger")
             return redirect(url_for("script_detail", sid=sid) if sid else url_for("scripts"))
         if warns and meta_level != "off":
-            flash("元数据不完整（已保存）：" + "；".join(warns), "warning")
+            flash(i18n.t("scripts.warn_meta_saved", err="；".join(warns)), "warning")
+        # Per-language name/desc/meta. The form's Basic fields edit the current
+        # UI language; the translation panel edits the others.
+        lang = (request.form.get("lang") or i18n.current() or i18n.BASE_LANG).strip()
+        desc_val = (request.form.get("desc") or "").strip()
+        cur = models.fetch_one("scripts", sid) if sid else None
+        ij = _i18n_form_values(
+            cur, lang, {"name": name, "desc": desc_val},
+            {"name": "name", "desc": "desc", "meta": "meta_name"},
+        )
         data = {
-            "name": name,
             "filename": (request.form.get("filename") or "").strip(),
             "kind": kind,
-            "desc": (request.form.get("desc") or "").strip(),
+            "i18n_json": json.dumps(ij, ensure_ascii=False),
             "updated_at": models.utcnow(),
         }
+        # Base columns: user scripts always; built-ins only when editing the base language.
+        if (not cur) or (not cur.get("seed_key")) or lang == i18n.BASE_LANG:
+            data["name"] = name
+            data["desc"] = desc_val
         new_id = save_object("script", sid, data, g.ip, name, script_content=content)
-        flash("脚本已保存", "success")
+        flash(i18n.t("scripts.saved"), "success")
         return redirect(url_for("script_detail", sid=new_id))
 
     @app.route("/scripts/<int:sid>/delete", methods=["POST"])
     def scripts_delete(sid: int):
         refs = references_to("script", sid)
         if refs:
-            flash("存在引用，无法删除：" + "、".join(refs), "danger")
+            flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
             return redirect(url_for("scripts"))
         delete_object("script", sid, g.ip)
-        flash("脚本已删除", "success")
+        flash(i18n.t("scripts.deleted"), "success")
         return redirect(url_for("scripts"))
 
     @app.route("/scripts/validate", methods=["POST"])
@@ -1463,7 +1729,7 @@ def create_app() -> Flask:
     def models_delete(mid: int):
         refs = references_to("model", mid)
         if refs:
-            flash("存在引用，无法删除：" + "、".join(refs), "danger")
+            flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
             return redirect(url_for("models_page"))
         delete_object("model", mid, g.ip)
         flash("模型已删除", "success")
@@ -1590,7 +1856,7 @@ def create_app() -> Flask:
         name = (request.form.get("name") or "").strip()
         ntype = request.form.get("type") or "smtp"
         if not name:
-            flash("通知名称必填", "danger")
+            flash(i18n.t("notifications.err_name_required"), "danger")
             return redirect(url_for("notifications"))
         if ntype == "smtp":
             config = {
@@ -1619,13 +1885,13 @@ def create_app() -> Flask:
             "created_at": models.utcnow(),
         }
         save_object("notification", nid, data, g.ip, name)
-        flash("通知已保存", "success")
+        flash(i18n.t("notifications.saved"), "success")
         return redirect(url_for("notifications"))
 
     @app.route("/notifications/<int:nid>/delete", methods=["POST"])
     def notifications_delete(nid: int):
         delete_object("notification", nid, g.ip)
-        flash("通知已删除", "success")
+        flash(i18n.t("notifications.deleted"), "success")
         return redirect(url_for("notifications"))
 
     @app.route("/notifications/<int:nid>/test", methods=["POST"])
@@ -1634,7 +1900,10 @@ def create_app() -> Flask:
         if not n:
             abort(404)
         ok, msg = notify.send_test(n, get_config().load_secrets())
-        flash(("测试消息发送成功" if ok else "测试消息发送失败：" + msg), "success" if ok else "danger")
+        flash(
+            i18n.t("notifications.test_ok") if ok else i18n.t("notifications.test_fail", err=msg),
+            "success" if ok else "danger",
+        )
         return redirect(url_for("notifications"))
 
     # ---- 定时任务
@@ -1661,10 +1930,10 @@ def create_app() -> Flask:
             "schedules.html",
             schedules=rows,
             servers=models.fetch_all("servers"),
-            groups=models.fetch_all("groups"),
+            groups=_picker_named(models.fetch_all("groups")),
             datasources=models.fetch_all("datasources"),
             scripts=_picker_scripts(models.fetch_all("scripts")),
-            applications=[a for a in models.fetch_all("applications") if a.get("enabled", 1)],
+            applications=_picker_named([a for a in models.fetch_all("applications") if a.get("enabled", 1)]),
             app_servers=engine.application_servers(),
             enabled_count=sum(1 for s in all_rows if s.get("enabled")),
             total_all=len(all_rows),
@@ -1784,7 +2053,7 @@ def create_app() -> Flask:
             return redirect(url_for("run_wait", after=prev_max))
 
         servers = models.fetch_all("servers")
-        groups = models.fetch_all("groups")
+        groups = _picker_named(models.fetch_all("groups"))
         server_items = [{"id": s["id"], "name": f"{s.get('hostname')} ({s.get('ip')})", "kind": ""} for s in servers]
         group_servers: dict[int, list[int]] = {}
         for s in servers:
@@ -1805,7 +2074,7 @@ def create_app() -> Flask:
             datasources=models.fetch_all("datasources"),
             scripts=_picker_scripts(models.fetch_all("scripts")),
             script_targets=engine.script_server_bindings(),
-            applications=[a for a in models.fetch_all("applications") if a.get("enabled", 1)],
+            applications=_picker_named([a for a in models.fetch_all("applications") if a.get("enabled", 1)]),
             app_servers=engine.application_servers(),
             group_servers=group_servers,
             all_server_ids=all_server_ids,
@@ -1917,7 +2186,7 @@ def create_app() -> Flask:
         )[0]["c"]
 
         def _decorate(r):
-            sm = json_or(r.get("summary"), {})
+            sm = _localize_summary(json_or(r.get("summary"), {}))
             r["summary_obj"] = sm
             r["duration"] = _duration(r.get("started"), r.get("finished"))
             iss = sm.get("issues") or []
@@ -1929,8 +2198,8 @@ def create_app() -> Flask:
         # "Needs attention" grouped by the run's target type: application / group / server
         if status == "need":
             all_rows = [_decorate(dict(r)) for r in models.query(f"SELECT * FROM run_history{clause} ORDER BY id DESC", tuple(params))]
-            _apps = {int(a["id"]): a["name"] for a in models.fetch_all("applications")}
-            _groups = {int(g["id"]): g["name"] for g in models.fetch_all("groups")}
+            _apps = {int(a["id"]): a["name"] for a in _picker_named(models.fetch_all("applications"))}
+            _groups = {int(g["id"]): g["name"] for g in _picker_named(models.fetch_all("groups"))}
             _servers = {int(s["id"]): (s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in models.fetch_all("servers")}
 
             def _keys(r):
@@ -1959,7 +2228,6 @@ def create_app() -> Flask:
             return render_template(
                 "reports.html", grouped=grouped, status=status, result=result, trigger=trigger, start=start, end=end,
                 total=len(all_rows), total_all=total_all, counts=counts, need_count=need_count,
-                status_cn={"success": "成功", "partial": "部分失败", "error": "失败", "running": "运行中"},
                 status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
             )
 
@@ -1975,7 +2243,6 @@ def create_app() -> Flask:
             "reports.html", reports=rows, status=status, result=result, trigger=trigger, start=start, end=end,
             page=page, pages=pages, total=total, per_page=per_page, total_all=total_all,
             counts=counts, need_count=need_count,
-            status_cn={"success": "成功", "partial": "部分失败", "error": "失败", "running": "运行中"},
             status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
         )
 
@@ -1984,11 +2251,30 @@ def create_app() -> Flask:
         row = models.fetch_one("run_history", rid)
         if not row:
             abort(404)
-        content = _read_report(row.get("report_file") or "")
+        # Regenerate from structured data when a language is requested and available.
+        # 指定语言且存在结构化数据时，按该语言从结构化数据重渲染 `.md`。
+        lang = (request.args.get("lang") or "").strip()
+        detail = None
+        drow = models.query("SELECT detail_json FROM run_results WHERE run_id=?", (rid,))
+        if drow:
+            try:
+                detail = json.loads(drow[0]["detail_json"] or "{}")
+            except ValueError:
+                detail = None
         from flask import Response
 
+        if lang and i18n.has(lang) and detail:
+            prev = i18n.current()
+            i18n.set_current(lang)
+            try:
+                summary = _localize_summary(json_or(row.get("summary"), {}))
+                md = _render_report_md(row, summary, _localize_detail(detail))
+            finally:
+                i18n.set_current(prev)
+        else:
+            md = _read_report(row.get("report_file") or "")
         return Response(
-            content,
+            md,
             mimetype="text/markdown",
             headers={"Content-Disposition": f"attachment; filename=pypimeops_report_{rid}.md"},
         )
@@ -2014,9 +2300,11 @@ def create_app() -> Flask:
             duration = f"{_sec // 60}m{_sec % 60}s" if _sec >= 60 else f"{_sec}s"
         except (ValueError, TypeError):
             duration = ""
+        detail = _localize_detail(detail)
+        summary = _localize_summary(json_or(row.get("summary"), {}))
         return render_template(
             "report_detail.html", run=row, content=content,
-            summary=json_or(row.get("summary"), {}), detail=detail, duration=duration,
+            summary=summary, detail=detail, duration=duration,
         )
 
     def _read_report(filename: str) -> str:
@@ -2335,15 +2623,26 @@ def create_app() -> Flask:
             "ssh_connect_timeout",
             "ssh_command_timeout",
         ]
+        new_lang = ""
         for key in keys:
             if key in request.form:
-                set_setting_versioned(key, (request.form.get(key) or "").strip(), g.ip)
+                val = (request.form.get(key) or "").strip()
+                if key == "default_language":
+                    new_lang = val
+                set_setting_versioned(key, val, g.ip)
         for key in ("sanitize_enabled", "warn_push_enabled", "notify_oversize_enabled", "notify_ambiguous_enabled"):
             set_setting_versioned(key, "true" if request.form.get(key) else "false", g.ip)
         apply_log_level(models.get_setting("app_log_level", "INFO"))
         i18n.set_fallback(models.get_setting("default_language", "zh-CN") or "zh-CN")
-        flash("设置已保存", "success")
-        return redirect(url_for("settings_page"))
+        flash(i18n.t("settings.saved"), "success")
+        resp = redirect(url_for("settings_page"))
+        # The language dropdown stores a cookie that takes priority; keep it in
+        # sync so the new default takes effect immediately.
+        # 语言下拉会写 cookie 且优先级更高，这里同步，使新默认语言立即生效。
+        if new_lang and i18n.has(new_lang):
+            i18n.set_current(new_lang)
+            resp.set_cookie("lang", new_lang, max_age=365 * 86400, samesite="Lax")
+        return resp
 
     @app.route("/settings/reload_locales", methods=["POST"])
     def settings_reload_locales():

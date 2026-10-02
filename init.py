@@ -73,13 +73,14 @@ def _seed_scripts(force: bool = False) -> dict:
         chash = _hash(content)
         name = item["name"]["zh-CN"]
         desc = item["desc"]["zh-CN"]
-        i18n = json.dumps(
-            {
-                "zh-CN": {"name": name, "desc": desc},
-                "en": {"name": item["name"]["en"], "desc": item["desc"]["en"]},
-            },
-            ensure_ascii=False,
-        )
+        entry_zh: dict = {"name": name, "desc": desc}
+        entry_en: dict = {"name": item["name"]["en"], "desc": item["desc"]["en"]}
+        items = item.get("items") or {}
+        if items.get("zh-CN"):
+            entry_zh["items"] = items["zh-CN"]
+        if items.get("en"):
+            entry_en["items"] = items["en"]
+        i18n = json.dumps({"zh-CN": entry_zh, "en": entry_en}, ensure_ascii=False)
         row = by_seed.get(key)
         if row is None:
             cand = by_name.get((name, kind))
@@ -115,16 +116,30 @@ def _seed_scripts(force: bool = False) -> dict:
         cur = backup.read_script(row)
         cur_h = _hash(cur)
         was_seed = bool(row.get("seed_key"))
-        modified = (not force) and (cur_h != (row.get("seed_hash") if was_seed else chash))
+        try:
+            cur_ij = json.loads(row.get("i18n_json") or "{}")
+        except (ValueError, TypeError):
+            cur_ij = {}
+        if not isinstance(cur_ij, dict):
+            cur_ij = {}
+        seed_ij = json.loads(i18n)
+        # Content edits OR user-edited name/desc translations count as "modified".
+        # Item-label maps ("items") are seed-managed and don't block upgrades.
+        # 内容修改或用户改过的 name/desc 视为“已修改”；item 标签映射由种子维护，不阻塞升级。
+        def _cmp(ij: dict) -> dict:
+            return {c: {k2: v2 for k2, v2 in v.items() if k2 != "items"} for c, v in ij.items() if isinstance(v, dict)}
+
+        modified = (not force) and (
+            cur_h != (row.get("seed_hash") if was_seed else chash)
+            or (was_seed and bool(cur_ij) and _cmp(cur_ij) != _cmp(seed_ij))
+        )
         if modified:
-            # Keep user content; still link the seed + translations so it shows multi-language.
+            # Keep user content and translations; only link the seed version.
+            upd = {"seed_key": key, "seed_hash": chash, "updated_at": models.utcnow()}
+            if not cur_ij:
+                upd["i18n_json"] = i18n
             with models.db() as conn:
-                models.update(
-                    conn,
-                    "scripts",
-                    sid,
-                    {"seed_key": key, "seed_hash": chash, "i18n_json": i18n, "updated_at": models.utcnow()},
-                )
+                models.update(conn, "scripts", sid, upd)
             kept += 1
             conflicts.append({"id": sid, "name": row.get("name") or name, "seed_name": name, "seed_key": key})
             continue

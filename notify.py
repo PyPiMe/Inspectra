@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import base64
+import copy
 import hashlib
 import hmac
 import json
@@ -19,9 +20,46 @@ from typing import Any
 
 import requests
 
+import i18n
 import models
 
 RETRY_TIMES = 2
+
+
+def _default_lang() -> str:
+    try:
+        return (models.get_setting("default_language", "zh-CN") or "zh-CN").strip() or "zh-CN"
+    except Exception:  # noqa: BLE001
+        return "zh-CN"
+
+
+def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
+    """Deep-copy summary and resolve app/script names for a language. 深拷贝并按语言解析名称。"""
+    s = copy.deepcopy(summary or {})
+    for a in s.get("apps") or []:
+        aid = a.get("id")
+        if aid:
+            row = models.fetch_one("applications", int(aid))
+            if row:
+                a["name"] = i18n.localize_named(row, lang)[0]
+    for it in s.get("issues") or []:
+        aids = it.get("app_ids") or []
+        if aids:
+            names = []
+            for aid in aids:
+                row = models.fetch_one("applications", int(aid))
+                names.append(i18n.localize_named(row, lang)[0] if row else f"#{aid}")
+            it["app"] = "、".join(names)
+        elif it.get("app") == "未归属":
+            it["app"] = i18n.t_for(lang, "reports2.unassigned")
+        sid = it.get("script_id")
+        if sid:
+            row = models.fetch_one("scripts", int(sid))
+            if row:
+                it["script"] = i18n.localize_script(row, lang)[0]
+                if it.get("item_key"):
+                    it["item"] = i18n.localize_item(row, it["item_key"], lang)
+    return s
 
 
 def _site_title() -> str:
@@ -41,7 +79,8 @@ def _parse_json(raw: Any) -> dict[str, Any]:
         return {}
 
 
-def send_smtp(notification: dict[str, Any], secrets: dict[str, str], subject: str, body: str) -> None:
+def send_smtp(notification: dict[str, Any], secrets: dict[str, str], subject: str, body: str, lang: str | None = None) -> None:
+    lang = lang or _default_lang()
     cfg = _parse_json(notification.get("config_json"))
     password = secrets.get(notification.get("secret_env") or "SMTP_PASSWORD", "")
     host = cfg.get("host")
@@ -51,7 +90,7 @@ def send_smtp(notification: dict[str, Any], secrets: dict[str, str], subject: st
     if isinstance(to_addrs, str):
         to_addrs = [a.strip() for a in to_addrs.replace(";", ",").split(",") if a.strip()]
     if not host or not from_addr or not to_addrs:
-        raise ValueError("SMTP 配置不完整（host/from/to 必填）")
+        raise ValueError(i18n.t_for(lang, "notify.err_smtp_config"))
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = Header(subject, "utf-8")
@@ -77,11 +116,12 @@ def send_smtp(notification: dict[str, Any], secrets: dict[str, str], subject: st
             pass
 
 
-def send_dingtalk(notification: dict[str, Any], secrets: dict[str, str], subject: str, body: str) -> None:
+def send_dingtalk(notification: dict[str, Any], secrets: dict[str, str], subject: str, body: str, lang: str | None = None) -> None:
+    lang = lang or _default_lang()
     cfg = _parse_json(notification.get("config_json"))
     webhook = cfg.get("webhook_url") or ""
     if not webhook:
-        raise ValueError("钉钉配置缺少 webhook_url")
+        raise ValueError(i18n.t_for(lang, "notify.err_dingtalk_webhook"))
     secret = secrets.get(notification.get("secret_env") or "DINGTALK_SECRET", "")
     url = webhook
     if secret:
@@ -105,17 +145,18 @@ def send_dingtalk(notification: dict[str, Any], secrets: dict[str, str], subject
     resp = requests.post(url, json=payload, timeout=20)
     data = resp.json() if resp.content else {}
     if resp.status_code != 200 or data.get("errcode") not in (0, None):
-        raise ValueError(f"钉钉发送失败：{resp.status_code} {data}")
+        raise ValueError(i18n.t_for(lang, "notify.err_dingtalk_failed", status=resp.status_code, data=data))
 
 
-def send_one(notification: dict[str, Any], secrets: dict[str, str], subject: str, body: str) -> None:
+def send_one(notification: dict[str, Any], secrets: dict[str, str], subject: str, body: str, lang: str | None = None) -> None:
+    lang = lang or _default_lang()
     ntype = (notification.get("type") or "").lower()
     if ntype == "smtp":
-        send_smtp(notification, secrets, subject, body)
+        send_smtp(notification, secrets, subject, body, lang)
     elif ntype == "dingtalk":
-        send_dingtalk(notification, secrets, subject, body)
+        send_dingtalk(notification, secrets, subject, body, lang)
     else:
-        raise ValueError(f"未知通知类型：{ntype}")
+        raise ValueError(i18n.t_for(lang, "notify.err_unknown_type", type=ntype))
 
 
 def send_with_retry(
@@ -124,11 +165,12 @@ def send_with_retry(
     subject: str,
     body: str,
     retries: int = RETRY_TIMES,
+    lang: str | None = None,
 ) -> tuple[bool, str]:
     last = ""
     for attempt in range(retries + 1):
         try:
-            send_one(notification, secrets, subject, body)
+            send_one(notification, secrets, subject, body, lang)
             return True, ""
         except Exception as exc:  # noqa: BLE001
             last = str(exc)
@@ -138,75 +180,88 @@ def send_with_retry(
 
 
 def send_test(notification: dict[str, Any], secrets: dict[str, str]) -> tuple[bool, str]:
+    lang = _default_lang()
     return send_with_retry(
         notification,
         secrets,
-        subject=f"[{_site_title()}] 通知连通性测试",
-        body="这是一条来自 PyPiMeOps 的测试消息。收到即表示通知配置可用。",
+        subject="[" + _site_title() + "] " + i18n.t_for(lang, "notify.test_subject"),
+        body=i18n.t_for(lang, "notify.test_body"),
+        lang=lang,
     )
 
 
 def send_all(
     notifications: list[dict[str, Any]],
     secrets: dict[str, str],
-    subject: str,
-    body: str,
+    summary: dict[str, Any],
+    targets_label: str = "",
 ) -> list[dict[str, Any]]:
-    """向全部启用通知发送；返回失败清单 [{"id","name","error"}]。"""
+    """向全部启用通知按其语言发送；返回失败清单 [{"id","name","error"}]。
+
+    Send to all enabled notifications, each in its own language.
+    """
     failures: list[dict[str, Any]] = []
     for n in notifications:
         if not n.get("enabled", 1):
             continue
-        ok, err = send_with_retry(n, secrets, subject, body)
+        lang = _default_lang()
+        subject, body = build_alert(summary, targets_label, lang)
+        ok, err = send_with_retry(n, secrets, subject, body, lang=lang)
         if not ok:
             failures.append({"id": n.get("id"), "name": n.get("name"), "error": err})
     return failures
 
 
-def build_alert(summary: dict[str, Any], targets_label: str = "") -> tuple[str, str]:
-    """由 run summary 组装聚合告警（状态汇总 + 异常清单）。"""
-    status = summary.get("status") or "unknown"
-    subject = f"[{_site_title()}] 巡检告警（{status}）" + (f" - {targets_label}" if targets_label else "")
-    mode_label = "模型分析" if summary.get("mode") != "raw" else "仅原始结果"
-    issues = summary.get("issues") or []
+def build_alert(summary: dict[str, Any], targets_label: str = "", lang: str | None = None) -> tuple[str, str]:
+    """由 run summary 组装聚合告警（按语言本地化应用/脚本名与固定文案）。"""
+    lang = lang or _default_lang()
+    s = _localize_summary_for(summary or {}, lang)
+    status = s.get("status") or "unknown"
+    status_label = i18n.t_for(lang, "status." + status, default=status)
+    subject = i18n.t_for(lang, "notify.subject", site=_site_title(), status=status_label)
+    if targets_label:
+        subject += " - " + targets_label
+    mode_label = i18n.t_for(lang, "notify.mode_raw" if s.get("mode") == "raw" else "notify.mode_model")
+    issues = s.get("issues") or []
     lines = [
-        f"巡检状态：{status}",
-        f"分析模式：{mode_label}",
-        f"目标：{targets_label or '全部所选对象'}",
-        f"开始：{models.local_str(summary.get('started'))}  结束：{models.local_str(summary.get('finished'))}",
+        i18n.t_for(lang, "notify.status_line", status=status_label),
+        i18n.t_for(lang, "notify.mode_line", mode=mode_label),
+        i18n.t_for(lang, "notify.target_line", target=targets_label or i18n.t_for(lang, "notify.target_all")),
+        i18n.t_for(lang, "notify.time_line", start=models.local_str(s.get("started")), end=models.local_str(s.get("finished"))),
+        i18n.t_for(lang, "notify.counts_line", servers=s.get("server_count", 0), errors=s.get("error_count", 0), issues=len(issues)),
+        "",
+        i18n.t_for(lang, "notify.issues_header"),
     ]
-    lines.append(f"服务器：{summary.get('server_count', 0)}  异常：{summary.get('error_count', 0)}  问题项：{len(issues)}")
-    lines.append("")
-    lines.append("异常清单：")
     if issues:
-        _STATUS_CN = {"OK": "正常", "WARN": "警告", "FAIL": "失败", "ERROR": "异常", "UNKNOWN": "未知", "INFO": "信息"}
         by_app: dict[str, list[dict[str, Any]]] = {}
         for it in issues[:200]:
-            by_app.setdefault(it.get("app") or "未归属", []).append(it)
+            by_app.setdefault(it.get("app") or i18n.t_for(lang, "reports2.unassigned"), []).append(it)
         for app, items in by_app.items():
-            lines.append(f"【{app}】")
+            lines.append(i18n.t_for(lang, "notify.app_section", app=app))
             shown_sugg: set[str] = set()
             for it in items[:100]:
-                st = _STATUS_CN.get((it.get("status") or "").upper(), it.get("status") or "")
-                head = f"- [{st}] {it.get('server')} / {it.get('script')}"
+                st = i18n.t_for(lang, "status." + (it.get("status") or "").lower(), default=it.get("status") or "")
+                head = i18n.t_for(lang, "notify.issue_head", status=st, server=it.get("server"), script=it.get("script"))
                 if it.get("item"):
                     unit = it.get("unit") or ""
-                    detail = f"项「{it['item']}」实际 {it.get('value') or ''}" + (f" {unit}" if unit else "")
+                    detail = i18n.t_for(lang, "notify.item_detail", item=it["item"], value=it.get("value") or "")
+                    if unit:
+                        detail += " " + unit
                     if it.get("threshold"):
-                        detail += f"，阈值 {it['threshold']}"
+                        detail += i18n.t_for(lang, "notify.item_threshold", threshold=it["threshold"])
                     if it.get("excess"):
-                        detail += f"，超限 {it['excess']}"
+                        detail += i18n.t_for(lang, "notify.item_excess", excess=it["excess"])
                     lines.append(head)
-                    lines.append(f"    {detail}")
+                    lines.append("    " + detail)
                 else:
-                    lines.append(f"{head}：{it.get('message', '')}")
+                    lines.append(head + i18n.t_for(lang, "notify.colon") + (it.get("message") or ""))
                 sug = it.get("suggestion") or ""
                 if sug and it.get("server") not in shown_sugg:
                     shown_sugg.add(it.get("server"))
-                    lines.append(f"    建议：{sug}")
+                    lines.append("    " + i18n.t_for(lang, "notify.suggestion", suggestion=sug))
     else:
-        lines.append("- （无）")
-    if summary.get("notify_failures"):
+        lines.append(i18n.t_for(lang, "notify.no_issues"))
+    if s.get("notify_failures"):
         lines.append("")
-        lines.append(f"告警发送失败：{summary['notify_failures']}")
+        lines.append(i18n.t_for(lang, "notify.notify_failed", info=s["notify_failures"]))
     return subject, "\n".join(lines)

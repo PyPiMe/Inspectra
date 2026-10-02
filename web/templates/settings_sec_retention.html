@@ -2,24 +2,24 @@
   <div class="col-md-4"><label class="form-label mb-0">{{ t('settings.audit_retention') }}</label></div>
   <div class="col-md-3"><div class="input-group"><input class="form-control" name="audit_retention_days" value="{{ settings.audit_retention_days }}"><span class="input-group-text">{{ t('common.days') }}</span></div></div>
   <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="audit" onclick="return confirm('{{ t('settings.cleanup_confirm_audit') }}')">{{ t('settings.cleanup_now') }}</button></div>
-  <div class="col-md-2 small text-muted">{{ t('settings.current_count', n=audit_count) }}</div>
+  <div class="col-md-2 small text-muted">{{ tn('settings.current_count', n=audit_count) }}</div>
 </div>
 <div class="row g-2 align-items-center mb-2">
   <div class="col-md-4"><label class="form-label mb-0">{{ t('settings.applog_retention') }}</label></div>
   <div class="col-md-3"><div class="input-group"><input class="form-control" name="app_log_retention_days" value="{{ settings.app_log_retention_days }}"><span class="input-group-text">{{ t('common.days') }}</span></div></div>
   <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="applog" onclick="return confirm('{{ t('settings.cleanup_confirm_applog') }}')">{{ t('settings.cleanup_now') }}</button></div>
-  <div class="col-md-2 small text-muted">{{ t('settings.current_files', n=log_file_count) }}</div>
+  <div class="col-md-2 small text-muted">{{ tn('settings.current_files', n=log_file_count) }}</div>
 </div>
 <div class="row g-2 align-items-center mb-2">
   <div class="col-md-4"><label class="form-label mb-0">{{ t('settings.report_retention') }}</label></div>
   <div class="col-md-3"><div class="input-group"><input class="form-control" name="report_retention_days" value="{{ settings.report_retention_days }}"><span class="input-group-text">{{ t('common.days') }}</span></div></div>
   <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="reports" onclick="return confirm('{{ t('settings.cleanup_confirm_reports') }}')">{{ t('settings.cleanup_now') }}</button></div>
-  <div class="col-md-2 small text-muted">{{ t('settings.current_reports', n=report_count) }}</div>
+  <div class="col-md-2 small text-muted">{{ tn('settings.current_reports', n=report_count) }}</div>
 </div>
 <div class="row g-2 align-items-center">
   <div class="col-md-4"><label class="form-label mb-0">{{ t('settings.backup_retention') }}</label></div>
   <div class="col-md-3"><div class="input-group"><input class="form-control" name="backup_retention_days" value="{{ settings.backup_retention_days }}"><span class="input-group-text">{{ t('common.days') }}</span></div></div>
   <div class="col-md-3"><button type="submit" class="btn btn-outline-danger w-100" formaction="{{ url_for('settings_cleanup') }}" formmethod="post" name="kind" value="backups" onclick="return confirm('{{ t('settings.cleanup_confirm_backups') }}')">{{ t('settings.cleanup_now') }}</button></div>
-  <div class="col-md-2 small text-muted">{{ t('settings.current_count', n=backup_count) }}</div>
+  <div class="col-md-2 small text-muted">{{ tn('settings.current_count', n=backup_count) }}</div>
 </div>
 <div class="form-text mt-1">{{ t('settings.retention_hint') }}</div>

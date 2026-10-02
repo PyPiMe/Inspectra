@@ -10,6 +10,8 @@ import json
 import re
 from typing import Any, Iterable
 
+import i18n
+
 DEFAULT_RULES: list[dict[str, Any]] = [
     {"name": "private_key", "enabled": True, "pattern": r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z0-9 ]*PRIVATE KEY-----"},
     {"name": "password", "enabled": True, "pattern": r"(?i)\b(password|passwd|pwd|pass)\b\s*[:=]\s*\S+"},
@@ -97,5 +99,5 @@ def summarize_hits(hits: Iterable[dict[str, Any]]) -> str:
     parts = [f"{h['name']}×{h['count']}" for h in hits]
     total = sum(int(h.get("count", 0)) for h in hits)
     if not parts:
-        return "未命中"
-    return f"已脱敏 {total} 处（" + "、".join(parts) + "）"
+        return i18n.t("sanitize.none")
+    return i18n.t("sanitize.summary", total=total, parts="、".join(parts))

@@ -96,34 +96,112 @@ def t(key: str, **kw: Any) -> str:
     return key
 
 
-def localize_script(row: dict[str, Any], lang: str | None = None) -> tuple[str, str]:
-    """Resolve a script's display (name, desc) for the current language.
+def parse_i18n(row: dict[str, Any]) -> dict[str, dict[str, str]]:
+    """Parse an object's i18n_json into {lang: {name, desc, meta_name, ...}}. 解析多语言字段。"""
+    try:
+        data = json.loads(row.get("i18n_json") or "{}")
+    except (ValueError, TypeError):
+        data = {}
+    if not isinstance(data, dict):
+        return {}
+    return {str(k): v for k, v in data.items() if isinstance(v, dict)}
 
-    - Built-in (has seed_key): i18n_json[current] -> en -> zh-CN; a user-renamed
-      built-in falls back to the literal name/desc.
-    - User script: i18n_json[current] -> literal name/desc (author's base).
-    解析脚本展示名称/说明：内置缺语言回退 en，用户脚本回退作者字面值。
+
+def _pick(ij: dict[str, Any], lang: str, key: str, base: str) -> str:
+    """Fallback chain: requested lang -> en -> base literal. 回退链：当前 → en → 基座。"""
+    for code in (lang, "en", BASE_LANG):
+        entry = ij.get(code)
+        if isinstance(entry, dict) and entry.get(key):
+            return entry[key]
+    return base
+
+
+def localize_script(row: dict[str, Any], lang: str | None = None) -> tuple[str, str, str]:
+    """Resolve a script's (name, desc, meta_name) for a language.
+
+    Unified fallback: requested lang -> en -> base literal (name/desc; meta falls
+    back to the base name, i.e. the script body `# NAME`).
+    解析脚本展示名称/说明/元数据名：统一回退 当前 → en → 基座。
     """
     lang = lang or current()
-    try:
-        ij = json.loads(row.get("i18n_json") or "{}")
-    except (ValueError, TypeError):
-        ij = {}
-    if not isinstance(ij, dict):
-        ij = {}
+    ij = parse_i18n(row)
     base_name = row.get("name") or ""
     base_desc = row.get("desc") or ""
-    zh = ij.get(BASE_LANG) if isinstance(ij.get(BASE_LANG), dict) else None
-    if row.get("seed_key") and zh:
-        if base_name != (zh.get("name") or base_name) or base_desc != (zh.get("desc") or base_desc):
-            return base_name, base_desc
-        entry = ij.get(lang) or ij.get("en") or zh
+    base_meta = row.get("meta_name") or base_name
+    return (
+        _pick(ij, lang, "name", base_name),
+        _pick(ij, lang, "desc", base_desc),
+        _pick(ij, lang, "meta_name", base_meta),
+    )
+
+
+def localize_item(row: dict[str, Any], key: str, lang: str | None = None) -> str:
+    """Resolve an item display name from the script's per-language `items` map.
+
+    按脚本 `i18n_json[lang].items[<key>]` 解析指标项展示名；缺失回退 key 本身。
+    """
+    lang = lang or current()
+    key = str(key or "")
+    if not key:
+        return ""
+    ij = parse_i18n(row)
+    for code in (lang, "en", BASE_LANG):
+        entry = ij.get(code)
         if isinstance(entry, dict):
-            return entry.get("name") or base_name, entry.get("desc") or base_desc
-    entry = ij.get(lang)
-    if isinstance(entry, dict):
-        return entry.get("name") or base_name, entry.get("desc") or base_desc
-    return base_name, base_desc
+            items = entry.get("items")
+            if isinstance(items, dict) and items.get(key):
+                return items[key]
+    return key
+
+
+def localize_named(row: dict[str, Any], lang: str | None = None) -> tuple[str, str]:
+    """Resolve (name, desc) for config objects (applications/groups) via i18n_json.
+
+    解析配置对象（应用/分组）名称与说明。
+    """
+    lang = lang or current()
+    ij = parse_i18n(row)
+    return (
+        _pick(ij, lang, "name", row.get("name") or ""),
+        _pick(ij, lang, "desc", row.get("desc") or ""),
+    )
+
+
+def tn(key: str, n: Any, **kw: Any) -> str:
+    """Plural-aware translate: use `<key>.one`/`<key>.other` when present in the
+    current language, else fall back to `t(key)`. 复数：当前语言有 `.one/.other` 时用之，否则回退。
+
+    仅在**当前语言包**里找复数键，避免回退链跨语言串味。
+    """
+    try:
+        plural_key = key + (".one" if int(n) == 1 else ".other")
+    except (TypeError, ValueError):
+        return t(key, n=n, **kw)
+    text = _locales.get(current(), {}).get(plural_key)
+    if text is not None:
+        kw.setdefault("n", n)
+        try:
+            return text.format(**kw)
+        except (KeyError, IndexError, ValueError):
+            return text
+    return t(key, n=n, **kw)
+
+
+def t_for(lang: str, key: str, default: str | None = None, **kw: Any) -> str:
+    """Translate a key for an explicit language (fallback: default → zh-CN → default/key).
+
+    指定语言翻译（不回退到 zh-CN 之外），供通知等后台线程使用。
+    """
+    for code in (lang, _fallback, BASE_LANG):
+        text = _locales.get(code, {}).get(key)
+        if text is not None:
+            if kw:
+                try:
+                    return text.format(**kw)
+                except (KeyError, IndexError, ValueError):
+                    return text
+            return text
+    return default if default is not None else key
 
 
 def js_dict() -> dict[str, str]:

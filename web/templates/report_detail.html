@@ -10,7 +10,7 @@
     <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('reports') }}">&larr; {{ t('reports.title') }}</a>
       </div>
   <div>
-    {% if run.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=run.id) }}">{{ t('report_detail.download_md') }}</a>{% endif %}
+    {% if run.report_file %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('report_download', rid=run.id, lang=current_lang) }}">{{ t('report_detail.download_md') }}</a>{% endif %}
     {% if detail and detail.apps %}<button type="button" class="btn btn-sm btn-outline-secondary" id="expJson">{{ t('reports2.export_json') }}</button>
     <button type="button" class="btn btn-sm btn-outline-secondary" id="expCsv">{{ t('reports2.export_csv') }}</button>{% endif %}
     <form method="post" action="{{ url_for('report_delete', rid=run.id) }}" class="d-inline" onsubmit="return confirm('{{ t('reports.confirm_single') }}')">
@@ -113,7 +113,7 @@
             {% if sfail %}<span class="badge bg-danger">{{ sfail }}</span>{% endif %}
             {% if swarn %}<span class="badge bg-warning text-dark">{{ swarn }}</span>{% endif %}
             {% if s.attention %}<span class="text-muted small ms-2">{{ t('reports.attention') }} {{ s.attention }}</span>{% endif %}
-            <span class="ms-auto text-muted small">{{ t('reports.script_count', n=(s.results|length)) }}</span>
+            <span class="ms-auto text-muted small">{{ tn('reports.script_count', n=(s.results|length)) }}</span>
           </div>
           <div class="collapse {{ 'show' if bad or s.skipped else '' }}" id="{{ sid }}">
             <div class="card-body py-2">

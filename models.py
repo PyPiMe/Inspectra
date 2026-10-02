@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS groups (
     name TEXT NOT NULL UNIQUE,
     desc TEXT DEFAULT '',
     prom_labels_json TEXT DEFAULT '{}',
+    i18n_json TEXT DEFAULT '{}',
     created_at TEXT,
     updated_at TEXT
 );
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS applications (
     name TEXT NOT NULL,
     desc TEXT DEFAULT '',
     enabled INTEGER DEFAULT 1,
+    i18n_json TEXT DEFAULT '{}',
     created_at TEXT,
     updated_at TEXT
 );
@@ -118,6 +120,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     name TEXT NOT NULL,
     config_json TEXT DEFAULT '{}',
     secret_env TEXT DEFAULT '',
+    language TEXT DEFAULT '',
     enabled INTEGER DEFAULT 1,
     created_at TEXT
 );
@@ -218,15 +221,15 @@ CONFIG_TABLES = {
 }
 
 TABLE_COLUMNS: dict[str, list[str]] = {
-    "groups": ["name", "desc", "prom_labels_json", "created_at", "updated_at"],
-    "applications": ["name", "desc", "enabled", "created_at", "updated_at"],
+    "groups": ["name", "desc", "prom_labels_json", "i18n_json", "created_at", "updated_at"],
+    "applications": ["name", "desc", "enabled", "i18n_json", "created_at", "updated_at"],
     "application_members": ["application_id", "member_type", "member_id"],
     "servers": ["group_id", "hostname", "ip", "port", "user", "vault_key", "scripts_json", "vm_ident", "enabled", "created_at", "updated_at"],
     "scripts": ["name", "filename", "kind", "desc", "seed_key", "seed_hash", "i18n_json", "created_at", "updated_at"],
     "datasources": ["name", "base_url", "auth_type", "secret_env", "verify_tls", "timeout", "labels_json", "enabled", "created_at"],
     "server_datasources": ["server_id", "datasource_id", "prom_instance", "labels_json", "scripts_json", "enabled"],
     "models": ["label", "provider", "model_id", "base_url", "api_key_env", "temperature", "top_p", "enabled", "extra_json", "data_policy", "sanitize_overrides", "created_at"],
-    "notifications": ["type", "name", "config_json", "secret_env", "enabled", "created_at"],
+    "notifications": ["type", "name", "config_json", "secret_env", "language", "enabled", "created_at"],
     "run_schedule": ["name", "targets_json", "scripts_json", "cron_min", "cron_hour", "cron_dow", "mode", "last_fired_at", "enabled", "created_at"],
     "run_history": ["started", "finished", "schedule_id", "trigger", "mode", "targets_json", "scripts_json", "status", "policy", "sanitize_hits", "error", "summary", "report_file"],
     "audit_log": ["ts", "ip", "action", "target_type", "target_id", "target_name", "detail", "status", "version_id"],
@@ -268,10 +271,19 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def local_str(iso_ts: str | None, fmt: str = "%Y-%m-%d %H:%M:%S %Z") -> str:
-    """将 UTC 存储的 ISO 时间换算为部署环境本地时区字符串（仅用于展示）。"""
+def local_str(iso_ts: str | None, fmt: str | None = None) -> str:
+    """将 UTC 存储的 ISO 时间换算为部署环境本地时区字符串（仅用于展示）。
+
+    默认格式按当前语言从 `common.datetime_format` 读取，缺省 `%Y-%m-%d %H:%M:%S %Z`。
+    """
     if not iso_ts:
         return ""
+    if fmt is None:
+        import i18n
+
+        fmt = i18n.t("common.datetime_format")
+        if fmt == "common.datetime_format":
+            fmt = "%Y-%m-%d %H:%M:%S %Z"
     try:
         dt = datetime.fromisoformat(iso_ts)
         if dt.tzinfo is None:
@@ -357,6 +369,14 @@ def _migrate(conn: sqlite3.Connection) -> None:
     for col, ddl in (("seed_key", "TEXT DEFAULT ''"), ("seed_hash", "TEXT DEFAULT ''"), ("i18n_json", "TEXT DEFAULT '{}'")):
         if col not in spcols:
             conn.execute(f"ALTER TABLE scripts ADD COLUMN {col} {ddl}")
+    # Per-language name/desc for config objects (applications/groups)
+    for table in ("applications", "groups"):
+        cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if "i18n_json" not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN i18n_json TEXT DEFAULT '{{}}'")
+    ncols = {r["name"] for r in conn.execute("PRAGMA table_info(notifications)").fetchall()}
+    if "language" not in ncols:
+        conn.execute("ALTER TABLE notifications ADD COLUMN language TEXT DEFAULT ''")
     _backfill_audit_versions(conn)
 
 

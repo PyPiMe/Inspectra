@@ -3,6 +3,6 @@
 # UNIT: mixed
 # DISPLAY: true
 # Info-only: keepalived up / VRRP state / script status
-label_replace(keepalived_up{$instance}, "item", "Keepalived存活", "job", ".*")
-or label_replace(keepalived_vrrp_state{$instance}, "item", "VRRP状态(2=MASTER)", "iname", ".*")
-or label_replace(keepalived_script_status{$instance}, "item", "健康检查", "name", ".*")
+label_replace(keepalived_up{$instance}, "item", "keepalived_up", "job", ".*")
+or label_replace(keepalived_vrrp_state{$instance}, "item", "keepalived_vrrp", "iname", ".*")
+or label_replace(keepalived_script_status{$instance}, "item", "keepalived_health", "name", ".*")

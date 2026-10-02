@@ -530,6 +530,28 @@
     "desc": {
       "zh-CN": "Nginx 汇总：up/活跃/读写等待连接/累计请求与连接/QPS/新建连接速率",
       "en": "Nginx summary: up/active/reading/writing/waiting/counters/QPS/new-connection rate"
+    },
+    "items": {
+      "zh-CN": {
+        "nginx_up": "存活(1=正常)",
+        "nginx_active": "活跃连接",
+        "nginx_reading": "读取中连接",
+        "nginx_writing": "写入中连接",
+        "nginx_waiting": "等待连接",
+        "nginx_accepted": "累计接受连接",
+        "nginx_handled": "累计处理连接",
+        "nginx_requests": "累计请求数"
+      },
+      "en": {
+        "nginx_up": "Up (1=OK)",
+        "nginx_active": "Active connections",
+        "nginx_reading": "Reading",
+        "nginx_writing": "Writing",
+        "nginx_waiting": "Waiting",
+        "nginx_accepted": "Accepted (total)",
+        "nginx_handled": "Handled (total)",
+        "nginx_requests": "Requests (total)"
+      }
     }
   },
   {
@@ -647,6 +669,18 @@
     "desc": {
       "zh-CN": "Keepalived 服务/VRRP 状态/健康检查脚本（信息展示，不判定）",
       "en": "Info-only: keepalived up / VRRP state / health-check script status"
+    },
+    "items": {
+      "zh-CN": {
+        "keepalived_up": "Keepalived存活",
+        "keepalived_vrrp": "VRRP状态(2=MASTER)",
+        "keepalived_health": "健康检查"
+      },
+      "en": {
+        "keepalived_up": "Keepalived up",
+        "keepalived_vrrp": "VRRP state (2=MASTER)",
+        "keepalived_health": "Health check"
+      }
     }
   },
   {

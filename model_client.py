@@ -11,6 +11,8 @@ from typing import Any
 
 import requests
 
+import i18n
+
 PROVIDER_PRESETS: dict[str, dict[str, str]] = {
     "deepseek": {"label": "DeepSeek", "base_url": "https://api.deepseek.com", "api_key_env": "DEEPSEEK_API_KEY", "extra_json": '{"thinking": {"type": "disabled"}}', "temperature": "0.3", "top_p": ""},
     "openai": {"label": "OpenAI", "base_url": "https://api.openai.com/v1", "api_key_env": "OPENAI_API_KEY", "extra_json": "", "temperature": "0.2", "top_p": "1"},
@@ -55,10 +57,8 @@ def resolve_key(model: dict[str, Any], secrets: dict[str, str]) -> str:
         hint = ""
         # 常见误用：把真实 key 填进了“环境变量名”字段
         if env.startswith(("sk-", "sk_")) or (len(env) >= 32 and "_" not in env and " " not in env):
-            hint = "；该字段应填“环境变量名”（如 DEEPSEEK_API_KEY），真实 key 请写入 secrets.env"
-        raise ModelError(
-            f"缺少 API key：secrets.env 中未设置或为空 `{env}`{hint}"
-        )
+            hint = i18n.t("model.err_key_field_hint")
+        raise ModelError(i18n.t("model.err_no_key", env=env, hint=hint))
     return key
 
 
@@ -139,14 +139,14 @@ def analyze(
             data = resp.json()
             choices = data.get("choices") or []
             if not choices:
-                raise ModelError(f"响应缺少 choices：{str(data)[:300]}")
+                raise ModelError(i18n.t("model.err_no_choices", data=str(data)[:300]))
             message = choices[0].get("message", {}) or {}
             return message.get("content") or message.get("reasoning_content") or ""
         except Exception as exc:  # noqa: BLE001
             last_err = exc
             if attempt < retries:
                 time.sleep(2**attempt)
-    raise ModelError(f"模型请求失败（已重试 {retries} 次）：{last_err}")
+    raise ModelError(i18n.t("model.err_request_failed", retries=retries, err=last_err))
 
 
 def test_connection(model: dict[str, Any], secrets: dict[str, str], timeout: int = 60) -> tuple[bool, str]:
@@ -159,7 +159,7 @@ def test_connection(model: dict[str, Any], secrets: dict[str, str], timeout: int
             retries=0,
             extra={"max_tokens": 64},
         )
-        return True, f"连接成功：{content[:100] or '(空响应)'}"
+        return True, i18n.t("model.conn_ok", content=content[:100] or i18n.t("model.empty_response"))
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
 

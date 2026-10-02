@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+import i18n
 import requests
 
 SEVERITY = {"OK": 0, "UNKNOWN": 1, "WARN": 2, "FAIL": 3, "ERROR": 4}
@@ -17,6 +18,14 @@ SEVERITY = {"OK": 0, "UNKNOWN": 1, "WARN": 2, "FAIL": 3, "ERROR": 4}
 
 def severity_rank(status: str) -> int:
     return SEVERITY.get((status or "UNKNOWN").upper(), 1)
+
+
+def script_display(script: dict[str, Any]) -> str:
+    """Localized script display name in the current run language. 按运行语言解析脚本展示名。"""
+    try:
+        return i18n.localize_script(script)[0] or (script.get("name") or "")
+    except Exception:  # noqa: BLE001
+        return script.get("name") or ""
 
 
 def aggregate_status(statuses: list[str]) -> str:
@@ -240,11 +249,11 @@ def meta_warnings(content: str, kind: str = "promql") -> list[str]:
         return []
     warns: list[str] = []
     if not meta.get("NAME"):
-        warns.append("缺少 `# NAME`")
+        warns.append(i18n.t("meta.warn_name"))
     if not meta.get("THRESHOLD"):
-        warns.append("缺少 `# THRESHOLD`（纯信息类请加 `# DISPLAY: true`）")
+        warns.append(i18n.t("meta.warn_threshold"))
     if not meta.get("UNIT"):
-        warns.append("建议补充 `# UNIT`")
+        warns.append(i18n.t("meta.warn_unit"))
     return warns
 
 
@@ -253,18 +262,18 @@ def validate_promql(content: str) -> list[str]:
     errors: list[str] = []
     meta = parse_script_meta(content)
     if not meta["NAME"]:
-        errors.append("缺少 `# NAME` 元数据")
+        errors.append(i18n.t("meta.err_name"))
     mode = (meta["MODE"] or "instant").lower()
     if mode not in ("instant", "range"):
-        errors.append("`# MODE` 仅支持 instant|range")
+        errors.append(i18n.t("meta.err_mode"))
     if mode == "range":
         if not meta["WINDOW"] or parse_duration(meta["WINDOW"]) is None:
-            errors.append("`MODE=range` 需要合法 `# WINDOW`（如 5m）")
+            errors.append(i18n.t("meta.err_window"))
         if meta["STEP"] and parse_duration(meta["STEP"]) is None:
-            errors.append("`# STEP` 需为合法时长（如 1m）")
+            errors.append(i18n.t("meta.err_step"))
     for key in ("THRESHOLD", "WARN"):
         if meta.get(key) and parse_condition(meta[key]) is None:
-            errors.append(f"`# {key}` 格式应为 `>90` / `<=1` / `!=active` 等单条件")
+            errors.append(i18n.t("meta.err_condition", key=key))
     return errors
 
 
@@ -326,7 +335,7 @@ def _load_pkey(pem: bytes):
             return cls.from_private_key(io.StringIO(pem.decode("utf-8")))
         except Exception:  # noqa: BLE001
             continue
-    raise ValueError("无法解析 SSH 私钥（仅支持 OpenSSH 格式密钥）")
+    raise ValueError(i18n.t("collect.err_pem"))
 
 
 class SSHCollector:
@@ -394,7 +403,7 @@ class SSHCollector:
             if code != 0:
                 base.status = "ERROR"
                 base.hard_fact = True
-                base.error = f"命令退出码 {code}" + (f"：{err.strip()}" if err.strip() else "")
+                base.error = i18n.t("collect.cmd_exit", code=code) + (i18n.t("collect.cmd_exit_err", err=err.strip()) if err.strip() else "")
             else:
                 base.status = "OK"
                 if err.strip():
@@ -408,15 +417,15 @@ class SSHCollector:
         except paramiko.BadHostKeyException:
             base.status = "ERROR"
             base.hard_fact = True
-            base.error = "主机密钥已变更，连接被阻断（known_hosts TOFU）"
+            base.error = i18n.t("collect.err_hostkey")
         except paramiko.AuthenticationException:
             base.status = "ERROR"
             base.hard_fact = True
-            base.error = "SSH 认证失败"
+            base.error = i18n.t("collect.err_auth")
         except Exception as exc:  # noqa: BLE001
             base.status = "ERROR"
             base.hard_fact = True
-            base.error = f"SSH 采集异常：{exc}"
+            base.error = i18n.t("collect.err_ssh_exc", err=exc)
         finally:
             # 先关闭通道文件，再关客户端：避免 close 后 ChannelFile.__del__ 向已断开的
             # transport 发送 EOF 而抛出 "'NoneType' object has no attribute 'time'"
@@ -448,7 +457,7 @@ class PrometheusCollector:
             return None, {}
         secret = self.secrets.get(self.ds.get("secret_env") or "", "")
         if not secret:
-            raise ValueError(f"数据源缺少凭据：secrets.env 未设置 {self.ds.get('secret_env')}")
+            raise ValueError(i18n.t("collect.err_no_secret", env=self.ds.get("secret_env")))
         if auth_type == "basic":
             user, _, pwd = secret.partition(":")
             return (user, pwd), {}
@@ -468,10 +477,10 @@ class PrometheusCollector:
                 verify=self.verify,
             )
             if resp.status_code == 200 and resp.json().get("status") == "success":
-                return True, "连接成功"
+                return True, i18n.t("collect.conn_ok")
             return False, f"HTTP {resp.status_code}"
         except Exception as exc:  # noqa: BLE001
-            return False, f"连接失败：{exc}"
+            return False, i18n.t("collect.conn_fail", err=exc)
 
     def list_label_values(self, label: str, limit: int = 200) -> list[str]:
         """拉取某标签的全部取值（如 job / instance），用于表单下拉。"""
@@ -551,7 +560,7 @@ class PrometheusCollector:
         )
         if ambiguous:
             base.status = "UNKNOWN"
-            base.error = "instance selector 命中多个实例（ambiguous），请填写显式 prom_instance"
+            base.error = i18n.t("collect.err_ambiguous")
             base.meta["ambiguous"] = True
             return base
 
@@ -564,12 +573,12 @@ class PrometheusCollector:
         if "$guest" in query:
             base.status = "ERROR"
             base.hard_fact = True
-            base.error = "脚本使用 $guest，但服务器未配置「虚拟化标识」"
+            base.error = i18n.t("collect.err_guest_noconfig")
             return base
         if not query:
             base.status = "ERROR"
             base.hard_fact = True
-            base.error = "脚本无可执行的 PromQL 语句（仅注释或为空）"
+            base.error = i18n.t("collect.err_empty_query")
             return base
         base.meta["query"] = query
         mode = (meta.get("MODE") or "instant").lower()
@@ -591,27 +600,27 @@ class PrometheusCollector:
             if resp.status_code != 200:
                 base.status = "ERROR"
                 base.hard_fact = True
-                base.error = f"查询失败 HTTP {resp.status_code}: {_prom_error(resp)}"
+                base.error = i18n.t("collect.err_query_http", code=resp.status_code, err=_prom_error(resp))
                 base.output = f"query: {query}\n{base.error}"
                 return base
             payload = resp.json()
             if payload.get("status") != "success":
                 base.status = "ERROR"
                 base.hard_fact = True
-                base.error = f"查询返回错误：{payload.get('error')}"
+                base.error = i18n.t("collect.err_query_status", err=payload.get("error"))
                 return base
             result = (payload.get("data") or {}).get("result") or []
         except Exception as exc:  # noqa: BLE001
             base.status = "ERROR"
             base.hard_fact = True
-            base.error = f"查询异常：{exc}"
+            base.error = i18n.t("collect.err_query_exc", err=exc)
             return base
 
         if not result:
             base.status = "UNKNOWN"
-            base.error = "无数据"
-            hint = "；该实例由服务器 IP 自动推导，若目标实例以主机名暴露，请在绑定中填写 prom_instance 或数据源默认标签" if auto_instance else ""
-            base.output = f"query: {query}\n无数据（Prometheus 返回空结果：请核对实例标签与指标名是否存在{hint}）"
+            base.error = i18n.t("collect.err_no_data")
+            hint = i18n.t("collect.no_data_hint") if auto_instance else ""
+            base.output = f"query: {query}\n" + i18n.t("collect.no_data_output", hint=hint)
             return base
 
         if check_instances:
@@ -620,7 +629,7 @@ class PrometheusCollector:
             instances.discard("")
             if len(instances) > 1:
                 base.status = "UNKNOWN"
-                base.error = "instance selector 命中多个实例（ambiguous），请填写显式 prom_instance"
+                base.error = i18n.t("collect.err_ambiguous")
                 base.meta["ambiguous"] = True
                 return base
 
@@ -648,7 +657,7 @@ class PrometheusCollector:
 
         if not series_values:
             base.status = "UNKNOWN"
-            base.error = "无数据"
+            base.error = i18n.t("collect.err_no_data")
             return base
 
         lines = [f"{label} = {_fmt_num(value)}" for label, value in series_values]
@@ -665,5 +674,5 @@ class PrometheusCollector:
                 f"{it['name']}={_fmt_num(_as_float(it['value'])) if _as_float(it['value']) is not None else it['value']}"
                 for it in breached
             )
-            base.error = f"阈值越界：{detail}"
+            base.error = i18n.t("collect.err_threshold", detail=detail)
         return base

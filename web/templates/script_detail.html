@@ -16,6 +16,7 @@
 
 <form id="scriptForm" method="post" action="{{ url_for('scripts_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="lang" value="{{ current_lang }}">
   {% if script.id %}<input type="hidden" name="id" value="{{ script.id }}">{% endif %}
 
   {# Sticky action bar: save / back / validate live where you can always reach them. #}
@@ -67,7 +68,7 @@
       {# Keep the side fields in view while editing a long script. #}
       <div class="position-sticky" style="top: 4.5rem;">
         <div class="card mb-3"><div class="card-header">{{ t('script_detail.basic') }}</div><div class="card-body row g-2">
-          <div class="col-12"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ script.name }}" required></div>
+          <div class="col-12"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ script.lname or script.name }}" required></div>
           <div class="col-6"><label class="form-label">{{ t('common.type') }}</label>
             <select class="form-select" name="kind" id="kind">
               <option value="shell" {{ 'selected' if script.kind=='shell' else '' }}>shell</option>
@@ -75,7 +76,7 @@
             </select>
           </div>
           <div class="col-6"><label class="form-label">{{ t('scripts.filename') }}</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
-          <div class="col-12"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ script.desc }}"></div>
+          <div class="col-12"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ script.ldesc or script.desc }}"></div>
         </div></div>
 
         <div class="card mb-3 d-none" id="metaCard"><div class="card-header">{{ t('script_detail.meta_card') }}</div><div class="card-body row g-2">
@@ -92,6 +93,28 @@
       </div>
     </div>
   </div>
+
+  {# Per-language name/description/meta name. The base (current) language is edited above. #}
+  {% set others = languages | rejectattr('code', 'equalto', current_lang) | list %}
+  {% if others %}
+  <details class="card mt-3">
+    <summary class="card-header" style="cursor: pointer;">
+      {{ t('script_detail.translations') }}
+      <span class="text-muted small fw-normal ms-2">{{ t('script_detail.translations_hint') }}</span>
+    </summary>
+    <div class="card-body row g-3">
+      {% for L in others %}
+      {% set tr = i18n_map.get(L.code, {}) %}
+      <div class="col-md-4">
+        <div class="fw-semibold mb-1">{{ L.name }} <span class="text-muted small">({{ L.code }})</span></div>
+        <input class="form-control form-control-sm mb-1" name="tr_{{ L.code }}_name" value="{{ tr.get('name', '') }}" placeholder="{{ t('common.name') }}">
+        <input class="form-control form-control-sm mb-1" name="tr_{{ L.code }}_desc" value="{{ tr.get('desc', '') }}" placeholder="{{ t('common.desc') }}">
+        <input class="form-control form-control-sm" name="tr_{{ L.code }}_meta" value="{{ tr.get('meta_name', '') }}" placeholder="{{ t('script_detail.meta_name') }}">
+      </div>
+      {% endfor %}
+    </div>
+  </details>
+  {% endif %}
 
 </form>
 
