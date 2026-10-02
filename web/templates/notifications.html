@@ -5,39 +5,40 @@
 <h4>{{ t('notifications.title') }}</h4>
 <div class="alert alert-secondary small">{{ t('notifications.alert') | safe }}</div>
 
-<div class="d-flex align-items-center mb-2 gap-2 flex-wrap">
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createNotif">{{ t('notifications.new') }}</button>
-  <span class="badge bg-{{ 'success' if enabled_count else 'secondary' }}">{{ t('notifications.enabled_of', n=enabled_count, total=total_all) }}</span>
-  <form method="post" action="{{ url_for('notifications_toggle_all') }}" class="d-inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <input type="hidden" name="enable" value="1">
-    <button class="btn btn-sm btn-outline-success" {{ 'disabled' if enabled_count == total_all else '' }}>{{ t('notifications.enable_all') }}</button>
-  </form>
-  <form method="post" action="{{ url_for('notifications_toggle_all') }}" class="d-inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-sm btn-outline-warning" {{ 'disabled' if not enabled_count else '' }}>{{ t('notifications.disable_all') }}</button>
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createNotif">{{ t('notifications.new') }}</button>
+    <span class="badge bg-{{ 'success' if enabled_count else 'secondary' }}">{{ t('notifications.enabled_of', n=enabled_count, total=total_all) }}</span>
+    <form method="post" action="{{ url_for('notifications_toggle_all') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="enable" value="1">
+      <button class="btn btn-sm btn-outline-success" {{ 'disabled' if enabled_count == total_all else '' }}>{{ t('notifications.enable_all') }}</button>
+    </form>
+    <form method="post" action="{{ url_for('notifications_toggle_all') }}" class="d-inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn btn-sm btn-outline-warning" {{ 'disabled' if not enabled_count else '' }}>{{ t('notifications.disable_all') }}</button>
+    </form>
+  </div>
+  <form class="row g-2" method="get" action="{{ url_for('notifications') }}">
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('notifications.query_ph') }}"></div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="type">
+        <option value="">{{ t('notifications.all_types') }}</option>
+        <option value="smtp" {{ 'selected' if ntype == 'smtp' else '' }}>SMTP</option>
+        <option value="dingtalk" {{ 'selected' if ntype == 'dingtalk' else '' }}>{{ t('notifications.dingtalk') }}</option>
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="enabled">
+        <option value="">{{ t('servers.all_status') }}</option>
+        <option value="1" {{ 'selected' if enabled == '1' else '' }}>{{ t('common.enabled') }}</option>
+        <option value="0" {{ 'selected' if enabled == '0' else '' }}>{{ t('common.disabled') }}</option>
+      </select>
+    </div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('notifications') }}">{{ t('common.reset') }}</a></div>
   </form>
 </div>
-
-<form class="row g-2 mb-2" method="get" action="{{ url_for('notifications') }}">
-  <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('notifications.query_ph') }}"></div>
-  <div class="col-auto">
-    <select class="form-select form-select-sm" name="type">
-      <option value="">{{ t('notifications.all_types') }}</option>
-      <option value="smtp" {{ 'selected' if ntype == 'smtp' else '' }}>SMTP</option>
-      <option value="dingtalk" {{ 'selected' if ntype == 'dingtalk' else '' }}>{{ t('notifications.dingtalk') }}</option>
-    </select>
-  </div>
-  <div class="col-auto">
-    <select class="form-select form-select-sm" name="enabled">
-      <option value="">{{ t('servers.all_status') }}</option>
-      <option value="1" {{ 'selected' if enabled == '1' else '' }}>{{ t('common.enabled') }}</option>
-      <option value="0" {{ 'selected' if enabled == '0' else '' }}>{{ t('common.disabled') }}</option>
-    </select>
-  </div>
-  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
-  <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('notifications') }}">{{ t('common.reset') }}</a></div>
-</form>
 <table class="table table-sm">
   <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('common.type') }}</th><th>secret_env</th><th>{{ t('common.status') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>

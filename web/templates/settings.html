@@ -44,6 +44,7 @@
   </form>
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('settings_locale_template') }}">{{ t('settings.download_template') }}</a>
 </div>
+<div class="form-text mt-1">{{ t('settings.reload_locales_hint') | safe }}</div>
 {% endblock %}
 
 {% block scripts %}

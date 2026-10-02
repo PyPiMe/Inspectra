@@ -6,32 +6,33 @@
 <div class="alert alert-secondary small">{{ t('backups.alert') }}</div>
 
 {% set flt = {'object_type': object_type, 'object_id': object_id, 'action': action} %}
-<ul class="nav nav-pills mb-3">
-  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'objects' else '' }}" href="{{ url_for('backups', tab='objects', **flt) }}">{{ t('backups.tab_objects') }} <span class="badge text-bg-light">{{ obj_count }}</span></a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'versions' else '' }}" href="{{ url_for('backups', tab='versions', **flt) }}">{{ t('backups.tab_versions') }} <span class="badge text-bg-light">{{ ver_count }}</span></a></li>
-  <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'io' else '' }}" href="{{ url_for('backups', tab='io') }}">{{ t('backups.tab_io') }}</a></li>
-</ul>
-
-{% if tab in ('objects', 'versions') %}
-<form class="row g-2 mb-2 align-items-end" method="get" action="{{ url_for('backups') }}">
-  <input type="hidden" name="tab" value="{{ tab }}">
-  <div class="col-auto">
-    <select class="form-select form-select-sm" name="object_type">
-      <option value="">{{ t('backups.all_types') }}</option>
-      {% for tp in objtypes %}<option value="{{ tp }}" {{ 'selected' if object_type == tp else '' }}>{{ t('type.' ~ tp) }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="col-auto">
-    <select class="form-select form-select-sm" name="action">
-      <option value="">{{ t('backups.all_actions') }}</option>
-      {% for a in actions %}<option value="{{ a }}" {{ 'selected' if action == a else '' }}>{{ t('audit.' ~ a) }}</option>{% endfor %}
-    </select>
-  </div>
-  <div class="col-auto"><input class="form-control form-control-sm" name="object_id" value="{{ object_id }}" placeholder="{{ t('backups.object_id') }}"></div>
-  <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.filter') }}</button></div>
-  {% if object_type or object_id or action %}<div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('backups', tab=tab) }}">{{ t('common.reset') }}</a></div>{% endif %}
-</form>
-{% endif %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <ul class="nav nav-pills">
+    <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'objects' else '' }}" href="{{ url_for('backups', tab='objects', **flt) }}">{{ t('backups.tab_objects') }} <span class="badge text-bg-light">{{ obj_count }}</span></a></li>
+    <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'versions' else '' }}" href="{{ url_for('backups', tab='versions', **flt) }}">{{ t('backups.tab_versions') }} <span class="badge text-bg-light">{{ ver_count }}</span></a></li>
+    <li class="nav-item"><a class="nav-link {{ 'active' if tab == 'io' else '' }}" href="{{ url_for('backups', tab='io') }}">{{ t('backups.tab_io') }}</a></li>
+  </ul>
+  {% if tab in ('objects', 'versions') %}
+  <form class="row g-2 align-items-end" method="get" action="{{ url_for('backups') }}">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="object_type">
+        <option value="">{{ t('backups.all_types') }}</option>
+        {% for tp in objtypes %}<option value="{{ tp }}" {{ 'selected' if object_type == tp else '' }}>{{ t('type.' ~ tp) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto">
+      <select class="form-select form-select-sm" name="action">
+        <option value="">{{ t('backups.all_actions') }}</option>
+        {% for a in actions %}<option value="{{ a }}" {{ 'selected' if action == a else '' }}>{{ t('audit.' ~ a) }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-auto"><input class="form-control form-control-sm" name="object_id" value="{{ object_id }}" placeholder="{{ t('backups.object_id') }}"></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.filter') }}</button></div>
+    {% if object_type or object_id or action %}<div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('backups', tab=tab) }}">{{ t('common.reset') }}</a></div>{% endif %}
+  </form>
+  {% endif %}
+</div>
 
 {% if tab == 'objects' %}
 <table class="table table-sm table-hover align-middle">

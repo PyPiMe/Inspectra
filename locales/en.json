@@ -934,5 +934,6 @@
   "reports.script_count.one": "{n} item",
   "reports.script_count.other": "{n} items",
   "common.datetime_format": "%b %d, %Y %H:%M:%S %Z",
-  "settings.saved": "Settings saved"
+  "settings.saved": "Settings saved",
+  "settings.reload_locales_hint": "Clicking \"Reload locales\" re-scans <code>locales/</code> and <code>locales/custom/</code>; new languages then appear in the default-language dropdown and the top-right menu (files starting with <code>_</code> are skipped; missing entries fall back)."
 }

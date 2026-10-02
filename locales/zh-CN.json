@@ -934,5 +934,6 @@
   "reports.script_count.one": "共 {n} 项",
   "reports.script_count.other": "共 {n} 项",
   "common.datetime_format": "%Y-%m-%d %H:%M:%S %Z",
-  "settings.saved": "设置已保存"
+  "settings.saved": "设置已保存",
+  "settings.reload_locales_hint": "点击「重新加载语言包」会重新扫描 <code>locales/</code> 与 <code>locales/custom/</code>，新语言随即出现在默认语言下拉与右上角语言菜单（<code>_</code> 开头文件跳过；缺失词条按回退链）。"
 }
