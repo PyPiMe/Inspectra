@@ -63,23 +63,26 @@
   <div class="card mb-3">
     <div class="card-header d-flex align-items-center gap-2">
       <span>{{ t('server_detail.section_ssh') }}</span>
-      {% if ssh_configured %}<span class="badge bg-primary-subtle text-primary border">{{ t('server_detail.ssh_configured') }}</span>
-      {% else %}<span class="badge bg-secondary">{{ t('server_detail.ssh_unconfigured') }}</span>{% endif %}
+      <span class="badge {{ 'bg-primary-subtle text-primary border' if ssh_configured else 'bg-secondary' }}" id="sshState">{{ t('server_detail.ssh_configured') if ssh_configured else t('server_detail.ssh_unconfigured') }}</span>
+      <span class="text-muted small">{{ t('server_detail.ssh_shell_hint') }}</span>
     </div>
     <div class="card-body">
       <div class="row g-2">
-        <div class="col-md-4"><label class="form-label">{{ t('servers.ssh_port') }}</label><input class="form-control" name="port" value="{{ server.port or '' }}" placeholder="{{ t('servers.port_ph') }}"></div>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.ssh_port') }}</label><input class="form-control" name="port" id="sshPort" value="{{ server.port or '' }}" placeholder="{{ t('servers.port_ph') }}"></div>
         <div class="col-md-4"><label class="form-label">{{ t('servers.user') }}</label><input class="form-control" name="user" value="{{ server.user }}"></div>
         <div class="col-md-4"><label class="form-label">{{ t('servers.credential') }}</label>
-          <select class="form-select" name="vault_key"><option value="">-</option>
+          <select class="form-select" name="vault_key" id="sshKey"><option value="">-</option>
             {% for c in credentials %}<option value="{{ c.key }}" {{ 'selected' if server.vault_key==c.key else '' }}>{{ c.name }}{% if c.note %}（{{ c.note }}）{% endif %}</option>{% endfor %}
           </select>
           <div class="form-text">{{ t('server_detail.current_cred', name=(cred_names.get(server.vault_key) if server.vault_key else t('common.not_bound'))) }}</div>
         </div>
-        <div class="col-12"><label class="form-label">{{ t('servers.shell_scripts') }}</label>
-          {% set bound = json_or(server.scripts_json, []) %}
-          {{ script_picker('scripts', shell_scripts, bound, 'spShellEdit') }}
-        </div>
+      </div>
+      <hr class="my-3">
+      <div class="fw-semibold mb-1">{{ t('servers.shell_scripts') }}</div>
+      <div class="form-text text-muted d-none" id="shellGate">{{ t('servers.ssh_required_hint') }}</div>
+      <div id="shellGateArea">
+        {% set bound = json_or(server.scripts_json, []) %}
+        {{ script_picker('scripts', shell_scripts, bound, 'spShellEdit') }}
       </div>
     </div>
     <div class="card-footer d-flex justify-content-between align-items-center">
@@ -161,6 +164,26 @@
       } catch (err) { alert(__t('js.delete_failed')); }
     }
   });
+
+  // 前置条件门控：Shell 脚本需已配 SSH（端口 + 凭据）
+  const port = document.getElementById('sshPort');
+  const key = document.getElementById('sshKey');
+  const gate = document.getElementById('shellGate');
+  const area = document.getElementById('shellGateArea');
+  const state = document.getElementById('sshState');
+  function applyGate() {
+    const ok = !!(port && key && port.value && key.value);
+    if (gate) gate.classList.toggle('d-none', ok);
+    if (state) {
+      state.textContent = ok ? '{{ t("server_detail.ssh_configured") }}' : '{{ t("server_detail.ssh_unconfigured") }}';
+      state.className = 'badge ' + (ok ? 'bg-primary-subtle text-primary border' : 'bg-secondary');
+    }
+    // 未配 SSH：禁用“未勾选”的脚本（阻止新增）；已勾选的保持可用（可提交或取消）。
+    if (area) area.querySelectorAll('input[type=checkbox]').forEach((cb) => { cb.disabled = !ok && !cb.checked; });
+  }
+  if (port) port.addEventListener('input', applyGate);
+  if (key) key.addEventListener('change', applyGate);
+  applyGate();
 })();
 </script>
 {% endblock %}

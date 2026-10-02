@@ -77,6 +77,7 @@
           </div>
           <div class="col-6"><label class="form-label">{{ t('scripts.filename') }}</label><input class="form-control" name="filename" value="{{ script.filename }}"></div>
           <div class="col-12"><label class="form-label">{{ t('common.desc') }}</label><input class="form-control" name="desc" value="{{ script.ldesc or script.desc }}"></div>
+          <div class="col-12"><label class="form-label">{{ t('scripts.tags') }}</label><input class="form-control" name="tags" value="{{ json_or(script.tags_json, []) | join(', ') }}" placeholder="{{ t('scripts.tags_ph') }}"></div>
         </div></div>
 
         <div class="card mb-3 d-none" id="metaCard"><div class="card-header">{{ t('script_detail.meta_card') }}</div><div class="card-body row g-2">

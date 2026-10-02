@@ -229,6 +229,7 @@ def _picker_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for r in rows:
         r["name"], r["desc"], _ = i18n.localize_script(r)
+        r["tags"] = _row_tags(r)
         out.append(r)
     return out
 
@@ -355,6 +356,64 @@ def _localize_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
             a["name"] = i18n.t("reports2.unassigned")
     summary["issues"] = issues
     return summary
+
+
+def _parse_tags(raw: Any) -> list[str]:
+    """Parse a comma-separated tag input into a unique list. 解析逗号分隔的标签。"""
+    if not raw:
+        return []
+    out: list[str] = []
+    for part in str(raw).replace("，", ",").split(","):
+        t = part.strip()
+        if t and t not in out:
+            out.append(t)
+    return out
+
+
+def _parse_bindings(raw: Any) -> list[dict[str, Any]]:
+    """Normalize a posted bindings JSON array for a new server. 解析新建页提交的绑定 JSON。"""
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for b in data:
+        if not isinstance(b, dict):
+            continue
+        did = parse_int(b.get("datasource_id"))
+        if not did:
+            continue
+        labels = b.get("labels_json") or "{}"
+        if isinstance(labels, dict):
+            labels = json.dumps(labels, ensure_ascii=False)
+        try:
+            json.loads(labels)
+        except ValueError as exc:
+            raise ValueError("labels_json") from exc
+        scripts = b.get("scripts_json") or []
+        if not isinstance(scripts, list):
+            scripts = []
+        scripts = [int(x) for x in scripts if str(x).strip().isdigit()]
+        out.append({
+            "datasource_id": did,
+            "prom_instance": str(b.get("prom_instance") or "").strip(),
+            "labels_json": labels,
+            "scripts_json": json.dumps(scripts),
+            "enabled": 1 if b.get("enabled", 1) else 0,
+        })
+    return out
+
+
+def _row_tags(row: dict[str, Any]) -> list[str]:
+    try:
+        v = json.loads(row.get("tags_json") or "[]")
+        return [str(x) for x in v] if isinstance(v, list) else []
+    except (ValueError, TypeError):
+        return []
 
 
 def content_hash(text: str) -> str:
@@ -1106,6 +1165,45 @@ def create_app() -> Flask:
             page=page, pages=pages, total=total, per_page=per_page,
         )
 
+    @app.route("/servers/new")
+    def server_new():
+        """Full-page create (also used for copy via ?copy=<sid>). 全页新建/复制。"""
+        copy_id = parse_int(request.args.get("copy"))
+        src = models.fetch_one("servers", copy_id) if copy_id else None
+        credentials = _credential_list()
+        server = {
+            "id": 0, "hostname": (src.get("hostname") + "-copy") if src else "",
+            "ip": "", "group_id": src.get("group_id") if src else None,
+            "port": src.get("port") if src else 0, "user": src.get("user") if src else "",
+            "vault_key": src.get("vault_key") if src else "", "vm_ident": "",  # 复制清空虚拟化标识
+            "enabled": (src.get("enabled", 1) if src else 1),
+            "copy_from": copy_id or 0,
+        }
+        bound_scripts = json_or(src.get("scripts_json"), []) if src else []
+        prefill_bindings = []
+        if src:
+            for b in models.fetch_all("server_datasources", "server_id=?", (copy_id,)):
+                prefill_bindings.append({
+                    "datasource_id": b["datasource_id"],
+                    "prom_instance": "",  # 复制时清空
+                    "labels_json": b.get("labels_json") or "{}",
+                    "scripts_json": json_or(b.get("scripts_json"), []),
+                    "enabled": b.get("enabled", 1),
+                })
+        return render_template(
+            "server_new.html",
+            server=server, copy_mode=bool(src),
+            groups=_picker_named(models.fetch_all("groups")),
+            credentials=credentials,
+            cred_names={c["key"]: c["name"] for c in credentials},
+            shell_scripts=_picker_scripts(models.fetch_all("scripts", "kind='shell'")),
+            prom_scripts=_picker_scripts(models.fetch_all("scripts", "kind='promql'")),
+            datasources=models.fetch_all("datasources"),
+            bound_scripts=bound_scripts,
+            prefill_bindings=prefill_bindings,
+            prom_items=[{"id": s["id"], "name": i18n.localize_script(s)[0]} for s in models.fetch_all("scripts", "kind='promql'")],
+        )
+
     @app.route("/servers/<int:sid>")
     def server_detail(sid: int):
         server = models.fetch_one("servers", sid)
@@ -1132,43 +1230,80 @@ def create_app() -> Flask:
         hostname = (request.form.get("hostname") or "").strip()
         ip = (request.form.get("ip") or "").strip()
         if not hostname or not ip:
-            flash("主机名与 IP 必填", "danger")
+            flash(i18n.t("servers.err_host_ip_required"), "danger")
             return redirect(url_for("servers"))
+        # IP 唯一性（新建/复制/保存均校验）——阻止重复保存。
+        if models.query("SELECT id FROM servers WHERE ip=? AND id<>?", (ip, sid or 0)):
+            flash(i18n.t("servers.err_ip_dup", ip=ip), "danger")
+            return redirect(url_for("servers"))
+        vm_ident = (request.form.get("vm_ident") or "").strip()
+        if vm_ident and models.query("SELECT id FROM servers WHERE vm_ident=? AND id<>?", (vm_ident, sid or 0)):
+            flash(i18n.t("servers.err_vm_ident_dup", vm=vm_ident), "danger")
+            return redirect(url_for("servers"))
+        port = parse_int(request.form.get("port"), 0)
+        vault_key = (request.form.get("vault_key") or "").strip()
+        shell_ids = parse_ids(request.form.getlist("scripts"))
+        did = parse_int(request.form.get("datasource_id"))
+        prom_ids = parse_ids(request.form.getlist("prom_scripts"))
+        # 保存硬校验：**本次新增**的 Shell 脚本须已配 SSH；已选 PromQL 脚本须已选数据源。
+        cur_server = models.fetch_one("servers", sid) if sid else None
+        existing_shell = set(parse_ids(json_or((cur_server or {}).get("scripts_json"), [])))
+        copy_from = parse_int(request.form.get("copy_from"))
+        if not sid and copy_from:
+            _src = models.fetch_one("servers", copy_from)
+            if _src:
+                existing_shell |= set(parse_ids(json_or(_src.get("scripts_json"), [])))
+        new_shell = set(shell_ids) - existing_shell
+        if new_shell and not (port and vault_key):
+            log.warning(
+                "shell-ssh gate: sid=%s copy_from=%s scripts=%s existing=%s",
+                sid, copy_from, shell_ids, sorted(existing_shell),
+            )
+            if sid:
+                # 编辑页：新增 Shell 脚本必须配 SSH，阻止保存。
+                flash(i18n.t("servers.err_shell_needs_ssh"), "danger")
+                return redirect(url_for("servers"))
+            # 新建/复制页：忽略本次提交的 Shell 脚本并提示（不阻断保存）。
+            shell_ids = [x for x in shell_ids if x in existing_shell]
+            flash(i18n.t("servers.warn_shell_ignored"), "warning")
+        if prom_ids and not did and not sid:
+            flash(i18n.t("servers.err_prom_needs_ds"), "danger")
+            return redirect(url_for("servers"))
+        new_bindings: list[dict[str, Any]] = []
+        if not sid:
+            try:
+                new_bindings = _parse_bindings(request.form.get("bindings_json"))
+            except ValueError:
+                flash(i18n.t("servers.err_labels_json_saved"), "danger")
+                return redirect(url_for("servers"))
         data = {
             "group_id": parse_int(request.form.get("group_id")) or None,
             "hostname": hostname,
             "ip": ip,
-            "port": parse_int(request.form.get("port"), 0),  # 0=未设置（Prometheus-only 服务器可留空）
+            "port": port,  # 0=未设置（Prometheus-only 服务器可留空）
             "user": (request.form.get("user") or "").strip(),
-            "vault_key": (request.form.get("vault_key") or "").strip(),
-            "scripts_json": json.dumps(parse_ids(request.form.getlist("scripts"))),
-            "vm_ident": (request.form.get("vm_ident") or "").strip(),
+            "vault_key": vault_key,
+            "scripts_json": json.dumps(shell_ids),
+            "vm_ident": vm_ident,
             "enabled": 1 if request.form.get("enabled") else 0,
             "updated_at": models.utcnow(),
         }
         new_id = save_object("server", sid, data, g.ip, hostname)
-        # 新增时可一并绑定一个 Prometheus 数据源（可选）
+        # 新增：可一次性提交多条数据源绑定（新页 bindings_json）或旧的单条 datasource_id。
         if not sid:
-            did = parse_int(request.form.get("datasource_id"))
-            if did:
-                labels = (request.form.get("labels_json") or "{}").strip() or "{}"
-                try:
-                    json.loads(labels)
-                except ValueError:
-                    flash("数据源标签需为合法 JSON，服务器已保存但未创建绑定", "warning")
-                    return redirect(url_for("servers"))
-                with models.db() as conn:
-                    bind = {
-                        "server_id": new_id,
-                        "datasource_id": did,
-                        "prom_instance": (request.form.get("prom_instance") or "").strip(),
-                        "labels_json": labels,
-                        "scripts_json": json.dumps(parse_ids(request.form.getlist("prom_scripts"))),
-                        "enabled": 1,
-                    }
-                    bid = models.insert(conn, "server_datasources", bind)
-                    models.write_audit(conn, g.ip, "create", "server_datasource", bid, f"server-{new_id}", bind)
-        flash("服务器已保存", "success")
+            if not new_bindings and did:
+                new_bindings = [{
+                    "datasource_id": did,
+                    "prom_instance": (request.form.get("prom_instance") or "").strip(),
+                    "labels_json": (request.form.get("labels_json") or "{}").strip() or "{}",
+                    "scripts_json": prom_ids,
+                    "enabled": 1,
+                }]
+            with models.db() as conn:
+                for b in new_bindings:
+                    bid = models.insert(conn, "server_datasources", {**b, "server_id": new_id})
+                    models.write_audit(conn, g.ip, "create", "server_datasource", bid, f"server-{new_id}", b)
+        flash(i18n.t("servers.saved"), "success")
         return redirect(url_for("servers"))
 
     @app.route("/servers/<int:sid>/delete", methods=["POST"])
@@ -1555,6 +1690,7 @@ def create_app() -> Flask:
         name = (request.args.get("name") or "").strip()
         kind = (request.args.get("kind") or "").strip()
         desc = (request.args.get("desc") or "").strip()
+        tag = (request.args.get("tag") or "").strip()
         sort = request.args.get("sort") or "updated_at"
         order = {
             "updated_at": "updated_at DESC, id DESC",
@@ -1573,12 +1709,20 @@ def create_app() -> Flask:
         if desc:
             where.append("desc LIKE ?")
             params.append(f"%{desc}%")
+        if tag:
+            where.append("tags_json LIKE ?")
+            params.append(f'%"{tag}"%')
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         rows, total, page, pages = paginate(
             f"SELECT * FROM scripts{clause} ORDER BY {order}",
             f"SELECT COUNT(*) AS c FROM scripts{clause}",
             params, page, per_page,
         )
+        all_tags: list[str] = []
+        for r in models.fetch_all("scripts"):
+            for t in _row_tags(r):
+                if t not in all_tags:
+                    all_tags.append(t)
         for r in rows:
             content = backup.read_script(r)
             try:
@@ -1586,13 +1730,14 @@ def create_app() -> Flask:
             except Exception:  # noqa: BLE001
                 r["meta_warn"] = False
             r["lname"], r["ldesc"], r["lmeta"] = i18n.localize_script(r)
+            r["tags"] = _row_tags(r)
             if r.get("seed_key"):
                 r["dirty"] = bool(content) and content_hash(content) != (r.get("seed_hash") or "")
             else:
                 r["dirty"] = False
         return render_template(
             "scripts.html",
-            scripts=rows, name=name, kind=kind, desc=desc, sort=sort,
+            scripts=rows, name=name, kind=kind, desc=desc, tag=tag, all_tags=all_tags, sort=sort,
             page=page, per_page=per_page, total=total, pages=pages,
         )
 
@@ -1744,6 +1889,7 @@ def create_app() -> Flask:
             "filename": (request.form.get("filename") or "").strip(),
             "kind": kind,
             "i18n_json": json.dumps(ij, ensure_ascii=False),
+            "tags_json": json.dumps(_parse_tags(request.form.get("tags")), ensure_ascii=False),
             "updated_at": models.utcnow(),
         }
         # Base columns: user scripts always; built-ins only when editing the base language.

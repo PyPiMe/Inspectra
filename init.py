@@ -81,6 +81,7 @@ def _seed_scripts(force: bool = False) -> dict:
         if items.get("en"):
             entry_en["items"] = items["en"]
         i18n = json.dumps({"zh-CN": entry_zh, "en": entry_en}, ensure_ascii=False)
+        tags_json = json.dumps(item.get("tags") or [], ensure_ascii=False)
         row = by_seed.get(key)
         if row is None:
             cand = by_name.get((name, kind))
@@ -101,6 +102,7 @@ def _seed_scripts(force: bool = False) -> dict:
                         "seed_key": key,
                         "seed_hash": chash,
                         "i18n_json": i18n,
+                        "tags_json": tags_json,
                         "created_at": models.utcnow(),
                         "updated_at": models.utcnow(),
                     },
@@ -157,6 +159,7 @@ def _seed_scripts(force: bool = False) -> dict:
                     "seed_key": key,
                     "seed_hash": chash,
                     "i18n_json": i18n,
+                    "tags_json": tags_json,
                     "updated_at": models.utcnow(),
                 },
             )

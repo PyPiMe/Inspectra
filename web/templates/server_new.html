@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% from "_macros.html" import script_picker %}
+{% block title %}{{ t('servers.copy_title') if copy_mode else t('servers.new_title') }}{% endblock %}
+{% block content %}
+{% set ssh_configured = server.port or server.vault_key %}
+
+<div class="card mb-3">
+  <div class="card-body py-2 d-flex flex-wrap align-items-center gap-2">
+    <div class="me-3">
+      <div class="h4 mb-0">{{ t('servers.copy_title') if copy_mode else t('servers.new_title') }}</div>
+      <div class="text-muted small">{{ t('servers.new_page_hint') }}</div>
+    </div>
+    <div class="ms-auto">
+      <a class="btn btn-outline-secondary" href="{{ url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
+    </div>
+  </div>
+</div>
+
+<form id="serverForm" method="post" action="{{ url_for('servers_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if copy_mode %}<input type="hidden" name="copy_from" value="{{ server.copy_from }}">{% endif %}
+  <input type="hidden" name="bindings_json" id="bindingsJson" value="[]">
+
+  <div class="card mb-3">
+    <div class="card-header">{{ t('server_detail.section_basic') }}</div>
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-md-6"><label class="form-label">{{ t('servers.hostname') }}</label><input class="form-control" name="hostname" value="{{ server.hostname }}" required></div>
+        <div class="col-md-6"><label class="form-label">{{ t('common.ip') }}</label><input class="form-control" name="ip" value="{{ server.ip }}" required></div>
+        <div class="col-md-6"><label class="form-label">{{ t('servers.group') }}</label>
+          <select class="form-select" name="group_id"><option value="">-</option>
+            {% for g in groups %}<option value="{{ g.id }}" {{ 'selected' if server.group_id==g.id else '' }}>{{ g.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-md-6 d-flex align-items-end">
+          <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" id="srvEnabled" {{ 'checked' if server.enabled else '' }}><label class="form-check-label" for="srvEnabled">{{ t('common.enabled') }}</label></div>
+        </div>
+      </div>
+      <div class="mt-2">
+        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#advIdent" aria-expanded="{{ 'true' if server.vm_ident else 'false' }}">{{ t('server_detail.advanced') }}</button>
+        <div class="collapse {{ 'show' if server.vm_ident else '' }} mt-2" id="advIdent">
+          <div class="row g-2">
+            <div class="col-md-6"><label class="form-label">{{ t('servers.vm_ident_pve') }}</label>
+              <input class="form-control" name="vm_ident" value="{{ server.vm_ident or '' }}" placeholder="app-vm-01 / qemu/101">
+              <div class="form-text">{{ t('server_detail.vm_hint') | safe }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# SSH 接入：连接配置 + Shell 巡检脚本（同一张卡，先连接再选脚本） #}
+  <div class="card mb-3">
+    <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+      <span>{{ t('server_detail.section_ssh') }}</span>
+      <span class="text-muted small">{{ t('server_detail.ssh_shell_hint') }}</span>
+    </div>
+    <div class="card-body">
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label">{{ t('servers.ssh_port') }}</label><input class="form-control" name="port" id="sshPort" value="{{ server.port or '' }}" placeholder="{{ t('servers.port_ph') }}"></div>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.user') }}</label><input class="form-control" name="user" value="{{ server.user }}"></div>
+        <div class="col-md-4"><label class="form-label">{{ t('servers.credential') }}</label>
+          <select class="form-select" name="vault_key" id="sshKey"><option value="">-</option>
+            {% for c in credentials %}<option value="{{ c.key }}" {{ 'selected' if server.vault_key==c.key else '' }}>{{ c.name }}{% if c.note %}（{{ c.note }}）{% endif %}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <hr class="my-3">
+      <div class="fw-semibold mb-1">{{ t('servers.shell_scripts') }}</div>
+      <div class="form-text text-muted d-none" id="shellGate">{{ t('servers.ssh_required_hint') }}</div>
+      <div id="shellGateArea">
+        {{ script_picker('scripts', shell_scripts, bound_scripts, 'spShellNew') }}
+      </div>
+    </div>
+  </div>
+
+  {# Prometheus 接入：数据源绑定 + PromQL 脚本（同一张卡） #}
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span>{{ t('server_detail.section_prom') }} <span class="fw-normal text-muted">{{ t('server_detail.binding_optional_multi') }}</span></span>
+      <button type="button" class="btn btn-sm btn-primary" id="bindAdd">{{ t('server_detail.add_binding') }}</button>
+    </div>
+    <div class="card-body">
+      <div id="bindRows"></div>
+      <div class="text-muted small d-none" id="bindEmpty">{{ t('server_detail.no_binding') }}</div>
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <button class="btn btn-primary">{{ t('server_detail.save_server') }}</button>
+  </div>
+</form>
+
+<template id="bindRowTpl">
+  <div class="border rounded p-2 mb-2 bind-row">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-3"><label class="form-label small mb-0">{{ t('nav.datasources') }}</label>
+        <select class="form-select form-select-sm b-ds"><option value="">-</option>
+          {% for d in datasources %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3"><label class="form-label small mb-0">prom_instance</label><input class="form-control form-control-sm b-inst"></div>
+      <div class="col-md-4"><label class="form-label small mb-0">{{ t('servers.labels_override') }} (JSON)</label><input class="form-control form-control-sm b-labels" value="{}"></div>
+      <div class="col-md-2 text-end"><button type="button" class="btn btn-sm btn-outline-danger b-del">&times;</button></div>
+      <div class="col-12"><label class="form-label small mb-0">{{ t('servers.prom_scripts') }}</label>
+        <select class="form-select form-select-sm b-scripts" multiple size="5">
+          {% for s in prom_items %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-12"><div class="form-check"><input class="form-check-input b-enabled" type="checkbox" checked><label class="form-check-label small">{{ t('common.enabled') }}</label></div></div>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const rowsBox = document.getElementById('bindRows');
+  const tpl = document.getElementById('bindRowTpl');
+  const empty = document.getElementById('bindEmpty');
+  const prefill = {{ prefill_bindings | tojson }};
+  function refreshEmpty() { if (empty) empty.classList.toggle('d-none', rowsBox.querySelectorAll('.bind-row').length > 0); }
+  function addRow(b) {
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    rowsBox.appendChild(node);
+    if (b) {
+      node.querySelector('.b-ds').value = String(b.datasource_id || '');
+      node.querySelector('.b-inst').value = b.prom_instance || '';
+      node.querySelector('.b-labels').value = b.labels_json || '{}';
+      node.querySelector('.b-enabled').checked = !!b.enabled;
+      const sels = new Set((b.scripts_json || []).map(String));
+      node.querySelectorAll('.b-scripts option').forEach((o) => { o.selected = sels.has(o.value); });
+    }
+    refreshEmpty();
+  }
+  if (prefill.length) prefill.forEach(addRow); else addRow(null);  // 默认展示一条绑定
+  refreshEmpty();
+  document.getElementById('bindAdd').addEventListener('click', () => addRow(null));
+  rowsBox.addEventListener('click', (e) => {
+    const del = e.target.closest('.b-del');
+    if (del) { del.closest('.bind-row').remove(); refreshEmpty(); }
+  });
+  document.getElementById('serverForm').addEventListener('submit', () => {
+    const arr = [];
+    rowsBox.querySelectorAll('.bind-row').forEach((r) => {
+      const did = r.querySelector('.b-ds').value;
+      if (!did) return;
+      const scripts = [...r.querySelectorAll('.b-scripts option')].filter((o) => o.selected).map((o) => Number(o.value));
+      arr.push({
+        datasource_id: Number(did),
+        prom_instance: r.querySelector('.b-inst').value,
+        labels_json: r.querySelector('.b-labels').value || '{}',
+        scripts_json: scripts,
+        enabled: r.querySelector('.b-enabled').checked ? 1 : 0,
+      });
+    });
+    document.getElementById('bindingsJson').value = JSON.stringify(arr);
+  });
+
+  // 门控：未配 SSH 时禁用“未勾选”的 Shell 脚本（阻止新增）；已勾选/复制预填保持可用。
+  const port = document.getElementById('sshPort');
+  const key = document.getElementById('sshKey');
+  const gate = document.getElementById('shellGate');
+  const area = document.getElementById('shellGateArea');
+  const state = document.getElementById('sshState');
+  function sshOk() { return !!(port.value && key.value); }
+  function applyGate() {
+    const ok = sshOk();
+    if (gate) gate.classList.toggle('d-none', ok);
+    if (state) state.textContent = ok ? '{{ t("server_detail.ssh_configured") }}' : '{{ t("server_detail.ssh_unconfigured") }}';
+    if (area) area.querySelectorAll('input[type=checkbox]').forEach((cb) => { cb.disabled = !ok && !cb.checked; });
+  }
+  port.addEventListener('input', applyGate);
+  key.addEventListener('change', applyGate);
+  applyGate();
+})();
+</script>
+{% endblock %}

@@ -5,7 +5,7 @@
 <h4>{{ t('nav.servers') }}</h4>
 <div class="alert alert-secondary small mb-2">{{ t('servers.alert') }}</div>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
-  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createServer">{{ t('servers.new') }}</button>
+  <a class="btn btn-primary" href="{{ url_for('server_new') }}">{{ t('servers.new') }}</a>
   <form class="row g-2" method="get" action="{{ url_for('servers') }}">
     <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('servers.query_ph') }}"></div>
     <div class="col-auto">
@@ -43,6 +43,7 @@
       <td>{{ t('common.yes') if s.enabled else t('common.no') }}</td>
       <td class="text-nowrap">
         <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_detail', sid=s.id) }}">{{ t('common.details') }}</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_new', copy=s.id) }}">{{ t('servers.copy') }}</a>
         <form method="post" action="{{ url_for('servers_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('servers.confirm_delete') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
@@ -56,62 +57,4 @@
 </table>
 {{ pager('servers', {'q': q, 'group_id': group_id, 'enabled': enabled}, page, pages, total, per_page) }}
 
-<div class="modal fade" id="createServer"><div class="modal-dialog modal-lg"><div class="modal-content">
-  <form method="post" action="{{ url_for('servers_save') }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <div class="modal-header"><h5 class="modal-title">{{ t('servers.new_title') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body">
-      <h6 class="text-muted">{{ t('server_detail.section_basic') }}</h6>
-      <div class="row g-2 mb-2">
-        <div class="col-md-6"><label class="form-label">{{ t('servers.hostname') }}</label><input class="form-control" name="hostname" required></div>
-        <div class="col-md-6"><label class="form-label">{{ t('common.ip') }}</label><input class="form-control" name="ip" required></div>
-        <div class="col-md-6"><label class="form-label">{{ t('servers.group') }}</label>
-          <select class="form-select" name="group_id"><option value="">-</option>
-            {% for g in all_groups %}<option value="{{ g.id }}">{{ g.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-md-6 d-flex align-items-end">
-          <div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" id="newEnabled" checked><label class="form-check-label" for="newEnabled">{{ t('common.enabled') }}</label></div>
-        </div>
-      </div>
-      <div class="mb-2">
-        <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#newAdvIdent">{{ t('server_detail.advanced') }}</button>
-        <div class="collapse mt-2" id="newAdvIdent">
-          <div class="row g-2">
-            <div class="col-md-6"><label class="form-label">{{ t('servers.vm_ident') }}</label><input class="form-control" name="vm_ident" placeholder="{{ t('servers.vm_ident_ph') }}"></div>
-          </div>
-        </div>
-      </div>
-
-      <h6 class="text-muted">{{ t('server_detail.section_ssh') }}</h6>
-      <div class="row g-2 mb-2">
-        <div class="col-md-4"><label class="form-label">{{ t('servers.ssh_port') }}</label><input class="form-control" name="port" placeholder="{{ t('servers.port_ph') }}"></div>
-        <div class="col-md-4"><label class="form-label">{{ t('servers.user') }}</label><input class="form-control" name="user"></div>
-        <div class="col-md-4"><label class="form-label">{{ t('servers.credential') }}</label>
-          <select class="form-select" name="vault_key"><option value="">-</option>
-            {% for c in credentials %}<option value="{{ c.key }}">{{ c.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-12"><label class="form-label">{{ t('servers.shell_scripts') }}</label>
-          {{ script_picker('scripts', scripts, [], 'spShellCreate') }}
-        </div>
-      </div>
-
-      <h6 class="text-muted">{{ t('server_detail.section_prom') }} <span class="fw-normal">{{ t('servers.prom_binding') }}</span></h6>
-      <div class="row g-2">
-        <div class="col-md-4"><label class="form-label">{{ t('nav.datasources') }}</label>
-          <select class="form-select" name="datasource_id"><option value="">-</option>
-            {% for d in datasources %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="col-md-4"><label class="form-label">{{ t('servers.prom_instance') }}</label><input class="form-control" name="prom_instance"></div>
-        <div class="col-md-4"><label class="form-label">{{ t('servers.labels_override') }}</label>{{ label_editor('labels_json', '{}', 'leCreate') }}</div>
-        <div class="col-12"><label class="form-label">{{ t('servers.prom_scripts') }}</label>
-          {{ script_picker('prom_scripts', prom_scripts, [], 'spPromCreate') }}
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
-  </form>
-</div></div></div>
 {% endblock %}

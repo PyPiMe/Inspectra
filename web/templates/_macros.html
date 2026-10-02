@@ -72,16 +72,28 @@
 
 {% macro check_picker(name, items, selected, picker_id) %}
 {% set sel = selected or [] %}
+{% set tagmap = namespace(d={}) %}
+{% for it in items %}{% for tg in (it.tags or []) %}
+  {% set _ = tagmap.d.update({tg: tagmap.d.get(tg, 0) + 1}) %}
+{% endfor %}{% endfor %}
 <div class="script-picker" id="{{ picker_id }}">
   <div class="d-flex gap-1 mb-1 flex-wrap align-items-center">
     <input class="form-control form-control-sm sp-search" style="max-width: 14rem;" placeholder="{{ t('picker.search') }}">
     <button type="button" class="btn btn-sm btn-outline-secondary sp-all">{{ t('picker.all') }}</button>
     <button type="button" class="btn btn-sm btn-outline-secondary sp-none">{{ t('picker.none') }}</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary sp-onlysel">{{ t('picker.only_selected') }}</button>
     <span class="badge bg-secondary sp-count">{{ t('picker.selected', n=0) }}</span>
   </div>
+  {% if tagmap.d %}
+  <div class="d-flex gap-1 mb-1 flex-wrap align-items-center sp-tags">
+    {% for tg, cnt in tagmap.d.items() %}
+    <button type="button" class="btn btn-sm btn-outline-secondary py-0 sp-tag" data-tag="{{ tg }}">{{ tg }} <span class="text-muted">{{ cnt }}</span></button>
+    {% endfor %}
+  </div>
+  {% endif %}
   <div class="sp-list">
     {% for it in items %}
-      <label class="form-check sp-item" data-name="{{ (it.name ~ ' ' ~ (it.kind or '')) | lower }}">
+      <label class="form-check sp-item" data-name="{{ (it.name ~ ' ' ~ (it.kind or '') ~ ' ' ~ ((it.tags or []) | join(' '))) | lower }}" data-tags="{{ (it.tags or []) | join(',') }}">
         <input class="form-check-input" type="checkbox" name="{{ name }}" value="{{ it.id }}" {{ 'checked' if it.id in sel else '' }}>
         <span class="form-check-label">{{ it.name }}{% if it.kind %} <span class="text-muted small">({{ it.kind }})</span>{% endif %}</span>
       </label>

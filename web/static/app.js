@@ -141,6 +141,30 @@ function initScriptPickers(root) {
       p.querySelectorAll('input[type=checkbox]').forEach((cb) => { cb.checked = false; });
       update();
     });
+    // 标签条：单击=全选该标签脚本，再点=取消该标签脚本（一次性批量动作）
+    p.querySelectorAll('.sp-tag').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const tg = chip.dataset.tag || '';
+        const items = [...p.querySelectorAll('.sp-item')].filter(
+          (it) => (it.dataset.tags || '').split(',').includes(tg)
+        );
+        const allChecked = items.length > 0 && items.every((it) => it.querySelector('input').checked);
+        items.forEach((it) => { it.querySelector('input').checked = !allChecked; });
+        update();
+      });
+    });
+    // 仅看已选
+    const only = p.querySelector('.sp-onlysel');
+    let onlySel = false;
+    if (only) only.addEventListener('click', () => {
+      onlySel = !onlySel;
+      only.classList.toggle('active', onlySel);
+      p.querySelectorAll('.sp-item').forEach((it) => {
+        const hidden = it.dataset.relevant === '0';
+        const checked = it.querySelector('input').checked;
+        it.style.display = (!hidden && (!onlySel || checked)) ? '' : 'none';
+      });
+    });
     if (list) list.addEventListener('change', update);
     p.spRefresh = () => { filter(); update(); };
     update();
