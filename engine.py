@@ -29,6 +29,10 @@ from config import get_config
 
 log = logging.getLogger("pypimeops.engine")
 
+# Language-neutral marker for the "unassigned" application bucket (localized on display).
+# 未归属应用桶的语言中立标记（展示时本地化）。
+UNASSIGNED = "__unassigned__"
+
 _run_lock = threading.Lock()
 _current_run_id: int | None = None
 _current_started: str | None = None
@@ -385,13 +389,16 @@ def _analyze_batch(
     max_bytes = int(settings.get("model_output_max_bytes", 8192))
     batch_max = int(settings.get("model_batch_max_bytes", 32768))
     chunks: list[str] = []
+    any_truncated = False
     for item in batch:
         out, truncated = preprocess_output(item["text"], max_bytes)
+        any_truncated = any_truncated or truncated
         flag = " [truncated]" if truncated else ""
         chunks.append(f"### server_id={item['server_id']}{flag}\n{out}")
     data_text = "\n\n".join(chunks)
     if len(data_text.encode("utf-8", "replace")) > batch_max:
         data_text, _ = preprocess_output(data_text, batch_max)
+        any_truncated = True
 
     messages = [
         {"role": "system", "content": _system_prompt()},
@@ -405,7 +412,7 @@ def _analyze_batch(
         retries=int(settings.get("model_retry_times", 2)),
     )
     parsed = model_client.extract_json(content)
-    return {"raw": content, "parsed": parsed}
+    return {"raw": content, "parsed": parsed, "truncated": any_truncated}
 
 
 # ------------------------------------------------------------ 报告
@@ -416,6 +423,13 @@ def _st(status: Any) -> str:
     key = "status." + st.lower()
     val = i18n.t(key)
     return val if val != key else st
+
+
+def _app_display(name: Any) -> str:
+    """Display name for an app bucket (unassigned marker -> localized label). 应用展示名。"""
+    if str(name) == UNASSIGNED:
+        return i18n.t("reports2.unassigned")
+    return str(name or "")
 
 
 def _mode_label(mode: Any) -> str:
@@ -442,7 +456,7 @@ def _fmt_human_value(item: str, val_str: str) -> str:
     except (ValueError, TypeError):
         return val_str
     low = (item or "").lower()
-    if "bytes" in low or low.endswith("_bytes") or "字节" in (item or ""):
+    if "bytes" in low or low.endswith("_bytes"):
         units = ["B", "KB", "MB", "GB", "TB", "PB"]
         i = 0
         while abs(v) >= 1024 and i < len(units) - 1:
@@ -634,12 +648,12 @@ def _report_markdown(ctx: dict[str, Any]) -> str:
     ]) + " |")
     lines.append("|------|------|--------|------|")
     for a in app_groups:
-        lines.append(f"| {a['name']} | {_st(a['status'])} | {len(a['servers'])} | {_bad_count(a['servers'])} |")
+        lines.append(f"| {_app_display(a['name'])} | {_st(a['status'])} | {len(a['servers'])} | {_bad_count(a['servers'])} |")
     lines.append("")
     lines.append(i18n.t("report_md.detail_header"))
     for a in app_groups:
         lines.append("")
-        lines.append(i18n.t("report_md.app", name=a["name"], status=_st(a["status"])))
+        lines.append(i18n.t("report_md.app", name=_app_display(a["name"]), status=_st(a["status"])))
         lines.append("")
         lines.append("| " + " | ".join([
             i18n.t("report_md.th_servers"), i18n.t("report_md.th_status"), i18n.t("report_md.th_issues"),
@@ -893,6 +907,9 @@ def run(
                     it["key"] = _k
                     it["name"] = i18n.localize_item(_row, _k)
 
+        # PromQL instance ambiguity events (flag set by collectors). 实例歧义事件计数。
+        ambiguous_hits = sum(1 for r in results if (r.meta or {}).get("ambiguous"))
+
         # 按服务器分组
         by_server: dict[int, list[collectors.CollectResult]] = {}
         for r in results:
@@ -923,12 +940,15 @@ def run(
         if mode == "model":
             _set_progress("model", i18n.t("run.phase_model"), 0, len(batch_items))
         analyzed = 0
+        oversize_hits = 0
         if batch_items:
             with ThreadPoolExecutor(max_workers=model_concurrency) as pool:
                 futs = [pool.submit(_analyze_batch, model, b, settings, secrets) for b in batch_items]
                 for fut in as_completed(futs):
                     try:
                         res = fut.result()
+                        if res.get("truncated"):
+                            oversize_hits += 1
                         model_raw_chunks.append(res["raw"])
                         if res["parsed"]:
                             for k, v in res["parsed"].items():
@@ -955,7 +975,7 @@ def run(
             sid = int(server["id"])
             rs = by_server.get(sid, [])
             app_ids = server_apps.get(sid) or []
-            app_label = "、".join(app_names.get(i, f"#{i}") for i in app_ids) or "未归属"
+            app_label = "、".join(app_names.get(i, f"#{i}") for i in app_ids) or UNASSIGNED
             server_name = server.get("hostname") or server.get("ip") or f"server-{sid}"
             if not rs:
                 # 已选中但无可执行项（无 Shell 脚本、无启用的数据源绑定）
@@ -1076,7 +1096,7 @@ def run(
         app_groups = [
             {
                 "application_id": aid or 0,
-                "name": app_names.get(aid, "未归属") if aid else "未归属",
+                "name": app_names.get(aid, UNASSIGNED) if aid else UNASSIGNED,
                 "servers": _app_buckets[aid],
                 "status": collectors.aggregate_status([x["status"] for x in _app_buckets[aid]]),
             }
@@ -1140,6 +1160,26 @@ def run(
                 # 无启用通知：仅日志落盘
                 subject, body = notify.build_alert(summary, targets_label)
                 log.warning("告警（未启用通知，仅日志）：%s\n%s", subject, body)
+
+        # Event notifications (independent switches): output oversize / instance ambiguity.
+        # 事件通知（独立开关）：输出超限 / 实例歧义。
+        def _on(key: str) -> bool:
+            return str(settings.get(key, "true")).lower() in ("1", "true", "yes")
+
+        events: list[tuple[str, int]] = []
+        if oversize_hits and _on("notify_oversize_enabled"):
+            events.append(("oversize", oversize_hits))
+        if ambiguous_hits and _on("notify_ambiguous_enabled"):
+            events.append(("ambiguous", ambiguous_hits))
+        if events:
+            ev_notifications = [n for n in maps["notifications"].values() if n.get("enabled", 1)]
+            if ev_notifications:
+                ev_fail = notify.send_events(ev_notifications, secrets, events, run_id, targets_label)
+                with models.db() as conn:
+                    models.write_audit(conn, operator_ip, "notify_event", "run", run_id, trigger,
+                                       {"events": events, "failures": ev_fail}, "error" if ev_fail else "ok")
+            else:
+                log.warning("事件（未启用通知，仅日志）：%s", events)
 
         with models.db() as conn:
             conn.execute(

@@ -23,7 +23,6 @@ from flask import (
     redirect,
     render_template,
     request,
-    send_file,
     session,
     url_for,
 )
@@ -346,13 +345,13 @@ def _localize_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
                 it["item"] = i18n.localize_item(row, it["item_key"])
         if it.get("app_ids"):
             it["app"] = _app_label(it["app_ids"], amap)
-        elif it.get("app") == "未归属":
+        elif it.get("app") in ("未归属", "__unassigned__"):
             it["app"] = i18n.t("reports2.unassigned")
     for a in summary.get("apps") or []:
         aid = a.get("id")
         if aid:
             a["name"] = amap.get(int(aid), a.get("name"))
-        elif a.get("name") == "未归属":
+        elif a.get("name") in ("未归属", "__unassigned__"):
             a["name"] = i18n.t("reports2.unassigned")
     summary["issues"] = issues
     return summary
@@ -922,16 +921,12 @@ def create_app() -> Flask:
                 {"name": a["lname"] or a["name"], "status": "-", "server_count": len(amap.get(int(a["id"]), []))}
                 for a in applications
             ]
-        status_counts: dict[str, int] = {}
-        for s in servers:
-            pass
         return render_template(
             "dashboard.html",
             runs=runs,
             servers=servers,
             latest=latest,
             summary=summary,
-            status_counts=status_counts,
             apps_health=apps_health,
             group_count=len(models.fetch_all("groups")),
             application_count=len(applications),

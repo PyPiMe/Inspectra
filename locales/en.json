@@ -936,5 +936,10 @@
   "common.datetime_format": "%b %d, %Y %H:%M:%S %Z",
   "settings.saved": "Settings saved",
   "settings.reload_locales_hint": "Clicking \"Reload locales\" re-scans <code>locales/</code> and <code>locales/custom/</code>; new languages then appear in the default-language dropdown and the top-right menu (files starting with <code>_</code> are skipped; missing entries fall back).",
-  "reports2.recovered": "Recovered / history"
+  "reports2.recovered": "Recovered / history",
+  "notify.event_subject": "[{site}] Inspection event",
+  "notify.event_header": "Events triggered by this run:",
+  "notify.event_oversize": "Oversize: {n} analysis batch(es) truncated by model_output_max_bytes",
+  "notify.event_ambiguous": "Ambiguity: {n} query(ies) matched multiple instances (set an explicit prom_instance in the binding)",
+  "notify.event_run": "Run #{id}"
 }

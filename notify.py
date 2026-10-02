@@ -42,6 +42,8 @@ def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
             row = models.fetch_one("applications", int(aid))
             if row:
                 a["name"] = i18n.localize_named(row, lang)[0]
+        elif a.get("name") in ("未归属", "__unassigned__"):
+            a["name"] = i18n.t_for(lang, "reports2.unassigned")
     for it in s.get("issues") or []:
         aids = it.get("app_ids") or []
         if aids:
@@ -50,7 +52,7 @@ def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
                 row = models.fetch_one("applications", int(aid))
                 names.append(i18n.localize_named(row, lang)[0] if row else f"#{aid}")
             it["app"] = "、".join(names)
-        elif it.get("app") == "未归属":
+        elif it.get("app") in ("未归属", "__unassigned__"):
             it["app"] = i18n.t_for(lang, "reports2.unassigned")
         sid = it.get("script_id")
         if sid:
@@ -206,6 +208,37 @@ def send_all(
             continue
         lang = _default_lang()
         subject, body = build_alert(summary, targets_label, lang)
+        ok, err = send_with_retry(n, secrets, subject, body, lang=lang)
+        if not ok:
+            failures.append({"id": n.get("id"), "name": n.get("name"), "error": err})
+    return failures
+
+
+def build_event(events: list, run_id: int, targets_label: str = "", lang: str | None = None) -> tuple[str, str]:
+    """Build an event notification (oversize / ambiguity) in a language. 组装事件通知。"""
+    lang = lang or _default_lang()
+    subject = i18n.t_for(lang, "notify.event_subject", site=_site_title())
+    lines = [i18n.t_for(lang, "notify.event_header")]
+    for kind, n in events:
+        if kind == "oversize":
+            lines.append("- " + i18n.t_for(lang, "notify.event_oversize", n=n))
+        elif kind == "ambiguous":
+            lines.append("- " + i18n.t_for(lang, "notify.event_ambiguous", n=n))
+    lines.append(i18n.t_for(lang, "notify.event_run", id=run_id))
+    if targets_label:
+        lines.append(i18n.t_for(lang, "notify.target_line", target=targets_label))
+    return subject, "\n".join(lines)
+
+
+def send_events(notifications: list[dict[str, Any]], secrets: dict[str, str], events: list,
+                run_id: int, targets_label: str = "") -> list[dict[str, Any]]:
+    """Send an event notification to all enabled notifications (default language)."""
+    lang = _default_lang()
+    subject, body = build_event(events, run_id, targets_label, lang)
+    failures: list[dict[str, Any]] = []
+    for n in notifications:
+        if not n.get("enabled", 1):
+            continue
         ok, err = send_with_retry(n, secrets, subject, body, lang=lang)
         if not ok:
             failures.append({"id": n.get("id"), "name": n.get("name"), "error": err})

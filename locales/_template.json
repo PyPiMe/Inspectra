@@ -923,5 +923,10 @@
   "common.datetime_format": "%Y-%m-%d %H:%M:%S %Z",
   "settings.saved": "设置已保存",
   "settings.reload_locales_hint": "点击「重新加载语言包」会重新扫描 <code>locales/</code> 与 <code>locales/custom/</code>，新语言随即出现在默认语言下拉与右上角语言菜单（<code>_</code> 开头文件跳过；缺失词条按回退链）。",
-  "reports2.recovered": "已恢复 / 历史"
+  "reports2.recovered": "已恢复 / 历史",
+  "notify.event_subject": "[{site}] 巡检事件通知",
+  "notify.event_header": "本次巡检触发事件：",
+  "notify.event_oversize": "输出超限：{n} 个分析批次因超过 model_output_max_bytes 被截断",
+  "notify.event_ambiguous": "实例歧义：{n} 个查询命中多个实例（请在绑定中填写显式 prom_instance）",
+  "notify.event_run": "运行 #{id}"
 }
