@@ -70,6 +70,9 @@
 </div>
 {% endif %}
 
+{# Selection/batch controls apply to the flat list only; the grouped "needs attention"
+   view is read-only. 选择/批量仅用于扁平列表；分组「需关注」视图为只读。 #}
+{% if grouped is not defined %}
 <div class="alert alert-light border py-1 px-2 mb-2 d-none" id="uiBatchBar">
   <div class="d-flex flex-wrap align-items-center gap-2">
     <span class="small">{{ t('reports.selected_prefix') }}<strong id="uiSelCount">0</strong>{{ t('reports.selected_suffix') }}</span>
@@ -79,6 +82,7 @@
     <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBatchClear">{{ t('common.cancel_select') }}</button>
   </div>
 </div>
+{% endif %}
 
 {# Grouped "needs attention" view has no flat page select-all. 分组视图不提供全选当前页。 #}
 {% if grouped is not defined %}
@@ -115,7 +119,6 @@
       {% for r in g.runs %}
       <div class="card rep-card mb-2" {% if r.report_file %}data-href="{{ url_for('report_detail', rid=r.id) }}"{% endif %} style="cursor:{% if r.report_file %}pointer{% else %}default{% endif %};">
         <div class="card-body py-2 d-flex align-items-center gap-3">
-          <input class="form-check-input mt-0 row-cb" type="checkbox" value="{{ r.id }}">
           <div class="flex-grow-1">
             <div class="d-flex align-items-center gap-2 flex-wrap">
               <span class="text-{{ status_color.get(r.status, 'secondary') }}">●</span>
