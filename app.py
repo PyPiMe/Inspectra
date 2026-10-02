@@ -378,6 +378,135 @@ def _t_or(key: str, fallback: str) -> str:
     return val if val != key else fallback
 
 
+_BAD_SRV = ("WARN", "FAIL", "ERROR")
+
+
+def _run_targets(run: dict[str, Any], apps: dict, groups: dict, servers_map: dict) -> list:
+    tj = json_or(run.get("targets_json"), {})
+    if tj.get("applications"):
+        return [("app", int(i), apps.get(int(i), f"#{i}")) for i in tj["applications"]]
+    if tj.get("groups"):
+        return [("group", int(i), groups.get(int(i), f"#{i}")) for i in tj["groups"]]
+    if tj.get("servers"):
+        return [("server", int(i), servers_map.get(int(i), f"#{i}")) for i in tj["servers"]]
+    if tj.get("all"):
+        return [("all", 0, "__ALL__")]
+    return [("unassigned", 0, "__UNASSIGNED__")]
+
+
+def _target_attention(run: dict[str, Any], detail: dict | None, typ: str, tid: int, group_servers: dict) -> bool:
+    """Whether a target still needs attention in a run, by its own servers.
+
+    目标维度判定：按该目标下的服务器状态/问题项，而非运行级（消除混合运行牵连）。
+    """
+    if typ == "all":
+        return bool(run.get("issue_count")) or run.get("status") in ("error", "partial")
+    if not detail or not detail.get("apps"):
+        return bool(run.get("issue_count")) or run.get("status") in ("error", "partial")
+    apps = detail.get("apps") or []
+    issues = (run.get("summary_obj") or {}).get("issues") or []
+
+    def has_issue(sids: set[int]) -> bool:
+        for it in issues:
+            sid = it.get("server_id")
+            if sid and int(sid) in sids and (it.get("status") or "").upper() in ("WARN", "FAIL", "ERROR", "UNKNOWN"):
+                return True
+        return False
+
+    if typ in ("app", "unassigned"):
+        want = tid if typ == "app" else 0
+        for a in apps:
+            if int(a.get("application_id") or 0) == want:
+                srvs = a.get("servers") or []
+                if any((s.get("status") or "").upper() in _BAD_SRV for s in srvs):
+                    return True
+                return has_issue({int(s.get("server_id") or 0) for s in srvs})
+        return False
+    if typ == "group":
+        sids = set(group_servers.get(tid, []))
+        for a in apps:
+            for s in a.get("servers") or []:
+                if int(s.get("server_id") or 0) in sids and (s.get("status") or "").upper() in _BAD_SRV:
+                    return True
+        return has_issue(sids)
+    if typ == "server":
+        for a in apps:
+            for s in a.get("servers") or []:
+                if int(s.get("server_id") or 0) == tid:
+                    return (s.get("status") or "").upper() in _BAD_SRV or has_issue({tid})
+        return has_issue({tid})
+    return False
+
+
+def _group_runs_by_target(rows: list[dict], apps: dict, groups: dict, servers_map: dict,
+                          group_servers: dict, detail_of) -> tuple[list[dict], list[dict]]:
+    """Split decorated runs into (needs-attention, recovered) target groups.
+
+    按目标汇总运行，并按“目标最新一次运行”判定 需关注 / 已恢复。
+    """
+    per: dict[tuple, dict] = {}
+    for r in rows:
+        for typ, tid, name in _run_targets(r, apps, groups, servers_map):
+            per.setdefault((typ, tid), {"type": typ, "name": name, "runs": []})["runs"].append(r)
+    need: list[dict] = []
+    recovered: list[dict] = []
+    for (typ, tid), info in per.items():
+        runs = sorted(info["runs"], key=lambda x: (x.get("id") or 0), reverse=True)
+        latest = runs[0]
+        latest_bad = _target_attention(latest, detail_of(latest["id"]), typ, tid, group_servers)
+        hist_bad = any(_target_attention(rr, detail_of(rr["id"]), typ, tid, group_servers) for rr in runs[1:])
+        entry = {"name": info["name"], "type": typ, "runs": runs, "latest": latest,
+                 "recovered": (not latest_bad) and hist_bad}
+        if latest_bad:
+            need.append(entry)
+        elif hist_bad:
+            recovered.append(entry)
+    need.sort(key=lambda g: -(g["latest"].get("id") or 0))
+    recovered.sort(key=lambda g: -(g["latest"].get("id") or 0))
+    return need, recovered
+
+
+def _report_target_maps() -> tuple[dict, dict, dict, dict]:
+    """Localized app/group/server maps + group->server ids for report targeting."""
+    apps = {int(a["id"]): a["name"] for a in _picker_named(models.fetch_all("applications"))}
+    groups = {int(g["id"]): g["name"] for g in _picker_named(models.fetch_all("groups"))}
+    srv_rows = models.fetch_all("servers")
+    servers_map = {int(s["id"]): (s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in srv_rows}
+    group_servers: dict[int, list[int]] = {}
+    for s in srv_rows:
+        if s.get("group_id"):
+            group_servers.setdefault(int(s["group_id"]), []).append(int(s["id"]))
+    return apps, groups, servers_map, group_servers
+
+
+def _detail_loader():
+    """Cached detail_json loader per run id. 报告结构化数据按 run 缓存加载。"""
+    cache: dict[int, Any] = {}
+
+    def load(rid: int):
+        if rid not in cache:
+            drow = models.query("SELECT detail_json FROM run_results WHERE run_id=?", (rid,))
+            try:
+                cache[rid] = json.loads(drow[0]["detail_json"] or "{}") if drow else None
+            except (ValueError, TypeError):
+                cache[rid] = None
+        return cache[rid]
+
+    return load
+
+
+def _need_target_count() -> int:
+    """Global count of targets whose latest run still needs attention. 需关注目标数（全局）。"""
+    rows = []
+    for r in models.fetch_all("run_history", order="id DESC"):
+        d = dict(r)
+        d["summary_obj"] = _localize_summary(json_or(d.get("summary"), {}))
+        rows.append(d)
+    apps, groups, servers_map, grp = _report_target_maps()
+    need, _ = _group_runs_by_target(rows, apps, groups, servers_map, grp, _detail_loader())
+    return len(need)
+
+
 _EXTRA_TEMPLATE_KEYS = [
     "model.extra_none", "model.extra_deepseek_no_thinking",
     "model.extra_effort_low", "model.extra_effort_high", "model.extra_openai_json",
@@ -2164,8 +2293,8 @@ def create_app() -> Flask:
         start = request.args.get("start") or ""
         end = request.args.get("end") or ""
         where, params = [], []
-        if status == "need":
-            where.append("(issue_count>0 OR status IN ('error','partial'))")
+        # For "need" the window is trigger/time only; membership is decided per target
+        # from its latest run (see the grouping branch below). 「需关注」窗口仅 trigger/时间。
         if result in ("success", "partial", "error", "running"):
             where.append("status=?")
             params.append(result)
@@ -2181,9 +2310,6 @@ def create_app() -> Flask:
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         total_all = (models.query("SELECT COUNT(*) AS c FROM run_history")[0]["c"] or 0)
         counts = {row["status"]: row["c"] for row in models.query("SELECT status, COUNT(*) AS c FROM run_history GROUP BY status")}
-        need_count = models.query(
-            "SELECT COUNT(*) AS c FROM run_history WHERE issue_count>0 OR status IN ('error','partial')"
-        )[0]["c"]
 
         def _decorate(r):
             sm = _localize_summary(json_or(r.get("summary"), {}))
@@ -2197,37 +2323,30 @@ def create_app() -> Flask:
         # 「需关注」按“巡检大目标类型”分组：应用巡检→按应用；分组巡检→按分组；服务器巡检→按服务器
         # "Needs attention" grouped by the run's target type: application / group / server
         if status == "need":
+            # Judgement is per target's LATEST run in the current window (trigger/time),
+            # computed from structured detail (target dimension). 「需关注」按目标最新一次运行判定。
             all_rows = [_decorate(dict(r)) for r in models.query(f"SELECT * FROM run_history{clause} ORDER BY id DESC", tuple(params))]
-            _apps = {int(a["id"]): a["name"] for a in _picker_named(models.fetch_all("applications"))}
-            _groups = {int(g["id"]): g["name"] for g in _picker_named(models.fetch_all("groups"))}
-            _servers = {int(s["id"]): (s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in models.fetch_all("servers")}
+            _apps, _groups, _servers, _grp_srv = _report_target_maps()
+            need, recovered = _group_runs_by_target(all_rows, _apps, _groups, _servers, _grp_srv, _detail_loader())
+            result_filter = result in ("success", "partial", "error", "running")
 
-            def _keys(r):
-                tj = json_or(r.get("targets_json"), {})
-                if tj.get("applications"):
-                    return [(_apps.get(int(i), f"#{i}"), "app") for i in tj["applications"]]
-                if tj.get("groups"):
-                    return [(_groups.get(int(i), f"#{i}"), "group") for i in tj["groups"]]
-                if tj.get("servers"):
-                    return [(_servers.get(int(i), f"#{i}"), "server") for i in tj["servers"]]
-                if tj.get("all"):
-                    return [("__ALL__", "all")]
-                return [("__UNASSIGNED__", "unassigned")]
+            def _prep(entries):
+                out = []
+                for g in entries:
+                    disp = [x for x in g["runs"] if (not result_filter) or x.get("status") == result]
+                    if not disp:
+                        continue
+                    gg = dict(g)
+                    gg["runs"] = disp[:5]
+                    gg["count"] = len(disp)
+                    out.append(gg)
+                return out
 
-            buckets: dict[str, dict] = {}
-            for r in all_rows:
-                for k, typ in _keys(r):
-                    b = buckets.setdefault(k, {"name": k, "type": typ, "runs": []})
-                    b["runs"].append(r)
-            grouped = [
-                {"name": b["name"], "type": b["type"], "runs": b["runs"][:5],
-                 "count": len(b["runs"]), "latest": b["runs"][0]}
-                for b in buckets.values()
-            ]
-            grouped.sort(key=lambda g: -(g["latest"].get("id") or 0))
+            grouped = _prep(need) + _prep(recovered)
             return render_template(
-                "reports.html", grouped=grouped, status=status, result=result, trigger=trigger, start=start, end=end,
-                total=len(all_rows), total_all=total_all, counts=counts, need_count=need_count,
+                "reports.html", grouped=grouped, status=status, result=result,
+                trigger=trigger, start=start, end=end,
+                total=len(all_rows), total_all=total_all, counts=counts, need_count=len(need),
                 status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
             )
 
@@ -2242,7 +2361,7 @@ def create_app() -> Flask:
         return render_template(
             "reports.html", reports=rows, status=status, result=result, trigger=trigger, start=start, end=end,
             page=page, pages=pages, total=total, per_page=per_page, total_all=total_all,
-            counts=counts, need_count=need_count,
+            counts=counts, need_count=_need_target_count(),
             status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
         )
 

@@ -80,21 +80,33 @@
   </div>
 </div>
 
+{# Grouped "needs attention" view has no flat page select-all. 分组视图不提供全选当前页。 #}
+{% if grouped is not defined %}
 <div class="d-flex align-items-center gap-2 mb-2">
   <div class="form-check m-0"><input class="form-check-input" type="checkbox" id="uiSelectAll"><label class="form-check-label small" for="uiSelectAll">{{ t('common.select_page') }}</label></div>
 </div>
+{% endif %}
 
 {% if grouped is defined %}
 {% set TYPECN = {'app': t('reports2.type_app'), 'group': t('reports2.type_group'), 'server': t('reports2.type_server'), 'all': t('reports2.type_all'), 'unassigned': t('reports2.unassigned')} %}
 <div class="mb-2">
+{% set ns = namespace(shown_recovered=false) %}
 {% for g in grouped %}
+  {% if g.recovered and not ns.shown_recovered %}
+    {% set ns.shown_recovered = true %}
+    <div class="text-muted small mt-3 mb-1">{{ t('reports2.recovered') }}</div>
+  {% endif %}
   {% set gid = 'grp' ~ loop.index %}
   <div class="card mb-2">
     <div class="card-header d-flex align-items-center gap-2 flex-wrap" role="button" data-bs-toggle="collapse" data-bs-target="#{{ gid }}">
       <span class="text-muted">▸</span>
       <span class="badge bg-light text-dark border">{{ TYPECN.get(g.type, '') }}</span>
       <strong>{{ t('reports2.all_servers') if g.name == '__ALL__' else (t('reports2.unassigned') if g.name == '__UNASSIGNED__' else g.name) }}</strong>
+      {% if g.recovered %}
+      <span class="badge bg-success-subtle text-success border border-success-subtle">{{ t('reports2.recovered') }}</span>
+      {% else %}
       <span class="badge bg-danger">{{ t('reports.need') }} {{ g.count }}</span>
+      {% endif %}
       {% if g.latest.fail_count %}<span class="badge bg-danger">{{ t('status.fail') }} {{ g.latest.fail_count }}</span>{% endif %}
       {% if g.latest.warn_count %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ g.latest.warn_count }}</span>{% endif %}
       <span class="text-muted ms-auto">{{ t('reports2.latest') }} {{ g.latest.started|local }}</span>
