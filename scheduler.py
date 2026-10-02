@@ -85,6 +85,7 @@ class Scheduler:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._last_cleanup_day = None
+        self._inflight: set[int] = set()  # 防同任务在触发间隙重复 spawn
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -134,9 +135,22 @@ class Scheduler:
 
     def _fire(self, schedule: dict[str, Any]) -> None:
         sid = int(schedule["id"])
-        # 先落 last_fired_at（运行时字段，不写版本/审计）防同分钟重复触发
-        with models.db() as conn:
-            conn.execute("UPDATE run_schedule SET last_fired_at=? WHERE id=?", (models.utcnow(), sid))
+        if sid in self._inflight:
+            return
+        # 抢到全局 run 锁才登记 last_fired_at；失败不消耗本轮触发（同分钟由后续 tick 补跑）。
+        if not engine.begin_scheduled(sid):
+            log.warning("定时任务 #%s 抢锁失败（busy），本轮跳过，等待同分钟补跑", sid)
+            try:
+                with models.db() as conn:
+                    models.write_audit(
+                        conn, "scheduler", "schedule_skip", "schedule", sid,
+                        schedule.get("name") or "", {"reason": "busy"},
+                    )
+            except Exception:  # noqa: BLE001
+                log.exception("写 schedule_skip 审计失败")
+            return
+        self._inflight.add(sid)
+
         targets = schedule.get("targets_json")
         scripts = schedule.get("scripts_json")
         try:
@@ -152,10 +166,11 @@ class Scheduler:
 
         def _worker() -> None:
             try:
-                engine.run(targets, scripts, trigger="schedule", schedule_id=sid, operator_ip="scheduler", mode=mode)
-            except engine.RunBusy:
-                log.warning("定时任务 #%s 触发时已有 run 进行中，跳过本轮", sid)
+                engine.run(targets, scripts, trigger="schedule", schedule_id=sid, operator_ip="scheduler",
+                           mode=mode, lock_held=True)
             except Exception:  # noqa: BLE001
                 log.exception("定时任务 #%s 执行失败", sid)
+            finally:
+                self._inflight.discard(sid)
 
         threading.Thread(target=_worker, name=f"pypimeops-run-{sid}", daemon=True).start()

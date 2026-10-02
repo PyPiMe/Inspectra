@@ -958,5 +958,6 @@
   "server_detail.ssh_shell_hint": "Configure the connection first, then pick shell scripts",
   "servers.new_page_hint": "Fill in the form, then click \"Save server\" at the bottom",
   "servers.ssh_required_hint": "Configure SSH (port + credential) first to pick shell scripts",
-  "servers.err_vm_ident_dup": "PVE VM ident {vm} is already used by another server"
+  "servers.err_vm_ident_dup": "PVE VM ident {vm} is already used by another server",
+  "audit.schedule_skip": "Schedule skipped"
 }

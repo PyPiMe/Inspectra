@@ -706,6 +706,22 @@ def _write_report(run_id: int, content: str) -> str:
 
 # ------------------------------------------------------------ 主流程
 
+def begin_scheduled(schedule_id: int) -> bool:
+    """Acquire the run lock for a scheduled run and register last_fired_at on success.
+
+    定时任务：非阻塞抢占全局 run 锁，**抢到才登记** last_fired_at；失败返回 False（不消耗本轮触发）。
+    """
+    if not _run_lock.acquire(blocking=False):
+        return False
+    try:
+        with models.db() as conn:
+            conn.execute("UPDATE run_schedule SET last_fired_at=? WHERE id=?", (models.utcnow(), int(schedule_id)))
+    except Exception:  # noqa: BLE001
+        _run_lock.release()
+        raise
+    return True
+
+
 def run(
     targets: dict[str, Any],
     scripts: list[int] | None = None,
@@ -713,6 +729,7 @@ def run(
     schedule_id: int | None = None,
     operator_ip: str = "",
     mode: str = "model",
+    lock_held: bool = False,
 ) -> dict[str, Any]:
     global _current_run_id, _current_started
 
@@ -722,8 +739,10 @@ def run(
 
     i18n.set_current(models.get_setting("default_language", i18n.BASE_LANG))
 
-    if not _run_lock.acquire(blocking=False):
-        raise RunBusy(i18n.t("engine.err_busy"))
+    # lock_held=True：调用方（begin_scheduled）已持锁，避免二次加锁。
+    if not lock_held:
+        if not _run_lock.acquire(blocking=False):
+            raise RunBusy(i18n.t("engine.err_busy"))
 
     started = models.utcnow()
     _current_started = started

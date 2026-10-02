@@ -161,12 +161,13 @@ _AUDIT_NEED_SQL = "(action IN ('delete','restore','rekey','import') OR status<>'
 _AUDIT_ACTION_CN = {
     "create": "新增", "update": "修改", "delete": "删除", "run": "执行", "restore": "恢复",
     "rekey": "更换密钥", "import": "导入", "export": "导出", "cleanup": "清理",
-    "notify_failed": "告警失败", "model_extra_id": "模型异常ID",
+    "notify_failed": "告警失败", "model_extra_id": "模型异常ID", "schedule_skip": "调度跳过",
 }
 _AUDIT_ACTION_COLOR = {
     "create": "success", "update": "primary", "delete": "danger", "restore": "warning",
     "rekey": "warning", "import": "info", "export": "secondary", "run": "dark",
     "cleanup": "secondary", "notify_failed": "danger", "model_extra_id": "secondary",
+    "schedule_skip": "warning",
 }
 _AUDIT_TTYPE_CN = {
     "group": "分组", "server": "服务器", "script": "脚本", "datasource": "数据源", "model": "模型",
