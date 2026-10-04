@@ -128,18 +128,37 @@ def _seed_scripts(force: bool = False) -> dict:
         # Content edits OR user-edited name/desc translations count as "modified".
         # Item-label maps ("items") are seed-managed and don't block upgrades.
         # 内容修改或用户改过的 name/desc 视为“已修改”；item 标签映射由种子维护，不阻塞升级。
+        # 空字符串视为“缺失”（旧种子残留），不作为“用户已修改”的依据。
         def _cmp(ij: dict) -> dict:
-            return {c: {k2: v2 for k2, v2 in v.items() if k2 != "items"} for c, v in ij.items() if isinstance(v, dict)}
+            return {c: {k2: v2 for k2, v2 in v.items() if k2 != "items" and v2} for c, v in ij.items() if isinstance(v, dict)}
 
         modified = (not force) and (
             cur_h != (row.get("seed_hash") if was_seed else chash)
             or (was_seed and bool(cur_ij) and _cmp(cur_ij) != _cmp(seed_ij))
         )
         if modified:
-            # Keep user content and translations; only link the seed version.
+            # 保留用户内容与已有翻译；**仅补缺失字段**（filename 为空、i18n 空字段），不覆盖用户非空值。
             upd = {"seed_key": key, "seed_hash": chash, "updated_at": models.utcnow()}
+            if not (row.get("filename") or "").strip():
+                upd["filename"] = filename
+            merged = {k: dict(v) for k, v in cur_ij.items() if isinstance(v, dict)}
+            dirty_ij = False
+            for lang, vals in seed_ij.items():
+                if not isinstance(vals, dict):
+                    continue
+                tgt = merged.setdefault(lang, {})
+                for k2, v2 in vals.items():
+                    if k2 == "items":
+                        if v2 and not tgt.get("items"):
+                            tgt["items"] = v2
+                            dirty_ij = True
+                    elif v2 and not tgt.get(k2):
+                        tgt[k2] = v2
+                        dirty_ij = True
             if not cur_ij:
-                upd["i18n_json"] = i18n
+                merged, dirty_ij = seed_ij, True
+            if dirty_ij:
+                upd["i18n_json"] = json.dumps(merged, ensure_ascii=False)
             with models.db() as conn:
                 models.update(conn, "scripts", sid, upd)
             kept += 1
