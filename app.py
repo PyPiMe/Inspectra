@@ -516,10 +516,15 @@ def _group_runs_by_target(rows: list[dict], apps: dict, groups: dict, servers_ma
     recovered: list[dict] = []
     for (typ, tid), info in per.items():
         runs = sorted(info["runs"], key=lambda x: (x.get("id") or 0), reverse=True)
-        latest = runs[0]
-        latest_bad = _target_attention(latest, detail_of(latest["id"]), typ, tid, group_servers)
-        hist_bad = any(_target_attention(rr, detail_of(rr["id"]), typ, tid, group_servers) for rr in runs[1:])
-        entry = {"name": info["name"], "type": typ, "runs": runs, "latest": latest,
+        # 仅用“有结构化 detail”的运行判定需关注/已恢复；生成失败/中断等无证据运行被跳过（仍显示在运行列表）。
+        evidence = [(r, detail_of(r["id"])) for r in runs]
+        evidence = [(r, d) for (r, d) in evidence if d and d.get("apps")]
+        if not evidence:
+            continue
+        head = evidence[0][0]
+        latest_bad = _target_attention(evidence[0][0], evidence[0][1], typ, tid, group_servers)
+        hist_bad = any(_target_attention(r, d, typ, tid, group_servers) for r, d in evidence[1:])
+        entry = {"name": info["name"], "type": typ, "runs": runs, "latest": runs[0], "head": head,
                  "recovered": (not latest_bad) and hist_bad}
         if latest_bad:
             need.append(entry)

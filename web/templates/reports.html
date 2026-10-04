@@ -109,6 +109,8 @@
       {% if g.recovered %}
       <span class="badge bg-success-subtle text-success border border-success-subtle">{{ t('reports2.recovered') }}</span>
       {% endif %}
+      {% if g.head.fail_count %}<span class="badge bg-danger">{{ t('status.fail') }} {{ g.head.fail_count }}</span>{% endif %}
+      {% if g.head.warn_count %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ g.head.warn_count }}</span>{% endif %}
       <span class="text-muted small ms-auto">{{ t('reports2.run_count', n=g.count) }} · {{ t('reports2.latest') }} {{ g.latest.started|local }}</span>
     </div>
     <div class="collapse p-2" id="{{ gid }}">
