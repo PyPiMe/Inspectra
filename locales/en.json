@@ -1013,5 +1013,8 @@
   "weekday.3": "Thu",
   "weekday.4": "Fri",
   "weekday.5": "Sat",
-  "weekday.6": "Sun"
+  "weekday.6": "Sun",
+  "reports2.show_more": "Show earlier",
+  "reports2.gen_failed": "Report generation failed",
+  "reports2.generating": "Generating"
 }

@@ -457,12 +457,11 @@ def _run_targets(run: dict[str, Any], apps: dict, groups: dict, servers_map: dic
 def _target_attention(run: dict[str, Any], detail: dict | None, typ: str, tid: int, group_servers: dict) -> bool:
     """Whether a target still needs attention in a run, by its own servers.
 
-    目标维度判定：按该目标下的服务器状态/问题项，而非运行级（消除混合运行牵连）。
+    目标维度判定：**仅依据结构化证据（detail 的服务器状态/问题项）**；无 detail（生成失败/中断/提前中止）
+    不算“需关注”（这类只在运行卡片上以次要徽标提示）。消除混合运行牵连。
     """
-    if typ == "all":
-        return bool(run.get("issue_count")) or run.get("status") in ("error", "partial")
     if not detail or not detail.get("apps"):
-        return bool(run.get("issue_count")) or run.get("status") in ("error", "partial")
+        return False
     apps = detail.get("apps") or []
     issues = (run.get("summary_obj") or {}).get("issues") or []
 
@@ -473,6 +472,11 @@ def _target_attention(run: dict[str, Any], detail: dict | None, typ: str, tid: i
                 return True
         return False
 
+    if typ == "all":
+        sids = {int(s.get("server_id") or 0) for a in apps for s in (a.get("servers") or [])}
+        if any((s.get("status") or "").upper() in _BAD_SRV for a in apps for s in (a.get("servers") or [])):
+            return True
+        return has_issue(sids)
     if typ in ("app", "unassigned"):
         want = tid if typ == "app" else 0
         for a in apps:
@@ -2599,11 +2603,12 @@ def create_app() -> Flask:
             def _prep(entries):
                 out = []
                 for g in entries:
-                    disp = [x for x in g["runs"] if (not result_filter) or x.get("status") == result]
+                    full = g["runs"]
+                    disp = [x for x in full if (not result_filter) or x.get("status") == result]
                     if not disp:
                         continue
                     gg = dict(g)
-                    gg["runs"] = disp[:5]
+                    gg["runs"] = disp[:50]  # 组内展示上限（更早可前端展开）
                     gg["count"] = len(disp)
                     out.append(gg)
                 return out

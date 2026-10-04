@@ -101,7 +101,7 @@
     <div class="text-muted small mt-3 mb-1">{{ t('reports2.recovered') }}</div>
   {% endif %}
   {% set gid = 'grp' ~ loop.index %}
-  <div class="card mb-2">
+  <div class="card mb-2 rep-group">
     <div class="card-header d-flex align-items-center gap-2 flex-wrap" role="button" data-bs-toggle="collapse" data-bs-target="#{{ gid }}">
       <span class="text-muted">▸</span>
       <span class="badge bg-light text-dark border">{{ TYPECN.get(g.type, '') }}</span>
@@ -109,18 +109,23 @@
       {% if g.recovered %}
       <span class="badge bg-success-subtle text-success border border-success-subtle">{{ t('reports2.recovered') }}</span>
       {% endif %}
-      <span class="text-muted small">{{ t('reports2.run_count', n=g.count) }}</span>
-      {% if g.latest.fail_count %}<span class="badge bg-danger">{{ t('status.fail') }} {{ g.latest.fail_count }}</span>{% endif %}
-      {% if g.latest.warn_count %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ g.latest.warn_count }}</span>{% endif %}
-      <span class="text-muted ms-auto">{{ t('reports2.latest') }} {{ g.latest.started|local }}</span>
+      <span class="text-muted small ms-auto">{{ t('reports2.run_count', n=g.count) }} · {{ t('reports2.latest') }} {{ g.latest.started|local }}</span>
     </div>
     <div class="collapse p-2" id="{{ gid }}">
       {% for r in g.runs %}
-      <div class="card rep-card mb-2" {% if r.report_file %}data-href="{{ url_for('report_detail', rid=r.id) }}"{% endif %} style="cursor:{% if r.report_file %}pointer{% else %}default{% endif %};">
+      <div class="card rep-card mb-2 {{ 'grp-extra d-none' if loop.index > 5 else '' }}" data-status="{{ r.status }}" {% if r.report_file %}data-href="{{ url_for('report_detail', rid=r.id) }}"{% endif %} style="cursor:{% if r.report_file %}pointer{% else %}default{% endif %};">
         <div class="card-body py-2 d-flex align-items-center gap-3">
           <div class="flex-grow-1">
             <div class="d-flex align-items-center gap-2 flex-wrap">
+              {% if r.report_file %}
               <span class="text-{{ status_color.get(r.status, 'secondary') }}">●</span>
+              {% elif r.status == 'running' %}
+              <span class="badge text-bg-light text-muted border">{{ t('reports2.generating') }}</span>
+              {% elif r.status == 'error' %}
+              <span class="badge text-bg-light text-danger border border-danger-subtle">{{ t('reports2.gen_failed') }}</span>
+              {% else %}
+              <span class="text-{{ status_color.get(r.status, 'secondary') }}">●</span>
+              {% endif %}
               <strong>{{ r.started|local }}</strong>
               <span class="text-muted">#{{ r.id }} · {{ t('trigger.' ~ r.trigger) }} · {{ t('reports.mode_model') if r.mode != 'raw' else t('reports.mode_raw') }}</span>
             </div>
@@ -134,6 +139,7 @@
       </div>
       {% endfor %}
       {% if g.count > g.runs|length %}<div class="text-muted px-2 py-1">{{ t('reports2.show_recent', n=(g.runs|length), total=g.count) }}</div>{% endif %}
+      {% if g.runs|length > 5 %}<button type="button" class="btn btn-sm btn-link grp-more">{{ t('reports2.show_more') }}</button>{% endif %}
     </div>
   </div>
 {% else %}
@@ -281,6 +287,20 @@
   document.getElementById('fClear').addEventListener('click', () => { fResult.value = ''; fTrig.value = ''; fStart.value = ''; fEnd.value = ''; form.submit(); });
   from.value = fStart.value || '';
   to.value = fEnd.value || '';
+})();
+
+// 分组内：展开“显示更早”（默认列最近 5 条）
+(function () {
+  document.querySelectorAll('.rep-group').forEach((grp) => {
+    const more = grp.querySelector('.grp-more');
+    if (!more) return;
+    more.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      grp.querySelectorAll('.grp-extra').forEach((c) => c.classList.remove('grp-extra', 'd-none'));
+      more.classList.add('d-none');
+    });
+  });
 })();
 </script>
 {% endblock %}

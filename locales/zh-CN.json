@@ -1013,5 +1013,8 @@
   "weekday.3": "周四",
   "weekday.4": "周五",
   "weekday.5": "周六",
-  "weekday.6": "周日"
+  "weekday.6": "周日",
+  "reports2.show_more": "显示更早",
+  "reports2.gen_failed": "报告生成失败",
+  "reports2.generating": "生成中"
 }
