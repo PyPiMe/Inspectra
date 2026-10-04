@@ -9,15 +9,19 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import engine
+import i18n
 import models
 
 log = logging.getLogger("pypimeops.scheduler")
+
+_WEEKDAY_KEYS = ["weekday.0", "weekday.1", "weekday.2", "weekday.3", "weekday.4", "weekday.5", "weekday.6"]
 
 
 def _match_field(expr: str, value: int, lo: int, hi: int) -> bool:
@@ -77,6 +81,108 @@ def _same_minute(iso_ts: str | None, now_utc: datetime) -> bool:
         dt = dt.replace(tzinfo=timezone.utc)
     n = now_utc.astimezone(timezone.utc)
     return (dt.year, dt.month, dt.day, dt.hour, dt.minute) == (n.year, n.month, n.day, n.hour, n.minute)
+
+
+def _fixed(expr: Any, lo: int, hi: int) -> int | None:
+    try:
+        v = int(str(expr).strip())
+    except (TypeError, ValueError):
+        return None
+    return v if lo <= v <= hi else None
+
+
+def describe(schedule: dict[str, Any]) -> str:
+    """Human-readable frequency for a schedule. 频率人话化。"""
+    mn = str(schedule.get("cron_min") or "*").strip()
+    hr = str(schedule.get("cron_hour") or "*").strip()
+    dw = str(schedule.get("cron_dow") or "*").strip()
+    if hr == "*" and dw == "*":
+        if mn == "*":
+            return i18n.t("schedule.desc_every_minute")
+        m = re.fullmatch(r"\*/(\d+)", mn)
+        if m:
+            return i18n.t("schedule.desc_every_n_minutes", n=m.group(1))
+        mi = _fixed(mn, 0, 59)
+        if mi is not None:
+            return i18n.t("schedule.desc_hourly_at", min=f"{mi:02d}")
+        return i18n.t("schedule.desc_custom", expr=f"{mn} {hr} {dw}")
+    hi = _fixed(hr, 0, 23)
+    mi = _fixed(mn, 0, 59)
+    di = _fixed(dw, 0, 6)
+    if dw == "*" and hi is not None and mi is not None:
+        return i18n.t("schedule.desc_daily_at", time=f"{hi:02d}:{mi:02d}")
+    if di is not None and hi is not None and mi is not None:
+        return i18n.t("schedule.desc_weekly_at", dow=i18n.t(_WEEKDAY_KEYS[di]), time=f"{hi:02d}:{mi:02d}")
+    return i18n.t("schedule.desc_custom", expr=f"{mn} {hr} {dw}")
+
+
+def classify(schedule: dict[str, Any]) -> dict[str, str]:
+    """Reverse-map a stored cron to a form preset (for editing). 编辑时反推频率预设。"""
+    mn = str(schedule.get("cron_min") or "*").strip()
+    hr = str(schedule.get("cron_hour") or "*").strip()
+    dw = str(schedule.get("cron_dow") or "*").strip()
+    out = {"preset": "custom", "minute": "", "hour": "", "dow": ""}
+    if hr == "*" and dw == "*":
+        m = re.fullmatch(r"\*/(5|10|15|30)", mn)
+        if m:
+            out["preset"] = "every" + m.group(1)
+            return out
+        mi = _fixed(mn, 0, 59)
+        if mi is not None:
+            out["preset"] = "hourly"
+            out["minute"] = f"{mi:02d}"
+            return out
+        return out
+    hi = _fixed(hr, 0, 23)
+    mi = _fixed(mn, 0, 59)
+    di = _fixed(dw, 0, 6)
+    if dw == "*" and hi is not None and mi is not None:
+        out.update(preset="daily", hour=f"{hi:02d}", minute=f"{mi:02d}")
+        return out
+    if di is not None and hi is not None and mi is not None:
+        out.update(preset="weekly", dow=str(di), hour=f"{hi:02d}", minute=f"{mi:02d}")
+        return out
+    return out
+
+
+def cron_error(schedule: dict[str, Any]) -> bool:
+    """Validate cron fields (min/hour/dow); True when invalid. 校验 cron 字段合法性。"""
+    for key, hi in (("cron_min", 59), ("cron_hour", 23), ("cron_dow", 6)):
+        val = str(schedule.get(key) or "*").strip() or "*"
+        for part in val.split(","):
+            part = part.strip()
+            if not part:
+                return True
+            if part == "*":
+                continue
+            if part.startswith("*/"):
+                if not part[2:].isdigit() or int(part[2:]) <= 0:
+                    return True
+                continue
+            if "-" in part:
+                a, _, b = part.partition("-")
+                if not (a.isdigit() and b.isdigit()):
+                    return True
+                if not (0 <= int(a) <= hi and 0 <= int(b) <= hi and int(a) <= int(b)):
+                    return True
+                continue
+            if not part.isdigit() or not (0 <= int(part) <= hi):
+                return True
+    return False
+
+
+def next_runs(schedule: dict[str, Any], count: int = 1, now: datetime | None = None) -> list[datetime]:
+    """Compute the next `count` local fire times (minute granularity). 计算下次触发（本地时区）。"""
+    base = (now or datetime.now()).replace(second=0, microsecond=0)
+    out: list[datetime] = []
+    cur = base
+    for _ in range(366 * 24 * 60):
+        cur = cur + timedelta(minutes=1)
+        if _matches(schedule, cur):
+            out.append(cur)
+            if len(out) >= count:
+                break
+    return out
 
 
 class Scheduler:

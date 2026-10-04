@@ -41,6 +41,7 @@ import notify
 import sanitize
 import vault
 from config import get_config, load_config, set_config
+import scheduler as scheduler_mod
 from scheduler import Scheduler
 
 log = logging.getLogger("pypimeops.app")
@@ -835,6 +836,14 @@ def create_app() -> Flask:
     models.set_db_path(cfg.db_path)
     models.init_db()
     vault.ensure_key()
+    # 启动恢复：上次进程中断遗留的 running 运行标记为中断（避免永久“生成中”）。
+    with models.db() as conn:
+        cur = conn.execute(
+            "UPDATE run_history SET status='error', finished=?, error=? WHERE status='running'",
+            (models.utcnow(), "服务重启，运行中断"),
+        )
+        if cur.rowcount:
+            logging.getLogger("pypimeops.app").warning("标记 %s 条中断运行（服务重启）", cur.rowcount)
     setup_logging()
 
     app = Flask(__name__, template_folder="web/templates", static_folder="web/static")
@@ -2178,6 +2187,46 @@ def create_app() -> Flask:
         return redirect(url_for("notifications"))
 
     # ---- 定时任务
+    def _schedule_targets_chips(s: dict[str, Any], maps: dict[str, dict[int, str]]) -> list[str]:
+        tj = json_or(s.get("targets_json"), {})
+        chips: list[str] = []
+        if tj.get("all"):
+            chips.append(i18n.t("schedules.chip_all"))
+        if tj.get("applications"):
+            chips.append(i18n.t("schedules.chip_apps", n=len(tj["applications"])))
+        if tj.get("groups"):
+            chips.append(i18n.t("schedules.chip_groups", n=len(tj["groups"])))
+        if tj.get("servers"):
+            chips.append(i18n.t("schedules.chip_servers", n=len(tj["servers"])))
+        if tj.get("datasources"):
+            chips.append(i18n.t("schedules.chip_datasources", n=len(tj["datasources"])))
+        sc = json_or(s.get("scripts_json"), [])
+        if sc:
+            chips.append(i18n.t("schedules.chip_scripts", n=len(sc)))
+        if not chips:
+            chips.append(i18n.t("schedules.chip_none"))
+        return chips
+
+    def _schedule_form_ctx(s: dict[str, Any] | None) -> dict[str, Any]:
+        servers = models.fetch_all("servers")
+        group_servers: dict[int, list[int]] = {}
+        for sv in servers:
+            if sv.get("group_id"):
+                group_servers.setdefault(int(sv["group_id"]), []).append(int(sv["id"]))
+        return dict(
+            s=s,
+            groups=_picker_named(models.fetch_all("groups")),
+            servers=servers,
+            server_items=[{"id": sv["id"], "name": f"{sv.get('hostname')} ({sv.get('ip')})"} for sv in servers],
+            datasources=models.fetch_all("datasources"),
+            scripts=_picker_scripts(models.fetch_all("scripts")),
+            applications=_picker_named([a for a in models.fetch_all("applications") if a.get("enabled", 1)]),
+            app_servers=engine.application_servers(),
+            group_servers=group_servers,
+            all_server_ids=[int(x["id"]) for x in servers],
+            freq=scheduler_mod.classify(s) if s else {"preset": "every30", "minute": "", "hour": "", "dow": ""},
+        )
+
     @app.route("/schedules")
     def schedules():
         q = (request.args.get("q") or "").strip()
@@ -2196,20 +2245,47 @@ def create_app() -> Flask:
             f"SELECT COUNT(*) AS c FROM run_schedule{clause}",
             params, page, per_page,
         )
+        maps = dict(
+            apps={int(a["id"]): a["name"] for a in models.fetch_all("applications")},
+            groups={int(g["id"]): g["name"] for g in models.fetch_all("groups")},
+            servers={int(sv["id"]): (sv.get("hostname") or sv.get("ip") or "") for sv in models.fetch_all("servers")},
+            datasources={int(d["id"]): d["name"] for d in models.fetch_all("datasources")},
+        )
+        # 上次结果：按 schedule_id 批量取最近一条（避免 N+1）
+        last: dict[int, dict[str, Any]] = {}
+        sids = [int(r["id"]) for r in rows]
+        if sids:
+            qmarks = ",".join("?" for _ in sids)
+            for r in models.query(
+                f"SELECT * FROM run_history WHERE schedule_id IN ({qmarks}) ORDER BY id DESC", sids
+            ):
+                last.setdefault(int(r["schedule_id"]), r)
+        for s in rows:
+            s["freq"] = scheduler_mod.describe(s)
+            s["chips"] = _schedule_targets_chips(s, maps)
+            nr = scheduler_mod.next_runs(s, 1)
+            s["next_at"] = nr[0].strftime("%Y-%m-%d %H:%M") if nr else ""
+            s["last_run"] = last.get(int(s["id"]))
         all_rows = models.fetch_all("run_schedule")
         return render_template(
             "schedules.html",
             schedules=rows,
-            servers=models.fetch_all("servers"),
-            groups=_picker_named(models.fetch_all("groups")),
-            datasources=models.fetch_all("datasources"),
-            scripts=_picker_scripts(models.fetch_all("scripts")),
-            applications=_picker_named([a for a in models.fetch_all("applications") if a.get("enabled", 1)]),
-            app_servers=engine.application_servers(),
             enabled_count=sum(1 for s in all_rows if s.get("enabled")),
             total_all=len(all_rows),
+            status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
             q=q, enabled=enabled, page=page, pages=pages, total=total, per_page=per_page,
         )
+
+    @app.route("/schedules/new")
+    def schedules_new():
+        return render_template("schedule_detail.html", **_schedule_form_ctx(None))
+
+    @app.route("/schedules/<int:sid>")
+    def schedule_detail(sid: int):
+        s = models.fetch_one("run_schedule", sid)
+        if not s:
+            abort(404)
+        return render_template("schedule_detail.html", **_schedule_form_ctx(s))
 
     @app.route("/schedules/<int:sid>/toggle", methods=["POST"])
     def schedules_toggle(sid: int):
@@ -2218,7 +2294,8 @@ def create_app() -> Flask:
             abort(404)
         new = 0 if s.get("enabled") else 1
         save_object("schedule", sid, {"enabled": new}, g.ip, s.get("name") or "", {"enabled": new})
-        flash(f"定时任务「{s.get('name') or sid}」已{'启用' if new else '停用'}", "success")
+        flash(i18n.t("schedules.toggled", name=s.get("name") or sid,
+                     state=i18n.t("common.enabled") if new else i18n.t("common.disabled")), "success")
         return redirect(url_for("schedules"))
 
     @app.route("/schedules/toggle_all", methods=["POST"])
@@ -2229,16 +2306,17 @@ def create_app() -> Flask:
             if int(s.get("enabled") or 0) != enable:
                 save_object("schedule", s["id"], {"enabled": enable}, g.ip, s.get("name") or "", {"enabled": enable})
                 changed += 1
-        flash(f"已{'全部启用' if enable else '全部停用'}定时任务（变更 {changed} 条）", "success")
+        flash(i18n.t("schedules.toggled_all", state=i18n.t("common.enabled") if enable else i18n.t("common.disabled"), n=changed), "success")
         return redirect(url_for("schedules"))
 
     @app.route("/schedules/save", methods=["POST"])
     def schedules_save():
         sid = parse_int(request.form.get("id")) or None
+        back = url_for("schedule_detail", sid=sid) if sid else url_for("schedules_new")
         name = (request.form.get("name") or "").strip()
         if not name:
-            flash("任务名称必填", "danger")
-            return redirect(url_for("schedules"))
+            flash(i18n.t("schedules.err_name_required"), "danger")
+            return redirect(back)
         targets = {
             "groups": parse_ids(request.form.getlist("target_groups")),
             "servers": parse_ids(request.form.getlist("target_servers")),
@@ -2246,25 +2324,71 @@ def create_app() -> Flask:
             "datasources": parse_ids(request.form.getlist("target_datasources")),
             "all": bool(request.form.get("target_all")),
         }
+        if not targets["all"] and not any(targets[k] for k in ("groups", "servers", "applications", "datasources")):
+            flash(i18n.t("schedules.err_no_target"), "danger")
+            return redirect(back)
+        cron = {
+            "cron_min": (request.form.get("cron_min") or "*").strip() or "*",
+            "cron_hour": (request.form.get("cron_hour") or "*").strip() or "*",
+            "cron_dow": (request.form.get("cron_dow") or "*").strip() or "*",
+        }
+        if scheduler_mod.cron_error(cron):
+            flash(i18n.t("schedules.err_cron"), "danger")
+            return redirect(back)
+        mode = request.form.get("mode") if request.form.get("mode") in ("model", "raw") else "model"
+        if mode == "model":
+            dm = models.get_setting("default_model", "")
+            m = models.fetch_one("models", int(dm)) if dm.isdigit() else None
+            if not m or not m.get("enabled", 1):
+                flash(i18n.t("schedules.err_no_model"), "danger")
+                return redirect(back)
         data = {
             "name": name,
             "targets_json": json.dumps(targets),
             "scripts_json": json.dumps(parse_ids(request.form.getlist("scripts"))),
-            "cron_min": (request.form.get("cron_min") or "*").strip() or "*",
-            "cron_hour": (request.form.get("cron_hour") or "*").strip() or "*",
-            "cron_dow": (request.form.get("cron_dow") or "*").strip() or "*",
-            "mode": request.form.get("mode") if request.form.get("mode") in ("model", "raw") else "model",
+            "mode": mode,
             "enabled": 1 if request.form.get("enabled") else 0,
+            **cron,
         }
         save_object("schedule", sid, data, g.ip, name)
-        flash("定时任务已保存", "success")
+        flash(i18n.t("schedules.saved"), "success")
         return redirect(url_for("schedules"))
 
     @app.route("/schedules/<int:sid>/delete", methods=["POST"])
     def schedules_delete(sid: int):
         delete_object("schedule", sid, g.ip)
-        flash("定时任务已删除", "success")
+        flash(i18n.t("schedules.deleted"), "success")
         return redirect(url_for("schedules"))
+
+    @app.route("/schedules/<int:sid>/run", methods=["POST"])
+    def schedules_run(sid: int):
+        s = models.fetch_one("run_schedule", sid)
+        if not s:
+            abort(404)
+        if engine.is_running():
+            flash(i18n.t("engine.err_busy"), "warning")
+            return redirect(url_for("schedules"))
+        targets = json_or(s.get("targets_json"), {})
+        scripts = json_or(s.get("scripts_json"), [])
+        mode = s.get("mode") or "model"
+        if mode == "model":
+            dm = models.get_setting("default_model", "")
+            m = models.fetch_one("models", int(dm)) if dm.isdigit() else None
+            if not m or not m.get("enabled", 1):
+                flash(i18n.t("schedules.err_no_model"), "danger")
+                return redirect(url_for("schedules"))
+        operator_ip = g.ip
+        prev_max = int(models.query("SELECT COALESCE(MAX(id), 0) AS m FROM run_history")[0]["m"])
+
+        def _worker() -> None:
+            try:
+                engine.run(targets, scripts, trigger="schedule", schedule_id=sid, operator_ip=operator_ip, mode=mode)
+            except Exception:  # noqa: BLE001
+                log.exception("定时任务立即执行失败")
+
+        threading.Thread(target=_worker, name=f"pypimeops-sched-run-{sid}", daemon=True).start()
+        flash(i18n.t("schedules.run_submitted"), "success")
+        return redirect(url_for("run_wait", after=prev_max))
 
     # ---- 立即执行
     @app.route("/run", methods=["GET", "POST"])

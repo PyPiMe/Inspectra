@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% from "_macros.html" import check_picker, script_picker %}
+{% block title %}{{ t('nav.schedules') }} {{ s.name if s else t('schedules.new') }}{% endblock %}
+{% block content %}
+{% set tj = json_or(s.targets_json, {}) if s else {} %}
+{% set sel_apps = tj.get('applications', []) %}
+{% set sel_groups = tj.get('groups', []) %}
+{% set sel_servers = tj.get('servers', []) %}
+{% set sel_ds = tj.get('datasources', []) %}
+{% set sel_scripts = json_or(s.scripts_json, []) if s else [] %}
+
+<div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+  <h4 class="mb-0">{{ t('schedules.edit_title', id=s.id) if s else t('schedules.new') }}</h4>
+  <a class="btn btn-outline-secondary ms-auto" href="{{ url_for('schedules') }}">{{ t('server_detail.back_list') }}</a>
+</div>
+
+<form id="schForm" method="post" action="{{ url_for('schedules_save') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  {% if s %}<input type="hidden" name="id" value="{{ s.id }}">{% endif %}
+  <input type="hidden" name="cron_min" id="cronMin" value="{{ s.cron_min if s else '*/30' }}">
+  <input type="hidden" name="cron_hour" id="cronHour" value="{{ s.cron_hour if s else '*' }}">
+  <input type="hidden" name="cron_dow" id="cronDow" value="{{ s.cron_dow if s else '*' }}">
+
+  <div class="row g-3">
+    <div class="col-lg-7">
+      <div class="card mb-3"><div class="card-header">{{ t('schedules.section_basic') }}</div><div class="card-body row g-2">
+        <div class="col-md-6"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="name" value="{{ s.name if s else '' }}" required></div>
+        <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" id="schEnabled" {{ 'checked' if (not s or s.enabled) else '' }}><label class="form-check-label" for="schEnabled">{{ t('common.enabled') }}</label></div></div>
+        <div class="col-12"><label class="form-label">{{ t('reports.mode') }}</label>
+          <div class="d-flex gap-3">
+            <div class="form-check"><input class="form-check-input" type="radio" name="mode" value="model" id="mModel" {{ 'checked' if (not s or s.mode != 'raw') else '' }}><label class="form-check-label" for="mModel">{{ t('reports.analysis_model') }}</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="mode" value="raw" id="mRaw" {{ 'checked' if (s and s.mode == 'raw') else '' }}><label class="form-check-label" for="mRaw">{{ t('reports.analysis_raw') }}</label></div>
+          </div>
+        </div>
+      </div></div>
+
+      <div class="card mb-3"><div class="card-header">{{ t('schedules.section_freq') }}</div><div class="card-body">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-4"><label class="form-label">{{ t('schedules.freq_preset') }}</label>
+            <select class="form-select" id="freqPreset">
+              <option value="every5">{{ t('schedules.preset_every5') }}</option>
+              <option value="every10">{{ t('schedules.preset_every10') }}</option>
+              <option value="every15">{{ t('schedules.preset_every15') }}</option>
+              <option value="every30">{{ t('schedules.preset_every30') }}</option>
+              <option value="hourly">{{ t('schedules.preset_hourly') }}</option>
+              <option value="daily">{{ t('schedules.preset_daily') }}</option>
+              <option value="weekly">{{ t('schedules.preset_weekly') }}</option>
+              <option value="custom">{{ t('schedules.preset_custom') }}</option>
+            </select>
+          </div>
+          <div class="col-md-8">
+            <div class="freq-extra" id="fxHourly"><label class="form-label small mb-0">{{ t('schedules.freq_minute') }}</label><input class="form-control form-control-sm" id="fxHourlyMin" type="number" min="0" max="59" value="0"></div>
+            <div class="freq-extra d-none" id="fxDaily"><label class="form-label small mb-0">{{ t('schedules.freq_time') }}</label>
+              <div class="d-flex gap-1"><input class="form-control form-control-sm" id="fxDailyHour" type="number" min="0" max="23" value="2" style="width:5rem">:<input class="form-control form-control-sm" id="fxDailyMin" type="number" min="0" max="59" value="0" style="width:5rem"></div>
+            </div>
+            <div class="freq-extra d-none" id="fxWeekly"><label class="form-label small mb-0">{{ t('schedules.freq_weekly') }}</label>
+              <div class="d-flex gap-1">
+                <select class="form-select form-select-sm" id="fxWeeklyDow">
+                  {% for i in range(7) %}<option value="{{ i }}">{{ t('weekday.' ~ i) }}</option>{% endfor %}
+                </select>
+                <input class="form-control form-control-sm" id="fxWeeklyHour" type="number" min="0" max="23" value="2" style="width:4.5rem">
+                <input class="form-control form-control-sm" id="fxWeeklyMin" type="number" min="0" max="59" value="0" style="width:4.5rem">
+              </div>
+            </div>
+            <div class="freq-extra d-none" id="fxCustom"><label class="form-label small mb-0">{{ t('schedules.freq_custom') }}</label>
+              <div class="d-flex gap-1">
+                <input class="form-control form-control-sm" id="fxCMin" placeholder="min" value="{{ s.cron_min if s else '*/30' }}">
+                <input class="form-control form-control-sm" id="fxCHour" placeholder="hour" value="{{ s.cron_hour if s else '*' }}">
+                <input class="form-control form-control-sm" id="fxCDow" placeholder="dow" value="{{ s.cron_dow if s else '*' }}">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card mb-3"><div class="card-header">{{ t('schedules.col_targets') }}</div><div class="card-body">
+        <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="target_all" id="target_all" {{ 'checked' if tj.get('all') else '' }}><label class="form-check-label" for="target_all"><strong>{{ t('run.all_servers') }}</strong>{{ t('run.all_servers_hint') }}</label></div>
+        <label class="form-label mt-1">{{ t('run.applications') }}</label>{{ check_picker('target_applications', applications, sel_apps, 'sdApps') }}
+        <label class="form-label mt-2">{{ t('run.groups') }}</label>{{ check_picker('target_groups', groups, sel_groups, 'sdGroups') }}
+        <label class="form-label mt-2">{{ t('run.servers') }}</label>{{ check_picker('target_servers', server_items, sel_servers, 'sdServers') }}
+        <label class="form-label mt-2">{{ t('run.datasources_filter') }}</label>{{ check_picker('target_datasources', datasources, sel_ds, 'sdDs') }}
+      </div></div>
+
+      <div class="card mb-3"><div class="card-header">{{ t('schedules.scripts_override') }}</div><div class="card-body">
+        <div class="text-muted small mb-2">{{ t('run.scripts_hint') }}</div>
+        {{ script_picker('scripts', scripts, sel_scripts, 'sdScripts') }}
+      </div></div>
+
+      <div class="card"><div class="card-body">
+        <div class="text-muted small" id="schPreview"></div>
+        <div class="mt-2">
+          {% if s %}
+          <a class="btn btn-outline-success" href="#" onclick="document.getElementById('schRunForm').submit(); return false;">{{ t('schedules.run_now') }}</a>
+          {% endif %}
+          <button class="btn btn-primary">{{ t('common.save') }}</button>
+        </div>
+      </div></div>
+    </div>
+  </div>
+</form>
+
+{% if s %}
+<form id="schRunForm" method="post" action="{{ url_for('schedules_run', sid=s.id) }}" class="d-none" onsubmit="return confirm('{{ t('schedules.confirm_run') }}')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+</form>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const FREQ = {{ freq | tojson }};  // {preset,minute,hour,dow}
+  const preset = document.getElementById('freqPreset');
+  const groups = {
+    hourly: document.getElementById('fxHourly'),
+    daily: document.getElementById('fxDaily'),
+    weekly: document.getElementById('fxWeekly'),
+    custom: document.getElementById('fxCustom'),
+  };
+  function show(v) { Object.entries(groups).forEach(([k, el]) => el && el.classList.toggle('d-none', k !== v)); }
+  function buildCron() {
+    const p = preset.value;
+    if (p.startsWith('every')) return { min: '*/' + p.slice(5), hour: '*', dow: '*' };
+    if (p === 'hourly') return { min: String(parseInt(document.getElementById('fxHourlyMin').value || '0', 10)), hour: '*', dow: '*' };
+    if (p === 'daily') return { min: String(parseInt(document.getElementById('fxDailyMin').value || '0', 10)), hour: String(parseInt(document.getElementById('fxDailyHour').value || '0', 10)), dow: '*' };
+    if (p === 'weekly') return { min: String(parseInt(document.getElementById('fxWeeklyMin').value || '0', 10)), hour: String(parseInt(document.getElementById('fxWeeklyHour').value || '0', 10)), dow: document.getElementById('fxWeeklyDow').value };
+    return { min: document.getElementById('fxCMin').value || '*', hour: document.getElementById('fxCHour').value || '*', dow: document.getElementById('fxCDow').value || '*' };
+  }
+  function sync() {
+    const c = buildCron();
+    document.getElementById('cronMin').value = c.min;
+    document.getElementById('cronHour').value = c.hour;
+    document.getElementById('cronDow').value = c.dow;
+    updatePreview();
+  }
+  function checkedCount(name) { return document.querySelectorAll('input[name="' + name + '"]:checked').length; }
+  function updatePreview() {
+    const all = (document.getElementById('target_all') || {}).checked;
+    const apps = checkedCount('target_applications');
+    const grps = checkedCount('target_groups');
+    const srvs = checkedCount('target_servers');
+    const dss = checkedCount('target_datasources');
+    const parts = [];
+    if (all) parts.push('{{ t("run.all_servers") }}');
+    if (apps) parts.push('{{ t("run.applications") }}×' + apps);
+    if (grps) parts.push('{{ t("run.groups") }}×' + grps);
+    if (srvs) parts.push('{{ t("run.servers") }}×' + srvs);
+    if (dss) parts.push('{{ t("run.datasources_filter") }}×' + dss);
+    if (!parts.length) parts.push('{{ t("schedules.chip_none") }}');
+    const c = buildCron();
+    document.getElementById('schPreview').textContent =
+      '{{ t("schedules.preview") }}: ' + parts.join(', ') + ' · ' + (c.min + ' ' + c.hour + ' ' + c.dow);
+  }
+  preset.value = FREQ.preset || 'every30';
+  if (FREQ.minute) document.getElementById('fxHourlyMin').value = parseInt(FREQ.minute, 10);
+  if (FREQ.hour) document.getElementById('fxDailyHour').value = parseInt(FREQ.hour, 10);
+  if (FREQ.minute && FREQ.preset === 'daily') document.getElementById('fxDailyMin').value = parseInt(FREQ.minute, 10);
+  if (FREQ.minute) document.getElementById('fxWeeklyMin').value = parseInt(FREQ.minute, 10);
+  if (FREQ.hour) document.getElementById('fxWeeklyHour').value = parseInt(FREQ.hour, 10);
+  if (FREQ.dow) document.getElementById('fxWeeklyDow').value = FREQ.dow;
+  show(preset.value);
+  preset.addEventListener('change', () => { show(preset.value); sync(); });
+  document.querySelectorAll('#fxHourly input,#fxDaily input,#fxWeekly input,#fxWeekly select,#fxCustom input').forEach((el) => el.addEventListener('input', sync));
+  document.querySelectorAll('#schForm input[name^="target_"], #schForm input[name="scripts"]').forEach((el) => el.addEventListener('change', sync));
+  document.getElementById('schForm').addEventListener('submit', buildCron);
+  sync();
+})();
+</script>
+{% endblock %}
