@@ -2,6 +2,7 @@
 {% from "_macros.html" import pager, conn_badge, script_picker, label_editor %}
 {% block title %}{{ t('nav.servers') }}{% endblock %}
 {% block content %}
+{% set back_url = url_for('servers', q=q, group_id=group_id, enabled=enabled, page=page, per_page=per_page) %}
 <h4>{{ t('nav.servers') }}</h4>
 <div class="alert alert-secondary small mb-2">{{ t('servers.alert') }}</div>
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
@@ -32,7 +33,7 @@
   {% for s in servers %}
     {% set ct = conn_types.get(s.id, t('servers.not_configured')) %}
     <tr>
-      <td><a href="{{ url_for('server_detail', sid=s.id) }}">{{ s.hostname }}</a>
+      <td><a href="{{ url_for('server_detail', sid=s.id, back=back_url) }}">{{ s.hostname }}</a>
         {% if s.vm_ident %} <span class="badge bg-light text-dark border" title="{{ t('servers.vm_ident') }}">VM: {{ s.vm_ident }}</span>{% endif %}</td>
       <td>{{ s.ip }}</td>
       <td>{{ conn_badge(ct) }}</td>
@@ -42,8 +43,8 @@
       <td>{{ cred_names.get(s.vault_key) if s.vault_key else '-' }}</td>
       <td>{{ t('common.yes') if s.enabled else t('common.no') }}</td>
       <td class="text-nowrap">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_detail', sid=s.id) }}">{{ t('common.details') }}</a>
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_new', copy=s.id) }}">{{ t('servers.copy') }}</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_detail', sid=s.id, back=back_url) }}">{{ t('common.details') }}</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_new', copy=s.id, back=back_url) }}">{{ t('servers.copy') }}</a>
         <form method="post" action="{{ url_for('servers_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('servers.confirm_delete') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>

@@ -70,13 +70,13 @@
 </div>
 {% endmacro %}
 
-{% macro check_picker(name, items, selected, picker_id) %}
+{% macro check_picker(name, items, selected, picker_id, only_selected=false) %}
 {% set sel = selected or [] %}
 {% set tagmap = namespace(d={}) %}
 {% for it in items %}{% for tg in (it.tags or []) %}
   {% set _ = tagmap.d.update({tg: tagmap.d.get(tg, 0) + 1}) %}
 {% endfor %}{% endfor %}
-<div class="script-picker" id="{{ picker_id }}">
+<div class="script-picker" id="{{ picker_id }}" {% if only_selected %}data-only-selected="1"{% endif %}>
   <div class="d-flex gap-1 mb-1 flex-wrap align-items-center">
     <input class="form-control form-control-sm sp-search" style="max-width: 14rem;" placeholder="{{ t('picker.search') }}">
     <button type="button" class="btn btn-sm btn-outline-secondary sp-all">{{ t('picker.all') }}</button>
@@ -104,8 +104,8 @@
 </div>
 {% endmacro %}
 
-{% macro script_picker(name, items, selected, picker_id) %}
-{{ check_picker(name, items, selected, picker_id) }}
+{% macro script_picker(name, items, selected, picker_id, only_selected=false) %}
+{{ check_picker(name, items, selected, picker_id, only_selected) }}
 {% endmacro %}
 
 {# 标签覆盖编辑器：默认键值行，可切到高级 JSON；对应后端的 labels_json 字段 #}

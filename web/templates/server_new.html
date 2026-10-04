@@ -11,13 +11,14 @@
       <div class="text-muted small">{{ t('servers.new_page_hint') }}</div>
     </div>
     <div class="ms-auto">
-      <a class="btn btn-outline-secondary" href="{{ url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
+      <a class="btn btn-outline-secondary" href="{{ back or url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
     </div>
   </div>
 </div>
 
 <form id="serverForm" method="post" action="{{ url_for('servers_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="back" value="{{ back }}">
   {% if copy_mode %}<input type="hidden" name="copy_from" value="{{ server.copy_from }}">{% endif %}
   <input type="hidden" name="bindings_json" id="bindingsJson" value="[]">
 
@@ -70,7 +71,7 @@
       <div class="fw-semibold mb-1">{{ t('servers.shell_scripts') }}</div>
       <div class="form-text text-muted d-none" id="shellGate">{{ t('servers.ssh_required_hint') }}</div>
       <div id="shellGateArea">
-        {{ script_picker('scripts', shell_scripts, bound_scripts, 'spShellNew') }}
+        {{ script_picker('scripts', shell_scripts, bound_scripts, 'spShellNew', bound_scripts|length > 0) }}
       </div>
     </div>
   </div>

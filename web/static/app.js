@@ -153,18 +153,19 @@ function initScriptPickers(root) {
         update();
       });
     });
-    // 仅看已选
+    // 仅看已选（支持初始启用：data-only-selected="1"）
     const only = p.querySelector('.sp-onlysel');
     let onlySel = false;
-    if (only) only.addEventListener('click', () => {
-      onlySel = !onlySel;
-      only.classList.toggle('active', onlySel);
+    const applyOnly = () => {
+      if (only) only.classList.toggle('active', onlySel);
       p.querySelectorAll('.sp-item').forEach((it) => {
         const hidden = it.dataset.relevant === '0';
         const checked = it.querySelector('input').checked;
         it.style.display = (!hidden && (!onlySel || checked)) ? '' : 'none';
       });
-    });
+    };
+    if (only) only.addEventListener('click', () => { onlySel = !onlySel; applyOnly(); });
+    if (p.dataset.onlySelected === '1') { onlySel = true; applyOnly(); }
     if (list) list.addEventListener('change', update);
     p.spRefresh = () => { filter(); update(); };
     update();

@@ -21,7 +21,7 @@
         <span class="badge bg-warning text-dark d-none" id="dirtyBadge">{{ t('server_detail.unsaved') }}</span>
       </div>
       <div class="ms-auto">
-        <a class="btn btn-outline-secondary" href="{{ url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
+        <a class="btn btn-outline-secondary" href="{{ back or url_for('servers') }}">{{ t('server_detail.back_list') }}</a>
       </div>
     </div>
   </div>
@@ -30,6 +30,7 @@
 <form id="serverForm" method="post" action="{{ url_for('servers_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="id" value="{{ server.id }}">
+  <input type="hidden" name="back" value="{{ back }}">
 
   <div class="card mb-3">
     <div class="card-header">{{ t('server_detail.section_basic') }}</div>
@@ -82,7 +83,7 @@
       <div class="form-text text-muted d-none" id="shellGate">{{ t('servers.ssh_required_hint') }}</div>
       <div id="shellGateArea">
         {% set bound = json_or(server.scripts_json, []) %}
-        {{ script_picker('scripts', shell_scripts, bound, 'spShellEdit') }}
+        {{ script_picker('scripts', shell_scripts, bound, 'spShellEdit', bound|length > 0) }}
       </div>
     </div>
     <div class="card-footer d-flex justify-content-between align-items-center">
@@ -93,7 +94,7 @@
 </form>
 
 {% include "_server_bindings.html" %}
-<a class="btn btn-outline-secondary mt-2" href="{{ url_for('servers') }}">&larr; {{ t('server_detail.back_list') }}</a>
+<a class="btn btn-outline-secondary mt-2" href="{{ back or url_for('servers') }}">&larr; {{ t('server_detail.back_list') }}</a>
 {% endblock %}
 
 {% block scripts %}

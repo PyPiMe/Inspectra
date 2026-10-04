@@ -360,6 +360,12 @@ def _localize_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
     return summary
 
 
+def _safe_back(default_url: str) -> str:
+    """Return the same-site `back` target (from form/query) or the default. 返回站内 back 或默认。"""
+    b = (request.form.get("back") or request.args.get("back") or "").strip()
+    return b if b.startswith("/") else default_url
+
+
 def _parse_tags(raw: Any) -> list[str]:
     """Parse a comma-separated tag input into a unique list. 解析逗号分隔的标签。"""
     if not raw:
@@ -1211,7 +1217,7 @@ def create_app() -> Flask:
                 })
         return render_template(
             "server_new.html",
-            server=server, copy_mode=bool(src),
+            server=server, copy_mode=bool(src), back=request.args.get("back", ""),
             groups=_picker_named(models.fetch_all("groups")),
             credentials=credentials,
             cred_names={c["key"]: c["name"] for c in credentials},
@@ -1232,7 +1238,7 @@ def create_app() -> Flask:
         credentials = _credential_list()
         return render_template(
             "server_detail.html",
-            server=server,
+            server=server, back=request.args.get("back", ""),
             groups=_picker_named(models.fetch_all("groups")),
             credentials=credentials,
             cred_names={c["key"]: c["name"] for c in credentials},
@@ -1307,6 +1313,7 @@ def create_app() -> Flask:
             "enabled": 1 if request.form.get("enabled") else 0,
             "updated_at": models.utcnow(),
         }
+        back = _safe_back(url_for("servers"))
         new_id = save_object("server", sid, data, g.ip, hostname)
         # 新增：可一次性提交多条数据源绑定（新页 bindings_json）或旧的单条 datasource_id。
         if not sid:
@@ -1323,7 +1330,7 @@ def create_app() -> Flask:
                     bid = models.insert(conn, "server_datasources", {**b, "server_id": new_id})
                     models.write_audit(conn, g.ip, "create", "server_datasource", bid, f"server-{new_id}", b)
         flash(i18n.t("servers.saved"), "success")
-        return redirect(url_for("servers"))
+        return redirect(back)
 
     @app.route("/servers/<int:sid>/delete", methods=["POST"])
     def servers_delete(sid: int):
@@ -1793,6 +1800,32 @@ def create_app() -> Flask:
             current_lang=i18n.current(),
         )
 
+    def _unbind_script(sid: int, only_server: int | None = None) -> int:
+        """移除脚本在所有（或指定）服务器/数据源绑定中的引用。Remove the script from bindings."""
+        changed = 0
+        now = models.utcnow()
+        for sv in models.fetch_all("servers"):
+            if only_server and int(sv["id"]) != only_server:
+                continue
+            ids = [int(x) for x in json_or(sv.get("scripts_json"), [])]
+            if sid in ids:
+                new = [x for x in ids if x != sid]
+                save_object("server", sv["id"], {"scripts_json": json.dumps(new), "updated_at": now},
+                            g.ip, sv.get("hostname") or "", {"unbind_script": sid})
+                changed += 1
+        for b in models.fetch_all("server_datasources"):
+            if only_server and int(b["server_id"]) != only_server:
+                continue
+            ids = [int(x) for x in json_or(b.get("scripts_json"), [])]
+            if sid in ids:
+                new = [x for x in ids if x != sid]
+                with models.db() as conn:
+                    models.update(conn, "server_datasources", b["id"], {"scripts_json": json.dumps(new)})
+                    models.write_audit(conn, g.ip, "update", "server_datasource", b["id"],
+                                       f"server-{b['server_id']}", {"unbind_script": sid, "scripts_json": new})
+                changed += 1
+        return changed
+
     @app.route("/scripts/<int:sid>")
     def script_detail(sid: int):
         script = models.fetch_one("scripts", sid)
@@ -1801,6 +1834,21 @@ def create_app() -> Flask:
         content = backup.read_script(script)
         script["lname"], script["ldesc"], script["lmeta"] = i18n.localize_script(script)
         script["dirty"] = bool(script.get("seed_key")) and bool(content) and content_hash(content) != (script.get("seed_hash") or "")
+        # 使用情况：按“服务器”聚合（Shell 绑定 + 该服务器各数据源绑定中的 PromQL）——便于一眼看懂、按台解绑。
+        ds_names = {int(d["id"]): d["name"] for d in models.fetch_all("datasources")}
+        usage: dict[int, dict[str, Any]] = {}
+        for sv in models.fetch_all("servers"):
+            row = None
+            if sid in [int(x) for x in json_or(sv.get("scripts_json"), [])]:
+                row = usage.setdefault(int(sv["id"]), {"server_id": sv["id"], "name": sv.get("hostname") or sv.get("ip"), "shell": False, "datasources": []})
+                row["shell"] = True
+        for b in models.fetch_all("server_datasources"):
+            if sid in [int(x) for x in json_or(b.get("scripts_json"), [])]:
+                sid_srv = int(b["server_id"])
+                sv = models.fetch_one("servers", sid_srv) or {}
+                row = usage.setdefault(sid_srv, {"server_id": sid_srv, "name": sv.get("hostname") or sv.get("ip") or f"#{sid_srv}", "shell": False, "datasources": []})
+                row["datasources"].append(ds_names.get(int(b["datasource_id"]), f"#{b['datasource_id']}"))
+        usage_list = sorted(usage.values(), key=lambda x: x["name"])
         return render_template(
             "script_detail.html",
             script=script,
@@ -1808,8 +1856,26 @@ def create_app() -> Flask:
             i18n_map=i18n.parse_i18n(script),
             languages=i18n.languages(),
             current_lang=i18n.current(),
+            usage=usage_list,
+            back=request.args.get("back", ""),
             meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell"),
         )
+
+    @app.route("/scripts/<int:sid>/unbind", methods=["POST"])
+    def scripts_unbind_all(sid: int):
+        if not models.fetch_one("scripts", sid):
+            abort(404)
+        n = _unbind_script(sid)
+        flash(i18n.t("scripts.unbound_all", n=n), "success")
+        return redirect(url_for("script_detail", sid=sid))
+
+    @app.route("/scripts/<int:sid>/unbind/<int:server_id>", methods=["POST"])
+    def scripts_unbind_server(sid: int, server_id: int):
+        if not models.fetch_one("scripts", sid):
+            abort(404)
+        n = _unbind_script(sid, only_server=server_id)
+        flash(i18n.t("scripts.unbound_one", n=n), "success")
+        return redirect(url_for("script_detail", sid=sid))
 
     @app.route("/scripts/<int:sid>/restore", methods=["POST"])
     def scripts_restore(sid: int):
@@ -1917,7 +1983,7 @@ def create_app() -> Flask:
             data["desc"] = desc_val
         new_id = save_object("script", sid, data, g.ip, name, script_content=content)
         flash(i18n.t("scripts.saved"), "success")
-        return redirect(url_for("script_detail", sid=new_id))
+        return redirect(_safe_back(url_for("script_detail", sid=new_id)))
 
     @app.route("/scripts/<int:sid>/delete", methods=["POST"])
     def scripts_delete(sid: int):
@@ -2287,14 +2353,14 @@ def create_app() -> Flask:
 
     @app.route("/schedules/new")
     def schedules_new():
-        return render_template("schedule_detail.html", **_schedule_form_ctx(None))
+        return render_template("schedule_detail.html", back=request.args.get("back", ""), **_schedule_form_ctx(None))
 
     @app.route("/schedules/<int:sid>")
     def schedule_detail(sid: int):
         s = models.fetch_one("run_schedule", sid)
         if not s:
             abort(404)
-        return render_template("schedule_detail.html", **_schedule_form_ctx(s))
+        return render_template("schedule_detail.html", back=request.args.get("back", ""), **_schedule_form_ctx(s))
 
     @app.route("/schedules/<int:sid>/toggle", methods=["POST"])
     def schedules_toggle(sid: int):
@@ -2321,7 +2387,10 @@ def create_app() -> Flask:
     @app.route("/schedules/save", methods=["POST"])
     def schedules_save():
         sid = parse_int(request.form.get("id")) or None
-        back = url_for("schedule_detail", sid=sid) if sid else url_for("schedules_new")
+        list_back = (request.form.get("back") or request.args.get("back") or "").strip()
+        list_back = list_back if list_back.startswith("/") else ""
+        back = (url_for("schedule_detail", sid=sid, back=list_back) if sid
+                else url_for("schedules_new", back=list_back))
         name = (request.form.get("name") or "").strip()
         if not name:
             flash(i18n.t("schedules.err_name_required"), "danger")
@@ -2361,7 +2430,7 @@ def create_app() -> Flask:
         }
         save_object("schedule", sid, data, g.ip, name)
         flash(i18n.t("schedules.saved"), "success")
-        return redirect(url_for("schedules"))
+        return redirect(list_back or url_for("schedules"))
 
     @app.route("/schedules/<int:sid>/delete", methods=["POST"])
     def schedules_delete(sid: int):

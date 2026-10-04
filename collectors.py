@@ -273,7 +273,7 @@ def validate_promql(content: str) -> list[str]:
             errors.append(i18n.t("meta.err_step"))
     for key in ("THRESHOLD", "WARN"):
         if meta.get(key) and parse_condition(meta[key]) is None:
-            errors.append(i18n.t("meta.err_condition", key=key))
+            errors.append(i18n.t("meta.err_condition", cond=key))
     return errors
 
 

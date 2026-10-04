@@ -6,6 +6,11 @@
   <span class="badge bg-secondary" id="kindBadge">{{ script.kind or 'shell' }}</span>
   {% if script.seed_key %}<span class="badge bg-light text-secondary border" title="{{ t('scripts.builtin_hint') }}">{{ t('scripts.builtin') }}</span>{% endif %}
   {% if script.dirty %}<span class="badge bg-warning text-dark" title="{{ t('scripts.modified_hint') }}">{{ t('scripts.modified') }}</span>{% endif %}
+  {% if script.id and usage %}
+  <button type="button" class="badge text-bg-light text-dark border" data-bs-toggle="modal" data-bs-target="#usageModal">
+    {{ t('scripts.usage') }} {{ usage|length }}
+  </button>
+  {% endif %}
   {% if script.id %}<span class="text-muted small ms-auto">#{{ script.id }}</span>{% endif %}
 </h4>
 {% if meta_warnings %}
@@ -17,6 +22,7 @@
 <form id="scriptForm" method="post" action="{{ url_for('scripts_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
   <input type="hidden" name="lang" value="{{ current_lang }}">
+  <input type="hidden" name="back" value="{{ back }}">
   {% if script.id %}<input type="hidden" name="id" value="{{ script.id }}">{% endif %}
 
   {# Sticky action bar: save / back / validate live where you can always reach them. #}
@@ -95,34 +101,12 @@
     </div>
   </div>
 
-  {# Per-language name/description/meta name. The base (current) language is edited above. #}
-  {% set others = languages | rejectattr('code', 'equalto', current_lang) | list %}
-  {% if others %}
-  <details class="card mt-3">
-    <summary class="card-header" style="cursor: pointer;">
-      {{ t('script_detail.translations') }}
-      <span class="text-muted small fw-normal ms-2">{{ t('script_detail.translations_hint') }}</span>
-    </summary>
-    <div class="card-body row g-3">
-      {% for L in others %}
-      {% set tr = i18n_map.get(L.code, {}) %}
-      <div class="col-md-4">
-        <div class="fw-semibold mb-1">{{ L.name }} <span class="text-muted small">({{ L.code }})</span></div>
-        <input class="form-control form-control-sm mb-1" name="tr_{{ L.code }}_name" value="{{ tr.get('name', '') }}" placeholder="{{ t('common.name') }}">
-        <input class="form-control form-control-sm mb-1" name="tr_{{ L.code }}_desc" value="{{ tr.get('desc', '') }}" placeholder="{{ t('common.desc') }}">
-        <input class="form-control form-control-sm" name="tr_{{ L.code }}_meta" value="{{ tr.get('meta_name', '') }}" placeholder="{{ t('script_detail.meta_name') }}">
-      </div>
-      {% endfor %}
-    </div>
-  </details>
-  {% endif %}
-
 </form>
 
 {# Bottom action row (outside the main form to avoid nested forms; Save uses form="scriptForm"). #}
 <div class="mt-3 d-flex align-items-center gap-2 flex-wrap">
   <button class="btn btn-primary" type="submit" form="scriptForm">{{ t('common.save') }}</button>
-  <a class="btn btn-outline-secondary" href="{{ url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
+  <a class="btn btn-outline-secondary" href="{{ back or url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
   {% if script.id %}
   <a class="btn btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">{{ t('common.history') }}</a>
   <form method="post" action="{{ url_for('scripts_clone', sid=script.id) }}" class="d-inline">
@@ -142,6 +126,56 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 </form>
 {% endif %}
+{% endif %}
+
+{# 使用情况：标题徽标 + 按需弹窗（避免与编辑主体抢焦点） #}
+{% if script.id %}
+<div class="modal fade" id="usageModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ t('scripts.usage') }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        {% if usage %}
+        <div class="small text-muted mb-2">{{ t('scripts.usage_hint', n=usage|length) }}</div>
+        <table class="table table-sm align-middle mb-0">
+          <thead><tr><th>{{ t('nav.servers') }}</th><th>{{ t('server_detail.section_prom') }}</th><th></th></tr></thead>
+          <tbody>
+          {% for u in usage %}
+          <tr>
+            <td><a href="{{ url_for('server_detail', sid=u.server_id) }}">{{ u.name }}</a></td>
+            <td>
+              {% if u.shell %}<span class="badge bg-primary me-1">Shell</span>{% endif %}
+              {% for d in u.datasources %}<span class="badge text-bg-light text-dark border me-1">{{ d }}</span>{% endfor %}
+            </td>
+            <td class="text-end">
+              <form method="post" action="{{ url_for('scripts_unbind_server', sid=script.id, server_id=u.server_id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn-sm btn-outline-warning">{{ t('scripts.unbind') }}</button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <span class="text-muted small">{{ t('scripts.usage_none') }}</span>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        {% if usage %}
+        <form method="post" action="{{ url_for('scripts_unbind_all', sid=script.id) }}" onsubmit="return confirm('{{ t('scripts.confirm_unbind_all') }}')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button class="btn btn-outline-warning">{{ t('scripts.unbind_all') }}</button>
+        </form>
+        {% endif %}
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">{{ t('common.cancel') }}</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endif %}
 
 {# Script spec moved off the page into an on-demand modal. #}

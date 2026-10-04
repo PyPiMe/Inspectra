@@ -4,6 +4,7 @@
 {% block content %}
 <h4>{{ t('nav.schedules') }}</h4>
 <div class="alert alert-secondary small">{{ t('schedules.alert') | safe }}</div>
+{% set back_url = url_for('schedules', q=q, enabled=enabled, page=page, per_page=per_page) %}
 {% set RUNCN = {'success': t('reports.success'), 'partial': t('reports.partial'), 'error': t('reports.error'), 'running': t('reports.running')} %}
 <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
   <div class="pt-1 d-flex align-items-center gap-2 flex-wrap">
@@ -41,7 +42,7 @@
   <tbody>
   {% for s in schedules %}
     <tr>
-      <td><a href="{{ url_for('schedule_detail', sid=s.id) }}">{{ s.name }}</a></td>
+      <td><a href="{{ url_for('schedule_detail', sid=s.id, back=back_url) }}">{{ s.name }}</a></td>
       <td class="small" title="{{ s.cron_min }} {{ s.cron_hour }} {{ s.cron_dow }}">{{ s.freq }}</td>
       <td>{% for c in s.chips %}<span class="badge text-bg-light text-dark border me-1">{{ c }}</span>{% endfor %}</td>
       <td class="small">{{ t('reports.analysis_model') if s.mode != 'raw' else t('reports.analysis_raw') }}</td>
@@ -60,7 +61,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="btn btn-sm {{ 'btn-outline-warning' if s.enabled else 'btn-outline-success' }}">{{ t('common.disable') if s.enabled else t('common.enable') }}</button>
         </form>
-        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('schedule_detail', sid=s.id) }}">{{ t('common.edit') }}</a>
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('schedule_detail', sid=s.id, back=back_url) }}">{{ t('common.edit') }}</a>
         <form method="post" action="{{ url_for('schedules_run', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('schedules.confirm_run') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <button class="btn btn-sm btn-outline-success" {{ 'disabled' if not s.enabled else '' }}>{{ t('schedules.run_now') }}</button>

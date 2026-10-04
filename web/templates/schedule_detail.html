@@ -11,11 +11,12 @@
 
 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
   <h4 class="mb-0">{{ t('schedules.edit_title', id=s.id) if s else t('schedules.new') }}</h4>
-  <a class="btn btn-outline-secondary ms-auto" href="{{ url_for('schedules') }}">{{ t('server_detail.back_list') }}</a>
+  <a class="btn btn-outline-secondary ms-auto" href="{{ back or url_for('schedules') }}">{{ t('server_detail.back_list') }}</a>
 </div>
 
 <form id="schForm" method="post" action="{{ url_for('schedules_save') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="back" value="{{ back }}">
   {% if s %}<input type="hidden" name="id" value="{{ s.id }}">{% endif %}
   <input type="hidden" name="cron_min" id="cronMin" value="{{ s.cron_min if s else '*/30' }}">
   <input type="hidden" name="cron_hour" id="cronHour" value="{{ s.cron_hour if s else '*' }}">
