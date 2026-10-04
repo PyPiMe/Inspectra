@@ -152,8 +152,8 @@
       "en": "Redis health"
     },
     "desc": {
-      "zh-CN": "按进程自动发现本机 redis-server 实例：存活/role/内存占比/命中率/淘汰/阻塞/RDB/主从；密码取实例 conf 的 requirepass（REDISCLI_AUTH 传入）",
-      "en": "Auto-discover local redis-server instances: alive/role/mem%/hit-ratio/evicted/blocked/RDB/replication; read requirepass from the instance conf (via REDISCLI_AUTH)"
+      "zh-CN": "按进程自动发现本机 redis-server 实例：存活/role/内存占比/命中率/淘汰/阻塞/RDB/主从；密码从常见 conf 路径（含 include）解析经 REDISCLI_AUTH 传入；存活以端口监听判定，INFO 指标可选",
+      "en": "Auto-discover local redis-server instances: alive/role/mem%/hit-ratio/evicted/blocked/RDB/replication; read requirepass from common conf paths (incl. include) via REDISCLI_AUTH; alive by listening port, INFO metrics optional"
     },
     "tags": [
       "redis"
