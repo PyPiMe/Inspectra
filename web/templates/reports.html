@@ -108,9 +108,8 @@
       <strong>{{ t('reports2.all_servers') if g.name == '__ALL__' else (t('reports2.unassigned') if g.name == '__UNASSIGNED__' else g.name) }}</strong>
       {% if g.recovered %}
       <span class="badge bg-success-subtle text-success border border-success-subtle">{{ t('reports2.recovered') }}</span>
-      {% else %}
-      <span class="badge bg-danger">{{ t('reports.need') }} {{ g.count }}</span>
       {% endif %}
+      <span class="text-muted small">{{ t('reports2.run_count', n=g.count) }}</span>
       {% if g.latest.fail_count %}<span class="badge bg-danger">{{ t('status.fail') }} {{ g.latest.fail_count }}</span>{% endif %}
       {% if g.latest.warn_count %}<span class="badge bg-warning text-dark">{{ t('status.warn') }} {{ g.latest.warn_count }}</span>{% endif %}
       <span class="text-muted ms-auto">{{ t('reports2.latest') }} {{ g.latest.started|local }}</span>

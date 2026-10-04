@@ -959,5 +959,7 @@
   "servers.new_page_hint": "填写后点击底部「保存服务器」",
   "servers.ssh_required_hint": "需先配置 SSH（端口 + 凭据）才能选择 Shell 脚本",
   "servers.err_vm_ident_dup": "虚拟化标识（PVE）{vm} 已被其它服务器占用",
-  "audit.schedule_skip": "调度跳过"
+  "audit.schedule_skip": "调度跳过",
+  "reports2.run_count": "{n} 次运行",
+  "scripts.all_tags": "全部标签"
 }
