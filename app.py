@@ -1761,9 +1761,19 @@ def create_app() -> Flask:
                 r["dirty"] = bool(content) and content_hash(content) != (r.get("seed_hash") or "")
             else:
                 r["dirty"] = False
+        # 使用情况计数：脚本 id -> 使用它的服务器数（无 N+1）
+        usage_sets: dict[int, set[int]] = {}
+        for sv in models.fetch_all("servers"):
+            for x in json_or(sv.get("scripts_json"), []):
+                usage_sets.setdefault(int(x), set()).add(int(sv["id"]))
+        for b in models.fetch_all("server_datasources"):
+            for x in json_or(b.get("scripts_json"), []):
+                usage_sets.setdefault(int(x), set()).add(int(b["server_id"]))
+        usage_counts = {k: len(v) for k, v in usage_sets.items()}
         return render_template(
             "scripts.html",
             scripts=rows, name=name, kind=kind, desc=desc, tag=tag, all_tags=all_tags, sort=sort,
+            usage_counts=usage_counts,
             page=page, per_page=per_page, total=total, pages=pages,
         )
 
@@ -1800,12 +1810,12 @@ def create_app() -> Flask:
             current_lang=i18n.current(),
         )
 
-    def _unbind_script(sid: int, only_server: int | None = None) -> int:
-        """移除脚本在所有（或指定）服务器/数据源绑定中的引用。Remove the script from bindings."""
+    def _unbind_script(sid: int, only_servers: set[int] | None = None) -> int:
+        """移除脚本在所有（或指定服务器集合）服务器/数据源绑定中的使用。Remove usages of the script."""
         changed = 0
         now = models.utcnow()
         for sv in models.fetch_all("servers"):
-            if only_server and int(sv["id"]) != only_server:
+            if only_servers is not None and int(sv["id"]) not in only_servers:
                 continue
             ids = [int(x) for x in json_or(sv.get("scripts_json"), [])]
             if sid in ids:
@@ -1814,7 +1824,7 @@ def create_app() -> Flask:
                             g.ip, sv.get("hostname") or "", {"unbind_script": sid})
                 changed += 1
         for b in models.fetch_all("server_datasources"):
-            if only_server and int(b["server_id"]) != only_server:
+            if only_servers is not None and int(b["server_id"]) not in only_servers:
                 continue
             ids = [int(x) for x in json_or(b.get("scripts_json"), [])]
             if sid in ids:
@@ -1826,19 +1836,11 @@ def create_app() -> Flask:
                 changed += 1
         return changed
 
-    @app.route("/scripts/<int:sid>")
-    def script_detail(sid: int):
-        script = models.fetch_one("scripts", sid)
-        if not script:
-            abort(404)
-        content = backup.read_script(script)
-        script["lname"], script["ldesc"], script["lmeta"] = i18n.localize_script(script)
-        script["dirty"] = bool(script.get("seed_key")) and bool(content) and content_hash(content) != (script.get("seed_hash") or "")
-        # 使用情况：按“服务器”聚合（Shell 绑定 + 该服务器各数据源绑定中的 PromQL）——便于一眼看懂、按台解绑。
+    def _script_usage_list(sid: int) -> list[dict[str, Any]]:
+        """Servers using the script (shell and/or datasource bindings), aggregated per server."""
         ds_names = {int(d["id"]): d["name"] for d in models.fetch_all("datasources")}
         usage: dict[int, dict[str, Any]] = {}
         for sv in models.fetch_all("servers"):
-            row = None
             if sid in [int(x) for x in json_or(sv.get("scripts_json"), [])]:
                 row = usage.setdefault(int(sv["id"]), {"server_id": sv["id"], "name": sv.get("hostname") or sv.get("ip"), "shell": False, "datasources": []})
                 row["shell"] = True
@@ -1848,7 +1850,18 @@ def create_app() -> Flask:
                 sv = models.fetch_one("servers", sid_srv) or {}
                 row = usage.setdefault(sid_srv, {"server_id": sid_srv, "name": sv.get("hostname") or sv.get("ip") or f"#{sid_srv}", "shell": False, "datasources": []})
                 row["datasources"].append(ds_names.get(int(b["datasource_id"]), f"#{b['datasource_id']}"))
-        usage_list = sorted(usage.values(), key=lambda x: x["name"])
+        return sorted(usage.values(), key=lambda x: x["name"])
+
+    @app.route("/scripts/<int:sid>")
+    def script_detail(sid: int):
+        script = models.fetch_one("scripts", sid)
+        if not script:
+            abort(404)
+        content = backup.read_script(script)
+        script["lname"], script["ldesc"], script["lmeta"] = i18n.localize_script(script)
+        script["dirty"] = bool(script.get("seed_key")) and bool(content) and content_hash(content) != (script.get("seed_hash") or "")
+        # 使用情况：按“服务器”聚合（Shell 绑定 + 该服务器各数据源绑定中的 PromQL）。
+        usage_list = _script_usage_list(sid)
         return render_template(
             "script_detail.html",
             script=script,
@@ -1861,21 +1874,56 @@ def create_app() -> Flask:
             meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell"),
         )
 
+    @app.route("/scripts/<int:sid>/usage")
+    def script_usage(sid: int):
+        script = models.fetch_one("scripts", sid)
+        if not script:
+            abort(404)
+        q = (request.args.get("q") or "").strip().lower()
+        all_usage = _script_usage_list(sid)
+        usage_all = len(all_usage)
+        usage = all_usage
+        if q:
+            usage = [u for u in usage if q in (u["name"] or "").lower() or any(q in (d or "").lower() for d in u["datasources"])]
+        page, per_page = page_args()
+        total = len(usage)
+        pages = max(1, (total + per_page - 1) // per_page)
+        page = min(max(1, page), pages)
+        rows = usage[(page - 1) * per_page: page * per_page]
+        script["lname"], script["ldesc"], script["lmeta"] = i18n.localize_script(script)
+        return render_template(
+            "script_usage.html", script=script, usage=rows, usage_total=total, usage_all=usage_all,
+            q=q, page=page, pages=pages, total=total, per_page=per_page,
+            back=request.args.get("back", ""),
+        )
+
     @app.route("/scripts/<int:sid>/unbind", methods=["POST"])
     def scripts_unbind_all(sid: int):
         if not models.fetch_one("scripts", sid):
             abort(404)
         n = _unbind_script(sid)
         flash(i18n.t("scripts.unbound_all", n=n), "success")
-        return redirect(url_for("script_detail", sid=sid))
+        back = _safe_back(url_for("script_detail", sid=sid))
+        return redirect(back)
+
+    @app.route("/scripts/<int:sid>/unbind_selected", methods=["POST"])
+    def scripts_unbind_selected(sid: int):
+        if not models.fetch_one("scripts", sid):
+            abort(404)
+        servers = {int(x) for x in parse_ids(request.form.getlist("server_ids"))}
+        n = _unbind_script(sid, only_servers=servers) if servers else 0
+        flash(i18n.t("scripts.unbound_one", n=n), "success")
+        back = (request.form.get("back") or "").strip()
+        return redirect(back if back.startswith("/") else url_for("script_usage", sid=sid))
 
     @app.route("/scripts/<int:sid>/unbind/<int:server_id>", methods=["POST"])
     def scripts_unbind_server(sid: int, server_id: int):
         if not models.fetch_one("scripts", sid):
             abort(404)
-        n = _unbind_script(sid, only_server=server_id)
+        n = _unbind_script(sid, only_servers={server_id})
         flash(i18n.t("scripts.unbound_one", n=n), "success")
-        return redirect(url_for("script_detail", sid=sid))
+        back = _safe_back(url_for("script_detail", sid=sid))
+        return redirect(back)
 
     @app.route("/scripts/<int:sid>/restore", methods=["POST"])
     def scripts_restore(sid: int):

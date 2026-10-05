@@ -1,6 +1,7 @@
 {% macro perpage(endpoint, params, per_page) %}
-<form class="d-inline-block" method="get" action="{{ url_for(endpoint) }}">
-  {% for k, v in params.items() %}{% if v not in ('', none) %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+{% set clean = {} %}
+{% for k, v in params.items() %}{% if v not in ('', none) %}{% set _ = clean.update({k: v}) %}{% endif %}{% endfor %}
+<form class="d-inline-block" method="get" action="{{ url_for(endpoint, **clean) }}">
   <select class="form-select form-select-sm d-inline-block w-auto" name="per_page" onchange="this.form.submit()">
     {% for n in [20, 50, 100] %}
       <option value="{{ n }}" {{ 'selected' if per_page == n else '' }}>{{ t('common.per_page', n=n) }}</option>

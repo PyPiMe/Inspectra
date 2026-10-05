@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% from "_macros.html" import pager %}
+{% block title %}{{ script.lname }} - {{ t('scripts.usage') }}{% endblock %}
+{% block content %}
+{% set back_url = back or url_for('scripts') %}
+<h4 class="d-flex align-items-center gap-2 flex-wrap mb-2">
+  <span>{{ script.lname }}</span>
+  <span class="text-muted">{{ t('scripts.usage') }}</span>
+  <span class="text-muted small ms-auto">#{{ script.id }}</span>
+</h4>
+
+<div class="alert alert-secondary small">{{ t('scripts.usage_hint', n=usage_total) }}</div>
+
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+  <a class="btn btn-outline-secondary" href="{{ back_url }}">{{ t('server_detail.back_list') }}</a>
+  <form class="row g-2 align-items-end" method="get" action="{{ url_for('script_usage', sid=script.id) }}">
+    <input type="hidden" name="back" value="{{ back }}">
+    <div class="col-auto"><input class="form-control form-control-sm" name="q" value="{{ q }}" placeholder="{{ t('scripts.usage_search') }}"></div>
+    <div class="col-auto"><button class="btn btn-sm btn-outline-secondary">{{ t('common.search') }}</button></div>
+    <div class="col-auto"><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('script_usage', sid=script.id, back=back) }}">{{ t('common.reset') }}</a></div>
+  </form>
+</div>
+
+{% if usage %}
+<form method="post" action="{{ url_for('scripts_unbind_selected', sid=script.id) }}" id="usageForm">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="back" value="{{ back_url }}">
+  <div class="alert alert-light border py-1 px-2 mb-2 d-none" id="usageBar">
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <span class="small">{{ t('reports.selected_prefix') }}<strong id="usageCount">0</strong>{{ t('reports.selected_suffix') }}</span>
+      <button type="button" class="btn btn-sm btn-outline-warning" id="usageUnbindSelected">{{ t('scripts.unbind_selected') }}</button>
+      <button type="submit" form="usageAllForm" class="btn btn-sm btn-outline-warning">{{ t('scripts.unbind_all_n', n=usage_all) }}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary" id="usageClear">{{ t('common.cancel_select') }}</button>
+    </div>
+  </div>
+  <div class="d-flex align-items-center gap-2 mb-2">
+    <div class="form-check m-0">
+      <input class="form-check-input" type="checkbox" id="usageSelectAll">
+      <label class="form-check-label small" for="usageSelectAll">{{ t('common.select_page') }}</label>
+    </div>
+  </div>
+  <div class="row g-1">
+    {% for u in usage %}
+    <div class="col-12">
+      <div class="card rep-card" data-href="{{ url_for('server_detail', sid=u.server_id) }}">
+        <div class="card-body py-2 d-flex align-items-center gap-3">
+          <input class="form-check-input mt-0 usage-cb" type="checkbox" name="server_ids" value="{{ u.server_id }}">
+          <div class="flex-grow-1">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <span class="fw-semibold">{{ u.name }}</span>
+              {% if u.shell %}<span class="badge bg-primary">Shell</span>{% endif %}
+              {% if u.datasources %}<span class="badge bg-info" title="{{ u.datasources|join(', ') }}">PromQL</span>{% endif %}
+            </div>
+          </div>
+          <span class="text-muted fs-5">&rsaquo;</span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</form>
+<form id="usageAllForm" method="post" action="{{ url_for('scripts_unbind_all', sid=script.id) }}" class="d-none" onsubmit="return confirm('{{ t('scripts.confirm_unbind_all') }}')">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="back" value="{{ back_url }}">
+</form>
+{{ pager('script_usage', {'sid': script.id, 'q': q, 'back': back}, page, pages, total, per_page) }}
+{% else %}
+<div class="text-muted">{{ t('scripts.usage_none') }}</div>
+{% endif %}
+<a class="btn btn-outline-secondary mt-2" href="{{ back_url }}">{{ t('server_detail.back_list') }}</a>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const cbs = [...document.querySelectorAll('.usage-cb')];
+  const all = document.getElementById('usageSelectAll');
+  const bar = document.getElementById('usageBar');
+  const cnt = document.getElementById('usageCount');
+  const refresh = () => {
+    const n = cbs.filter((c) => c.checked).length;
+    if (cnt) cnt.textContent = n;
+    if (bar) bar.classList.toggle('d-none', n === 0);
+  };
+  if (all) all.addEventListener('change', () => { cbs.forEach((c) => { c.checked = all.checked; }); refresh(); });
+  cbs.forEach((c) => c.addEventListener('change', refresh));
+  const clr = document.getElementById('usageClear');
+  if (clr) clr.addEventListener('click', () => { cbs.forEach((c) => { c.checked = false; }); if (all) all.checked = false; refresh(); });
+  const sub = document.getElementById('usageUnbindSelected');
+  if (sub) sub.addEventListener('click', () => {
+    const n = cbs.filter((c) => c.checked).length;
+    if (!n) { alert(__t('js.pick_first')); return; }
+    if (!confirm(__t('js.confirm_unbind_selected').replace('{n}', n))) return;
+    document.getElementById('usageForm').submit();
+  });
+  document.querySelectorAll('.rep-card[data-href]').forEach((c) => {
+    c.addEventListener('click', (e) => {
+      if (e.target.closest('input,button,a,label')) return;
+      window.location.href = c.dataset.href;
+    });
+  });
+  refresh();
+})();
+</script>
+{% endblock %}

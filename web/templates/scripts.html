@@ -63,6 +63,8 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-secondary">{{ t('scripts.clone') }}</button>
         </form>
         <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=s.id) }}">{{ t('common.history') }}</a>
+        {% set uc = usage_counts.get(s.id, 0) %}
+        {% if uc %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('script_usage', sid=s.id, back=back_url) }}">{{ t('scripts.usage_count', n=uc) }}</a>{% endif %}
         <form method="post" action="{{ url_for('scripts_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('common.confirm_delete') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
         </form>
