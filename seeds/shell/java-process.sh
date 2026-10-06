@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# NAME: Java 进程检查
 # UNIT: mixed
 # Generic: java process count (0 => FAIL) and total RSS
 n=$(pgrep -x java 2>/dev/null | wc -l)

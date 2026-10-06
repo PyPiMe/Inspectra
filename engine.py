@@ -446,7 +446,7 @@ def _source_label(source: Any) -> str:
     return val if val != key else s
 
 
-_META_KEYS = ("NAME", "MODE", "WINDOW", "STEP", "THRESHOLD", "WARN", "UNIT", "DISPLAY")
+_META_KEYS = ("MODE", "WINDOW", "STEP", "THRESHOLD", "WARN", "UNIT", "DISPLAY")
 
 
 def _fmt_human_value(item: str, val_str: str) -> str:
@@ -538,6 +538,8 @@ def _script_detail_lines(r: dict[str, Any]) -> list[str]:
     if meta.get("THRESHOLD"):
         bits.append(i18n.t("report_md.bit_threshold", threshold=meta["THRESHOLD"]))
     out.append("> " + i18n.t("report_md.bit_sep").join(bits))
+    if r.get("advice"):
+        out.append(i18n.t("report_md.advice", v=r["advice"]))
     if r.get("error"):
         out.append(i18n.t("report_md.error", err=r["error"]))
     hits = r.get("sanitize_hits") or ""
@@ -1088,6 +1090,13 @@ def run(
                             "sanitize_hits": sanitize.summarize_hits(r.meta.get("sanitize_hits", [])),
                             "items": r.meta.get("items") or [],
                             "meta": {k: r.meta.get(k) for k in _META_KEYS},
+                            # Author advice, localized in the run language for the archived .md
+                            # (not persisted in detail_json; re-resolved at view time).
+                            # 作者建议（按运行语言，用于归档 .md；不入 detail_json，查看时再解析）。
+                            "advice": i18n.localize_advice(
+                                maps["scripts"].get(int(r.script_id or 0)) or {},
+                                base=(r.meta or {}).get("ADVICE") or "",
+                            ),
                         }
                         for r in rs
                     ],

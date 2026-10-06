@@ -1,4 +1,3 @@
-# NAME: PVE 存储池使用率
 # MODE: instant
 # THRESHOLD: >90
 # UNIT: %

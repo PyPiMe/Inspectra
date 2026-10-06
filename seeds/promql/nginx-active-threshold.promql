@@ -1,4 +1,3 @@
-# NAME: Nginx 活跃连接数
 # MODE: instant
 # WARN: >800
 # THRESHOLD: >1000

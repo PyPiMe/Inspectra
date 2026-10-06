@@ -314,6 +314,7 @@ def _localize_detail(detail: dict[str, Any] | None):
     aids = [a.get("application_id") for a in detail["apps"] if a.get("application_id")]
     rows = _script_row_map(sids)
     amap = _application_name_map(aids)
+    advice_cache: dict[int, str] = {}
     for a in detail["apps"]:
         aid = a.get("application_id")
         a["name"] = amap.get(int(aid), a.get("name")) if aid else i18n.t("reports2.unassigned")
@@ -323,6 +324,17 @@ def _localize_detail(detail: dict[str, Any] | None):
                 row = rows.get(int(sid)) if sid else None
                 if row:
                     r["script"] = i18n.localize_script(row)[0]
+                    # Advice is language-neutral; resolve at view time from the script
+                    # row (built-ins) or its body `# ADVICE` (user scripts).
+                    # 建议语言中立，展示时从脚本行（内置）或正文 `# ADVICE`（用户脚本）解析。
+                    si = int(sid)
+                    if si not in advice_cache:
+                        try:
+                            base = collectors.parse_script_meta(backup.read_script(row)).get("ADVICE") or ""
+                        except Exception:  # noqa: BLE001
+                            base = ""
+                        advice_cache[si] = i18n.localize_advice(row, base=base)
+                    r["advice"] = advice_cache[si]
                     for it in r.get("items") or []:
                         k = it.get("key")
                         if k:
@@ -681,6 +693,8 @@ def _render_report_md(run: dict[str, Any], summary: dict[str, Any], detail: dict
                 if st in ("FAIL", "ERROR", "WARN", "UNKNOWN") or (r.get("meta") or {}).get("DISPLAY"):
                     lines += ["", t("report_md.script", name=r.get("script") or ""), "",
                               t("report_md.script_status", status=_status_label(st), source=r.get("source") or "")]
+                    if r.get("advice"):
+                        lines.append(t("report_md.advice", v=r["advice"]))
                     if items:
                         lines += ["", f"| {t('report_md.th_item')} | {t('report_md.th_value')} | {t('report_md.th_threshold')} | {t('report_md.th_verdict')} |",
                                   "|------|------|------|------|"]
@@ -1866,8 +1880,6 @@ def create_app() -> Flask:
         content = backup.read_script(script)
         script["lname"], script["ldesc"], script["lmeta"] = i18n.localize_script(script)
         script["dirty"] = bool(script.get("seed_key")) and bool(content) and content_hash(content) != (script.get("seed_hash") or "")
-        # 使用情况：按“服务器”聚合（Shell 绑定 + 该服务器各数据源绑定中的 PromQL）。
-        usage_list = _script_usage_list(sid)
         return render_template(
             "script_detail.html",
             script=script,
@@ -1875,7 +1887,6 @@ def create_app() -> Flask:
             i18n_map=i18n.parse_i18n(script),
             languages=i18n.languages(),
             current_lang=i18n.current(),
-            usage=usage_list,
             back=request.args.get("back", ""),
             meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell"),
         )

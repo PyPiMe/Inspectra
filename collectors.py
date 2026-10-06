@@ -82,8 +82,8 @@ def parse_duration(text: str) -> int | None:
 
 def parse_script_meta(content: str) -> dict[str, Any]:
     meta: dict[str, Any] = {
-        "NAME": "", "MODE": "instant", "WINDOW": "", "STEP": "1m",
-        "THRESHOLD": "", "WARN": "", "UNIT": "", "DISPLAY": "",
+        "MODE": "instant", "WINDOW": "", "STEP": "1m",
+        "THRESHOLD": "", "WARN": "", "UNIT": "", "DISPLAY": "", "ADVICE": "",
     }
     for line in (content or "").splitlines():
         s = line.strip()
@@ -243,13 +243,11 @@ def evaluate(output: str, meta: dict[str, Any]) -> tuple[str, list[dict[str, Any
 
 
 def meta_warnings(content: str, kind: str = "promql") -> list[str]:
-    """元数据警告（不阻断保存）：NAME 必填；THRESHOLD 建议；纯信息类用 DISPLAY 豁免。"""
+    """元数据警告（不阻断保存）：THRESHOLD 建议；纯信息类用 DISPLAY 豁免。"""
     meta = parse_script_meta(content)
     if is_display(meta):
         return []
     warns: list[str] = []
-    if not meta.get("NAME"):
-        warns.append(i18n.t("meta.warn_name"))
     if not meta.get("THRESHOLD"):
         warns.append(i18n.t("meta.warn_threshold"))
     if not meta.get("UNIT"):
@@ -261,8 +259,6 @@ def validate_promql(content: str) -> list[str]:
     """校验 promql 头部元数据，返回错误列表（空=通过）。"""
     errors: list[str] = []
     meta = parse_script_meta(content)
-    if not meta["NAME"]:
-        errors.append(i18n.t("meta.err_name"))
     mode = (meta["MODE"] or "instant").lower()
     if mode not in ("instant", "range"):
         errors.append(i18n.t("meta.err_mode"))

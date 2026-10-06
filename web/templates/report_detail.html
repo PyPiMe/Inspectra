@@ -135,6 +135,7 @@
                     <span class="text-muted small">{{ r.source }}</span>
                     {% if r['items']|length > 1 %}<button type="button" class="btn btn-sm btn-outline-secondary py-0 ms-auto row-toggle"></button>{% endif %}
                   </div>
+                  {% if r.advice %}<div class="small text-muted mt-1">{{ t('report_md.advice', v=r.advice) }}</div>{% endif %}
                   {% if r.error %}<div class="small text-danger">{{ t('report2.error') }}：{{ r.error }}</div>{% endif %}
                   {% if r['items'] %}
                   <table class="table table-sm table-hover mb-1">
@@ -171,6 +172,7 @@
                   <strong>{{ r.script }}</strong>
                   <span class="text-muted small">{{ r.source }}</span>
                 </div>
+                {% if r.advice %}<div class="small text-muted mt-1">{{ t('report_md.advice', v=r.advice) }}</div>{% endif %}
                 {% if r['items'] %}
                 <table class="table table-sm mb-1">
                   <thead><tr><th>{{ t('reports.col_item') }}</th><th>{{ t('reports.col_value') }}</th><th>{{ t('reports.col_threshold') }}</th><th>{{ t('reports.col_verdict') }}</th></tr></thead>

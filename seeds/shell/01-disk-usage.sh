@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # 输出规范：精简、结构化 key=value
+# Output: concise, structured key=value
 set -u
 df -P -x tmpfs -x devtmpfs | awk 'NR>1 {
   gsub("%","",$5);

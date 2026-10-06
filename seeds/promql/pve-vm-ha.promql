@@ -1,4 +1,3 @@
-# NAME: PVE 虚拟机 HA 状态
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: bool

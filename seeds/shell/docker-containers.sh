@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
-# NAME: Docker 容器检查
 # UNIT: mixed
-# 依赖：webops 对 docker 的只读 sudo 授权（ps / ps -a / inspect）
-# Requires read-only sudo docker for webops (ps / ps -a / inspect)
 sudo="sudo -n"
 if ! $sudo /usr/bin/docker ps >/dev/null 2>&1; then
   echo "docker_available=0 threshold=!=1 unit=bool"

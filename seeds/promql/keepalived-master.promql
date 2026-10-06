@@ -1,4 +1,3 @@
-# NAME: Keepalived 主备
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: count

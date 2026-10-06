@@ -135,6 +135,21 @@ def localize_script(row: dict[str, Any], lang: str | None = None) -> tuple[str, 
     )
 
 
+def localize_advice(row: dict[str, Any], lang: str | None = None, base: str = "") -> str:
+    """Resolve a script's author advice for a language.
+
+    Fallback chain: requested lang -> en -> base literal (script body `# ADVICE`).
+    解析脚本作者建议：回退 当前 → en → 正文基座（`# ADVICE`）。
+    """
+    lang = lang or current()
+    ij = parse_i18n(row)
+    for code in (lang, "en", BASE_LANG):
+        entry = ij.get(code)
+        if isinstance(entry, dict) and entry.get("advice"):
+            return entry["advice"]
+    return base or ""
+
+
 def localize_item(row: dict[str, Any], key: str, lang: str | None = None) -> str:
     """Resolve an item display name from the script's per-language `items` map.
 

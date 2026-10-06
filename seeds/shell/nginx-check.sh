@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# NAME: Nginx 检查(SSH)
 # UNIT: mixed
 # Generic host Nginx fallback: process / 80,443 listen / stub_status
 procs=$(pgrep -x nginx 2>/dev/null | wc -l)

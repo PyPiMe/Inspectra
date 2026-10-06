@@ -1,4 +1,3 @@
-# NAME: 磁盘使用率
 # MODE: instant
 # THRESHOLD: >90
 # UNIT: %

@@ -1,4 +1,3 @@
-# NAME: Anubis 代理请求速率
 # MODE: instant
 # UNIT: req/s
 sum(rate(anubis_proxied_requests_total{$instance}[5m]))

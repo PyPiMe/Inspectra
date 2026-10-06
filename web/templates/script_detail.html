@@ -82,7 +82,6 @@
         </div></div>
 
         <div class="card mb-3 d-none" id="metaCard"><div class="card-header">{{ t('script_detail.meta_card') }}</div><div class="card-body row g-2">
-          <div class="col-12"><label class="form-label">NAME</label><input class="form-control form-control-sm" id="metaName"></div>
           <div class="col-6"><label class="form-label">MODE</label>
             <select class="form-select form-select-sm" id="metaMode"><option value="instant">instant</option><option value="range">range</option></select>
           </div>
@@ -90,6 +89,7 @@
           <div class="col-6 meta-range"><label class="form-label">WINDOW</label><input class="form-control form-control-sm" id="metaWindow" placeholder="5m"></div>
           <div class="col-6 meta-range"><label class="form-label">STEP</label><input class="form-control form-control-sm" id="metaStep" placeholder="1m"></div>
           <div class="col-12"><label class="form-label">THRESHOLD</label><input class="form-control form-control-sm" id="metaThreshold" placeholder="{{ t('script_detail.threshold_ph') }}"></div>
+          <div class="col-12"><label class="form-label">ADVICE</label><textarea class="form-control form-control-sm" id="metaAdvice" rows="2" placeholder="{{ t('script_detail.advice_ph') }}"></textarea></div>
           <div class="col-12"><button type="button" class="btn btn-sm btn-outline-secondary w-100" id="syncHeaderBtn">{{ t('script_detail.sync_header') }}</button></div>
         </div></div>
       </div>
@@ -108,7 +108,6 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button class="btn btn-outline-secondary">{{ t('scripts.clone') }}</button>
   </form>
-  {% if usage %}<a class="btn btn-outline-secondary" href="{{ url_for('script_usage', sid=script.id, back=back or url_for('scripts')) }}">{{ t('scripts.usage_count', n=usage|length) }}</a>{% endif %}
   {% endif %}
 </div>
 
@@ -170,13 +169,14 @@ window.addEventListener('beforeunload', (e) => {
 
 const SHELL_TPL = `#!/usr/bin/env bash
 # ${__t('js.tpl_comment')}
+# ADVICE: ${__t('js.tpl_advice')}
 set -u
 echo "example_key=value"
 `;
-const PROMQL_TPL = `# NAME: example_metric
-# MODE: instant
+const PROMQL_TPL = `# MODE: instant
 # THRESHOLD: >90
 # UNIT: %
+# ADVICE: ${__t('js.tpl_advice')}
 node_load1{$instance}
 `;
 
@@ -254,7 +254,7 @@ document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); doValidate(); }
 });
 
-const metaIds = ['metaName', 'metaMode', 'metaWindow', 'metaStep', 'metaThreshold', 'metaUnit'];
+const metaIds = ['metaMode', 'metaWindow', 'metaStep', 'metaThreshold', 'metaUnit', 'metaAdvice'];
 const mval = (id) => (document.getElementById(id).value || '').trim();
 
 function splitHeader(text) {
@@ -266,7 +266,6 @@ function splitHeader(text) {
 function generateHeader() {
   const mode = mval('metaMode') || 'instant';
   const out = [];
-  if (mval('metaName')) out.push('# NAME: ' + mval('metaName'));
   out.push('# MODE: ' + mode);
   if (mode === 'range') {
     if (mval('metaWindow')) out.push('# WINDOW: ' + mval('metaWindow'));
@@ -274,6 +273,7 @@ function generateHeader() {
   }
   if (mval('metaThreshold')) out.push('# THRESHOLD: ' + mval('metaThreshold'));
   if (mval('metaUnit')) out.push('# UNIT: ' + mval('metaUnit'));
+  if (mval('metaAdvice')) out.push('# ADVICE: ' + mval('metaAdvice'));
   return out.join('\n');
 }
 function syncHeader() {
@@ -292,12 +292,12 @@ function parseHeader() {
     const m = t.replace(/^#\s*/, '').match(/^([A-Z]+)\s*:\s*(.*)$/);
     if (m) map[m[1]] = m[2].trim();
   }
-  document.getElementById('metaName').value = map.NAME || '';
   document.getElementById('metaMode').value = (map.MODE || 'instant').toLowerCase() === 'range' ? 'range' : 'instant';
   document.getElementById('metaWindow').value = map.WINDOW || '';
   document.getElementById('metaStep').value = map.STEP || '';
   document.getElementById('metaThreshold').value = map.THRESHOLD || '';
   document.getElementById('metaUnit').value = map.UNIT || '';
+  document.getElementById('metaAdvice').value = map.ADVICE || '';
   toggleRangeFields();
 }
 function toggleRangeFields() {

@@ -10,16 +10,18 @@
   <div class="alert alert-secondary small mb-3">{{ t('scripts.output_hint') | safe }}</div>
   <h6>Shell</h6>
   <ul class="small">
-    <li>一行一个 <code>key=value</code>；多值可在行内附 <code>threshold=&gt;90</code> / <code>warn=&gt;80</code> / <code>unit=%</code>。</li>
-    <li>纯信息类加 <code># DISPLAY: true</code>（仅展示、不判定）。</li>
-    <li>异常行用 <code>ERROR:</code> 前缀；保存前自动 <code>bash -n</code> 校验。</li>
+    <li>{{ t('scripts_help.shell_1') | safe }}</li>
+    <li>{{ t('scripts_help.shell_2') | safe }}</li>
+    <li>{{ t('scripts_help.shell_advice') | safe }}</li>
+    <li>{{ t('scripts_help.shell_3') | safe }}</li>
   </ul>
   <h6>PromQL</h6>
   <ul class="small">
-    <li>头部元数据：<code># NAME / # MODE: instant|range / # WINDOW / # STEP / # THRESHOLD / # WARN / # UNIT / # DISPLAY</code>。</li>
-    <li>占位符：<code>$instance</code>（实例匹配器）、<code>$guest</code>（PVE 虚拟机）。</li>
-    <li>多指标阈值：<code>label_replace(..., "threshold", "&gt;90", ...)</code> 让每条 series 自带阈值。</li>
-    <li>结果按 <code>item=&lt;名&gt;</code> 标签展示；<code>MODE=range</code> 取区间最后一个值判定。</li>
+    <li>{{ t('scripts_help.promql_1') | safe }}</li>
+    <li>{{ t('scripts_help.promql_2') | safe }}</li>
+    <li>{{ t('scripts_help.promql_3') | safe }}</li>
+    <li>{{ t('scripts_help.promql_advice') | safe }}</li>
+    <li>{{ t('scripts_help.promql_4') | safe }}</li>
   </ul>
 </div></div>
 {% endblock %}

@@ -1,4 +1,3 @@
-# NAME: Keepalived 存活
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: bool

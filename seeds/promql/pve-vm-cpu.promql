@@ -1,4 +1,3 @@
-# NAME: PVE 虚拟机 CPU 使用率
 # MODE: instant
 # THRESHOLD: >90
 # UNIT: %

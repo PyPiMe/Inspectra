@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# NAME: Redis 健康
 # UNIT: mixed
 # Auto-discover redis-server instances; resolve requirepass from common conf paths (incl. include);
 # alive by listening port (ss/netstat), INFO metrics optional.
@@ -8,6 +7,7 @@ set -u
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # 端口是否在监听（不依赖 redis-cli）
+# Is the port listening (no redis-cli needed)
 listen_has() {
   if have ss; then ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1$"
   elif have netstat; then netstat -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]$1$"
@@ -15,6 +15,7 @@ listen_has() {
 }
 
 # 从 conf 读取 requirepass（含 include 一层）
+# Read requirepass from conf (one include level)
 conf_pass() {
   f="$1"
   [ -n "$f" ] && [ -r "$f" ] || return 1
@@ -36,10 +37,12 @@ for p in $(pgrep -x redis-server 2>/dev/null); do
   confarg=$(echo "$cmd" | grep -oE '/[^ ]+\.conf' | head -1)
 
   # 端口：*:N / :N / --port N
+  # Port: *:N / :N / --port N
   port=$(echo "$cmd" | grep -oE ':[0-9]+' | head -1 | tr -d ':')
   [ -n "$port" ] || port=$(echo "$cmd" | grep -oE '\-\-port[= ]+[0-9]+' | grep -oE '[0-9]+$')
 
   # requirepass：常见路径 + 进程 conf + 发行版默认（含 include）
+  # requirepass: common paths + process conf + distro default (incl. include)
   pass=""
   for c in "$confarg" "$home/conf/redis.conf" "$home/etc/redis.conf" "$(dirname "$bin")/redis.conf" \
            "/etc/redis.conf" "/etc/redis/redis.conf" "/etc/redis/redis-${port}.conf" \
@@ -52,7 +55,9 @@ for p in $(pgrep -x redis-server 2>/dev/null); do
   count=$((count+1))
 
   # INFO（可选）：有 redis-cli 且能（带密码）取到才有指标
+  # INFO (optional): only when redis-cli can fetch (with password)
   # 兼容旧版 redis-cli（如 3.2 不支持 --no-auth-warning / REDISCLI_AUTH），统一用 -a。
+  # Compatible with old redis-cli (e.g. 3.2 lacks --no-auth-warning / REDISCLI_AUTH); always use -a.
   info=""
   if have redis-cli; then
     if [ -n "$pass" ]; then
@@ -63,6 +68,7 @@ for p in $(pgrep -x redis-server 2>/dev/null); do
   fi
 
   # 存活判定：以“端口在监听”为准（拿不到 INFO 不代表挂了）
+  # Liveness by listening port (missing INFO does not mean down)
   if listen_has "$port"; then
     echo "redis_${port}_alive=1 threshold=!=1 unit=bool"
   elif [ -n "$info" ]; then

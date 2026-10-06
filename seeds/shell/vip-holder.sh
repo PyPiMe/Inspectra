@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# NAME: VIP 归属
 # UNIT: mixed
 # Reverse-proxy node: detect local VIP holder (master/backup) and check keepalived/nginx services
 conf=/etc/keepalived/keepalived.conf

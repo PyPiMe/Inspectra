@@ -1,4 +1,3 @@
-# NAME: PVE 集群存活
 # MODE: instant
 # THRESHOLD: <1
 # UNIT: bool

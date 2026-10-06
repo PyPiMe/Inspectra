@@ -20,6 +20,8 @@ from typing import Any
 
 import requests
 
+import backup
+import collectors
 import i18n
 import models
 
@@ -36,6 +38,7 @@ def _default_lang() -> str:
 def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
     """Deep-copy summary and resolve app/script names for a language. 深拷贝并按语言解析名称。"""
     s = copy.deepcopy(summary or {})
+    advice_cache: dict[int, str] = {}
     for a in s.get("apps") or []:
         aid = a.get("id")
         if aid:
@@ -61,6 +64,14 @@ def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
                 it["script"] = i18n.localize_script(row, lang)[0]
                 if it.get("item_key"):
                     it["item"] = i18n.localize_item(row, it["item_key"], lang)
+                si = int(sid)
+                if si not in advice_cache:
+                    try:
+                        base = collectors.parse_script_meta(backup.read_script(row)).get("ADVICE") or ""
+                    except Exception:  # noqa: BLE001
+                        base = ""
+                    advice_cache[si] = i18n.localize_advice(row, lang, base=base)
+                it["advice"] = advice_cache[si]
     return s
 
 
@@ -272,6 +283,7 @@ def build_alert(summary: dict[str, Any], targets_label: str = "", lang: str | No
         for app, items in by_app.items():
             lines.append(i18n.t_for(lang, "notify.app_section", app=app))
             shown_sugg: set[str] = set()
+            shown_adv: set = set()
             for it in items[:100]:
                 st = i18n.t_for(lang, "status." + (it.get("status") or "").lower(), default=it.get("status") or "")
                 head = i18n.t_for(lang, "notify.issue_head", status=st, server=it.get("server"), script=it.get("script"))
@@ -292,6 +304,11 @@ def build_alert(summary: dict[str, Any], targets_label: str = "", lang: str | No
                 if sug and it.get("server") not in shown_sugg:
                     shown_sugg.add(it.get("server"))
                     lines.append("    " + i18n.t_for(lang, "notify.suggestion", suggestion=sug))
+                adv = it.get("advice") or ""
+                akey = (it.get("server_id"), it.get("script_id"))
+                if adv and akey not in shown_adv:
+                    shown_adv.add(akey)
+                    lines.append("    " + i18n.t_for(lang, "notify.advice", advice=adv))
     else:
         lines.append(i18n.t_for(lang, "notify.no_issues"))
     if s.get("notify_failures"):

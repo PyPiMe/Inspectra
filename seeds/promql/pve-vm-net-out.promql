@@ -1,4 +1,3 @@
-# NAME: PVE 虚拟机网络出站速率
 # MODE: instant
 # UNIT: B/s
 max by (id)(rate(pve_network_transmit_bytes_total{$guest}[5m]))

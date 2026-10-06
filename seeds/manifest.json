@@ -13,7 +13,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "清理日志/临时文件或扩容；定位大文件：du -xhd1 /，必要时逐层下钻排查",
+      "en": "Clean logs/temp files or expand; locate large files with du -xhd1 / and drill down"
+    }
   },
   {
     "key": "shell:02-memory-load.sh",
@@ -29,7 +33,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "排查占用内存/负载的进程：ps aux --sort=-%mem | head；必要时重启或扩容",
+      "en": "Find top memory/load consumers: ps aux --sort=-%mem | head; restart or scale up"
+    }
   },
   {
     "key": "shell:03-services.sh",
@@ -45,7 +53,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "查看失败服务并重启：systemctl --failed；journalctl -u <svc> -n 50 查原因",
+      "en": "Inspect and restart: systemctl --failed; check journalctl -u <svc> -n 50"
+    }
   },
   {
     "key": "shell:04-cpu-usage.sh",
@@ -61,7 +73,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "定位高 CPU 进程：top -o %CPU 或 pidstat；确认是否异常循环/流量突增",
+      "en": "Find hot processes: top -o %CPU or pidstat; check for runaway loops or traffic spikes"
+    }
   },
   {
     "key": "shell:05-network-rate.sh",
@@ -77,7 +93,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "排查异常流量：iftop / ss -s；检查大流量传输或异常连接",
+      "en": "Investigate traffic: iftop / ss -s; look for bulk transfers or abnormal connections"
+    }
   },
   {
     "key": "shell:06-disk-io.sh",
@@ -93,7 +113,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "定位高 IO 进程：iotop -o；检查备份/日志刷盘或磁盘故障",
+      "en": "Find heavy I/O: iotop -o; check backups/log flushes or disk issues"
+    }
   },
   {
     "key": "shell:07-uptime.sh",
@@ -109,7 +133,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "运行时长偏短说明近期重启；确认异常宕机或计划重启",
+      "en": "Short uptime suggests a recent reboot; confirm crash vs planned restart"
+    }
   },
   {
     "key": "shell:java-process.sh",
@@ -125,7 +153,11 @@
     },
     "tags": [
       "java"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "确认 Java 进程缺失/异常：检查应用日志与启动脚本；必要时重启服务",
+      "en": "Verify the Java process is missing/unhealthy: check app logs and start scripts; restart if needed"
+    }
   },
   {
     "key": "shell:vip-holder.sh",
@@ -141,7 +173,11 @@
     },
     "tags": [
       "vip"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "确认 VIP 归属是否符合预期；异常时检查 keepalived 状态与主备切换",
+      "en": "Confirm the VIP holder is expected; if not, check keepalived state and failover"
+    }
   },
   {
     "key": "shell:redis-health.sh",
@@ -157,7 +193,11 @@
     },
     "tags": [
       "redis"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "检查 Redis 内存/连接/主从；必要时清理大 key 或扩容，并查看 slowlog",
+      "en": "Check Redis memory/connections/replication; trim big keys or scale; review slowlog"
+    }
   },
   {
     "key": "shell:docker-containers.sh",
@@ -168,12 +208,16 @@
       "en": "Docker container check"
     },
     "desc": {
-      "zh-CN": "只读检查 Docker 容器：运行/重启/健康；重启策略=always 的容器未运行则 FAIL（依赖 webops 的只读 sudo docker 授权）",
-      "en": "Read-only Docker check: up/restarts/health; FAIL if a restart=always container is not running (needs webops read-only sudo docker)"
+      "zh-CN": "只读检查 Docker 容器：运行/重启/健康；重启策略=always 的容器未运行则 FAIL（需目标主机授予只读 sudo docker 权限）",
+      "en": "Read-only Docker check: up/restarts/health; FAIL if a restart=always container is not running (requires read-only sudo docker on the target host)"
     },
     "tags": [
       "docker"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "查看异常容器：docker ps -a / docker logs <name>；必要时 docker restart",
+      "en": "Inspect unhealthy containers: docker ps -a / docker logs <name>; docker restart if needed"
+    }
   },
   {
     "key": "shell:nginx-check.sh",
@@ -189,7 +233,11 @@
     },
     "tags": [
       "nginx"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "检查 Nginx 进程与配置：nginx -t；systemctl status nginx；查看 error.log",
+      "en": "Check Nginx process and config: nginx -t; systemctl status nginx; review error.log"
+    }
   },
   {
     "key": "promql:disk-usage.promql",
@@ -205,7 +253,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "清理日志/临时文件或扩容；定位大文件 du -xhd1 /",
+      "en": "Clean logs/temp files or expand; locate large files with du -xhd1 /"
+    }
   },
   {
     "key": "promql:memory-usage.promql",
@@ -221,7 +273,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "排查占用内存的进程；调整缓存/连接数或扩容",
+      "en": "Find memory consumers; tune caches/connections or scale up"
+    }
   },
   {
     "key": "promql:cpu-usage.promql",
@@ -237,7 +293,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "定位高 CPU 进程；确认是否流量突增或异常任务",
+      "en": "Find hot processes; check for traffic spikes or runaway jobs"
+    }
   },
   {
     "key": "promql:load1.promql",
@@ -253,7 +313,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "负载持续高于核数说明 CPU 饱和；定位高负载进程或扩容",
+      "en": "Load persistently above core count means CPU saturation; find the cause or scale"
+    }
   },
   {
     "key": "promql:uptime.promql",
@@ -269,7 +333,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "运行时长偏短说明近期重启；确认异常宕机或计划重启",
+      "en": "Short uptime means a recent reboot; confirm crash vs planned restart"
+    }
   },
   {
     "key": "promql:failed-services.promql",
@@ -285,7 +353,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "存在失败服务：systemctl --failed 并重启、查 journalctl",
+      "en": "Failed units present: systemctl --failed, restart and check journalctl"
+    }
   },
   {
     "key": "promql:disk-write-rate.promql",
@@ -301,7 +373,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "写入速率异常：iotop -o 定位进程；检查日志/备份刷盘",
+      "en": "Abnormal write rate: locate with iotop -o; check log/backup flushes"
+    }
   },
   {
     "key": "promql:up.promql",
@@ -317,7 +393,11 @@
     },
     "tags": [
       "os"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "目标不可达：检查 Exporter 进程、网络与防火墙；确认采集端口",
+      "en": "Target down: check exporter process, network and firewall; verify scrape port"
+    }
   },
   {
     "key": "promql:pve-node-up.promql",
@@ -333,7 +413,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "PVE 节点失联：检查节点网络/电源与 pveproxy/pve-cluster 服务",
+      "en": "PVE node unreachable: check network/power and pveproxy/pve-cluster"
+    }
   },
   {
     "key": "promql:pve-cluster-up.promql",
@@ -349,7 +433,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "集群成员减少：检查节点连通性与 corosync，确认是否掉线",
+      "en": "Cluster members decreased: check connectivity and corosync; confirm node loss"
+    }
   },
   {
     "key": "promql:pve-node-cpu.promql",
@@ -365,7 +453,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "节点 CPU 高：定位高负载虚拟机/进程，或迁移/扩容",
+      "en": "High node CPU: find busy VMs/processes; migrate or scale"
+    }
   },
   {
     "key": "promql:pve-node-memory.promql",
@@ -381,7 +473,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "节点内存估算含缓存、可能虚高；以 OS(SSH) 为准，必要时回收缓存/扩容",
+      "en": "Node memory estimate includes cache and may read high; trust OS via SSH; reclaim or expand"
+    }
   },
   {
     "key": "promql:pve-node-disk.promql",
@@ -397,7 +493,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "节点根盘占用高：清理日志/旧内核或扩容",
+      "en": "Node root disk high: clean logs/old kernels or expand"
+    }
   },
   {
     "key": "promql:pve-storage-usage.promql",
@@ -413,7 +513,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "存储池占用高：清理快照/模板或扩容；确认无异常增长",
+      "en": "Storage pool high: remove snapshots/templates or expand; check growth"
+    }
   },
   {
     "key": "promql:pve-node-uptime.promql",
@@ -429,7 +533,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "节点近期重启：确认计划升级/维护或异常宕机",
+      "en": "Node rebooted recently: confirm planned maintenance vs crash"
+    }
   },
   {
     "key": "promql:pve-not-backed-up.promql",
@@ -445,7 +553,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "存在未备份虚拟机：检查备份任务与存储，补跑备份",
+      "en": "VMs without backup: check backup jobs/storage and re-run backups"
+    }
   },
   {
     "key": "promql:pve-ha-fence.promql",
@@ -461,7 +573,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "HA fence 事件：检查节点/存储故障与 HA 日志；确认资源已恢复",
+      "en": "HA fence event: check node/storage faults and HA logs; verify resources recovered"
+    }
   },
   {
     "key": "promql:pve-subscription.promql",
@@ -477,7 +593,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "订阅过期/不匹配：核对订阅状态并按需续订",
+      "en": "Subscription expired/mismatched: verify status and renew if needed"
+    }
   },
   {
     "key": "promql:pve-net-in.promql",
@@ -493,7 +613,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "入站流量异常：确认业务高峰或异常来源；必要时限流",
+      "en": "Abnormal inbound traffic: confirm peak load or investigate the source; rate-limit if needed"
+    }
   },
   {
     "key": "promql:pve-net-out.promql",
@@ -509,7 +633,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "出站流量异常：排查大流量传输/异常外联；必要时限流",
+      "en": "Abnormal outbound traffic: check bulk transfers/egress; rate-limit if needed"
+    }
   },
   {
     "key": "promql:pve-vm-cpu.promql",
@@ -525,7 +653,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "虚拟机 CPU 高：登录排查进程或调整 CPU 配额；考虑迁移",
+      "en": "VM CPU high: log in to check processes or adjust CPU quota; consider migration"
+    }
   },
   {
     "key": "promql:pve-vm-memory.promql",
@@ -541,7 +673,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "虚拟机内存高：排查占用进程或调整内存配额；注意 swap",
+      "en": "VM memory high: find consumers or adjust memory quota; watch swap"
+    }
   },
   {
     "key": "promql:pve-vm-net-in.promql",
@@ -557,7 +693,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "虚拟机入站流量异常：确认业务或排查异常连接",
+      "en": "VM inbound traffic abnormal: confirm workload or investigate connections"
+    }
   },
   {
     "key": "promql:pve-vm-net-out.promql",
@@ -573,7 +713,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "虚拟机出站流量异常：排查大流量外发/异常外联",
+      "en": "VM outbound traffic abnormal: check bulk egress/abnormal connections"
+    }
   },
   {
     "key": "promql:pve-vm-disk-write.promql",
@@ -589,7 +733,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "虚拟机写入高：排查日志/任务刷盘或磁盘性能瓶颈",
+      "en": "VM write high: check log/task flushes or disk bottlenecks"
+    }
   },
   {
     "key": "promql:pve-vm-uptime.promql",
@@ -605,7 +753,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "虚拟机近期重启：确认计划内重启或异常重启",
+      "en": "VM rebooted recently: confirm planned vs unexpected restart"
+    }
   },
   {
     "key": "promql:pve-vm-ha.promql",
@@ -621,7 +773,11 @@
     },
     "tags": [
       "pve"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "VM HA 状态异常：检查 HA 配置与所在节点；确认资源在线",
+      "en": "VM HA abnormal: check HA config and host node; verify the resource is online"
+    }
   },
   {
     "key": "promql:nginx-up.promql",
@@ -637,7 +793,11 @@
     },
     "tags": [
       "nginx"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "Nginx 不可达：检查进程/监听端口与配置 nginx -t",
+      "en": "Nginx down: check process/listen port and nginx -t"
+    }
   },
   {
     "key": "promql:nginx-overview.promql",
@@ -675,7 +835,11 @@
     },
     "tags": [
       "nginx"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "Nginx 指标异常：结合 QPS/连接数定位上游或限流配置",
+      "en": "Nginx metrics abnormal: correlate QPS/connections with upstream or limits"
+    }
   },
   {
     "key": "promql:nginx-qps.promql",
@@ -691,7 +855,11 @@
     },
     "tags": [
       "nginx"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "QPS 异常：确认业务高峰或上游故障；必要时扩容/限流",
+      "en": "QPS abnormal: confirm peak or upstream fault; scale or rate-limit"
+    }
   },
   {
     "key": "promql:nginx-conn-rate.promql",
@@ -707,7 +875,11 @@
     },
     "tags": [
       "nginx"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "新建连接速率高：检查异常来源或长连接泄漏",
+      "en": "High new-connection rate: check for abnormal sources or connection leaks"
+    }
   },
   {
     "key": "promql:nginx-active-threshold.promql",
@@ -723,7 +895,11 @@
     },
     "tags": [
       "nginx"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "活跃连接数高：检查上游响应变慢或连接堆积；调优超时/扩容",
+      "en": "High active connections: check slow upstream or backlog; tune timeouts/scale"
+    }
   },
   {
     "key": "promql:keepalived-up.promql",
@@ -739,7 +915,11 @@
     },
     "tags": [
       "keepalived"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "Keepalived 不可达：检查进程与 VRRP 通告（防火墙/多播）",
+      "en": "Keepalived down: check process and VRRP (firewall/multicast)"
+    }
   },
   {
     "key": "promql:keepalived-script.promql",
@@ -755,7 +935,11 @@
     },
     "tags": [
       "keepalived"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "追踪脚本失败：手动执行该检查脚本并查看 keepalived 日志",
+      "en": "Track script failures: run the check script manually and inspect keepalived logs"
+    }
   },
   {
     "key": "promql:http-status-up.promql",
@@ -769,7 +953,11 @@
       "zh-CN": "http_status 探活：需把绑定 prom_instance 设为站点 URL（如 https://example.com）",
       "en": "http_status probe: set the binding prom_instance to the site URL (e.g. https://example.com)"
     },
-    "tags": []
+    "tags": [],
+    "advice": {
+      "zh-CN": "站点不可用：检查后端服务、反代与证书/网络",
+      "en": "Site down: check backend service, proxy and TLS/network"
+    }
   },
   {
     "key": "promql:anubis-proxy-rate.promql",
@@ -783,7 +971,11 @@
       "zh-CN": "Anubis 代理请求 5m 速率（req/s，仅展示）",
       "en": "Anubis proxied requests 5m rate (req/s, info)"
     },
-    "tags": []
+    "tags": [],
+    "advice": {
+      "zh-CN": "代理请求速率异常：确认业务或排查来源/限流",
+      "en": "Proxy request rate abnormal: confirm workload or investigate/limit"
+    }
   },
   {
     "key": "promql:victorialogs-disk.promql",
@@ -797,7 +989,11 @@
       "zh-CN": "VictoriaLogs 数据占用/总磁盘，超 90% FAIL",
       "en": "VictoriaLogs data/total disk usage; >90% FAIL"
     },
-    "tags": []
+    "tags": [],
+    "advice": {
+      "zh-CN": "日志盘占用高：调整保留期/清理旧数据或扩容",
+      "en": "Log disk high: shorten retention, prune old data or expand"
+    }
   },
   {
     "key": "promql:keepalived-overview.promql",
@@ -825,7 +1021,11 @@
     },
     "tags": [
       "keepalived"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "综合查看 VRRP 状态：确认主备与优先级配置是否符合预期",
+      "en": "Review VRRP state: verify master/backup and priority as expected"
+    }
   },
   {
     "key": "promql:keepalived-master.promql",
@@ -841,6 +1041,10 @@
     },
     "tags": [
       "keepalived"
-    ]
+    ],
+    "advice": {
+      "zh-CN": "主备异常：检查优先级/抢占与网络，确认切换是否符合预期",
+      "en": "Master/backup abnormal: check priority/preempt and network; verify failover"
+    }
   }
 ]

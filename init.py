@@ -80,6 +80,11 @@ def _seed_scripts(force: bool = False) -> dict:
             entry_zh["items"] = items["zh-CN"]
         if items.get("en"):
             entry_en["items"] = items["en"]
+        advice = item.get("advice") or {}
+        if advice.get("zh-CN"):
+            entry_zh["advice"] = advice["zh-CN"]
+        if advice.get("en"):
+            entry_en["advice"] = advice["en"]
         i18n = json.dumps({"zh-CN": entry_zh, "en": entry_en}, ensure_ascii=False)
         tags_json = json.dumps(item.get("tags") or [], ensure_ascii=False)
         row = by_seed.get(key)
@@ -130,7 +135,9 @@ def _seed_scripts(force: bool = False) -> dict:
         # 内容修改或用户改过的 name/desc 视为“已修改”；item 标签映射由种子维护，不阻塞升级。
         # 空字符串视为“缺失”（旧种子残留），不作为“用户已修改”的依据。
         def _cmp(ij: dict) -> dict:
-            return {c: {k2: v2 for k2, v2 in v.items() if k2 != "items" and v2} for c, v in ij.items() if isinstance(v, dict)}
+            # "items" and "advice" are seed-managed maps; their differences don't
+            # count as user edits.  items/advice 由种子维护，差异不算用户修改。
+            return {c: {k2: v2 for k2, v2 in v.items() if k2 not in ("items", "advice") and v2} for c, v in ij.items() if isinstance(v, dict)}
 
         modified = (not force) and (
             cur_h != (row.get("seed_hash") if was_seed else chash)

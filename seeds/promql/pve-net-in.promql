@@ -1,4 +1,3 @@
-# NAME: PVE 网络入站速率
 # MODE: instant
 # UNIT: B/s
 sum(rate(pve_network_receive_bytes_total{id=~"qemu/.*|lxc/.*",$instance}[5m]))

@@ -1,4 +1,3 @@
-# NAME: Nginx QPS
 # MODE: instant
 # THRESHOLD: >100
 # UNIT: req/s

@@ -1,4 +1,3 @@
-# NAME: PVE HA 故障转移(fence)
 # MODE: instant
 # THRESHOLD: >0
 # UNIT: count

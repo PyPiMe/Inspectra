@@ -1,4 +1,3 @@
-# NAME: Nginx 新建连接速率
 # MODE: instant
 # THRESHOLD: >100
 # UNIT: conn/s
