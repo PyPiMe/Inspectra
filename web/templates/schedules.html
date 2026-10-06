@@ -45,7 +45,8 @@
       <td><a href="{{ url_for('schedule_detail', sid=s.id, back=back_url) }}">{{ s.name }}</a></td>
       <td class="small" title="{{ s.cron_min }} {{ s.cron_hour }} {{ s.cron_dow }}">{{ s.freq }}</td>
       <td>{% for c in s.chips %}<span class="badge text-bg-light text-dark border me-1">{{ c }}</span>{% endfor %}</td>
-      <td class="small">{{ t('reports.analysis_model') if s.mode != 'raw' else t('reports.analysis_raw') }}</td>
+      <td class="small">{{ t('reports.analysis_model') if s.mode != 'raw' else t('reports.analysis_raw') }}
+        {% if s.mode != 'raw' and not model_available.available %}<span class="badge bg-warning text-dark">{{ t('schedules.model_missing_badge') }}</span>{% endif %}</td>
       <td class="small">
         {% if s.last_run %}
           <span class="text-{{ status_color.get(s.last_run.status, 'secondary') }}">●</span>

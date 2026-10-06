@@ -29,9 +29,10 @@
         <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" id="schEnabled" {{ 'checked' if (not s or s.enabled) else '' }}><label class="form-check-label" for="schEnabled">{{ t('common.enabled') }}</label></div></div>
         <div class="col-12"><label class="form-label">{{ t('reports.mode') }}</label>
           <div class="d-flex gap-3">
-            <div class="form-check"><input class="form-check-input" type="radio" name="mode" value="model" id="mModel" {{ 'checked' if (not s or s.mode != 'raw') else '' }}><label class="form-check-label" for="mModel">{{ t('reports.analysis_model') }}</label></div>
-            <div class="form-check"><input class="form-check-input" type="radio" name="mode" value="raw" id="mRaw" {{ 'checked' if (s and s.mode == 'raw') else '' }}><label class="form-check-label" for="mRaw">{{ t('reports.analysis_raw') }}</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="mode" value="model" id="mModel" {{ 'disabled' if not model_available.available else '' }} {{ 'checked' if (model_available.available and (not s or s.mode != 'raw')) else '' }}><label class="form-check-label" for="mModel"{% if not model_available.available %} title="{{ t('run.model_unavailable') }}"{% endif %}>{{ t('reports.analysis_model') }}</label></div>
+            <div class="form-check"><input class="form-check-input" type="radio" name="mode" value="raw" id="mRaw" {{ 'checked' if ((not model_available.available) or (s and s.mode == 'raw')) else '' }}><label class="form-check-label" for="mRaw">{{ t('reports.analysis_raw') }}</label></div>
           </div>
+          {% if not model_available.available %}<div class="form-text"><a href="{{ url_for('models_page') }}">{{ t('model.banner_cta') }}</a></div>{% endif %}
         </div>
       </div></div>
 

@@ -9,7 +9,7 @@
   <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
   <div class="card mb-3"><div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
-    <div>{{ t('run.will_run') }}<span id="sumServers" class="badge bg-primary">0</span>{{ t('run.servers_mid') }}<span id="sumScripts" class="badge bg-primary">0</span>{{ t('run.scripts_mid') }}<span id="sumMode">{{ t('reports.analysis_model') }}</span>）</div>
+    <div>{{ t('run.will_run') }}<span id="sumServers" class="badge bg-primary">0</span>{{ t('run.servers_mid') }}<span id="sumScripts" class="badge bg-primary">0</span>{{ t('run.scripts_mid') }}<span id="sumMode">{{ t('reports.analysis_raw') if not model_available.available else t('reports.analysis_model') }}</span>）</div>
     <div class="text-muted small">{{ t('run.hint') }}</div>
   </div></div>
 
@@ -52,12 +52,15 @@
       </div></div>
 
       <div class="card"><div class="card-header">{{ t('run.mode') }}</div><div class="card-body">
+        {% if not model_available.available %}
+        <div class="alert alert-warning small py-1 px-2 mb-2">{{ t('model.banner_body') }} <a href="{{ url_for('models_page') }}">{{ t('model.banner_cta') }}</a></div>
+        {% endif %}
         <div class="form-check">
-          <input class="form-check-input" type="radio" name="mode" value="model" id="mode_model" checked>
-          <label class="form-check-label" for="mode_model"><strong>{{ t('reports.analysis_model') }}</strong><br><span class="text-muted small">{{ t('run.mode_model_desc') }}</span></label>
+          <input class="form-check-input" type="radio" name="mode" value="model" id="mode_model" {{ 'disabled' if not model_available.available else '' }} {{ 'checked' if model_available.available else '' }}>
+          <label class="form-check-label" for="mode_model"{% if not model_available.available %} title="{{ t('run.model_unavailable') }}"{% endif %}><strong>{{ t('reports.analysis_model') }}</strong><br><span class="text-muted small">{{ t('run.mode_model_desc') }}</span></label>
         </div>
         <div class="form-check mt-2">
-          <input class="form-check-input" type="radio" name="mode" value="raw" id="mode_raw">
+          <input class="form-check-input" type="radio" name="mode" value="raw" id="mode_raw" {{ '' if model_available.available else 'checked' }}>
           <label class="form-check-label" for="mode_raw"><strong>{{ t('reports.analysis_raw') }}</strong><br><span class="text-muted small">{{ t('run.mode_raw_desc') }}</span></label>
         </div>
       </div></div>

@@ -61,6 +61,19 @@
   </div>
   {% endif %}
 
+  {% if not model_available.available and not model_banner_ack %}
+  <div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <div><strong>{{ t('model.banner_title') }}</strong>{{ t('model.banner_body') }}</div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-dark" href="{{ url_for('models_page') }}">{{ t('model.banner_cta') }}</a>
+      <form method="post" action="{{ url_for('model_banner_ack') }}" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn-sm btn-outline-secondary">{{ t('banner.ack') }}</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}
       <div class="alert alert-{{ category }} alert-dismissible fade show">{{ message }}

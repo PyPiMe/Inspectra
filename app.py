@@ -940,6 +940,8 @@ def create_app() -> Flask:
             "site_title": (settings.get("site_title") or "").strip() or "PyPiMeOps",
             "whitelist_empty": not (settings.get("allowed_ips") or "").strip(),
             "whitelist_ack": settings.get("whitelist_ack") == "true",
+            "model_available": models.model_availability(),
+            "model_banner_ack": settings.get("model_banner_ack") == "true",
             "engine_running": engine.is_running(),
             "nav_active": request.endpoint or "",
             "PROVIDER_PRESETS": _presets,
@@ -988,6 +990,10 @@ def create_app() -> Flask:
     # ---- 首页：默认进入「智能巡检」
     @app.route("/")
     def index():
+        # 无可用模型时，智能问答不可用 → 首页改跳仪表盘。
+        # Without a usable model, chat is unavailable → land on the dashboard.
+        if not models.model_availability()["available"]:
+            return redirect(url_for("dashboard"))
         return redirect(url_for("chatbot_page"))
 
     # ---- 仪表盘
@@ -2347,6 +2353,7 @@ def create_app() -> Flask:
             app_servers=engine.application_servers(),
             group_servers=group_servers,
             all_server_ids=[int(x["id"]) for x in servers],
+            model_available=models.model_availability(),
             freq=scheduler_mod.classify(s) if s else {"preset": "every30", "minute": "", "hour": "", "dow": ""},
         )
 
@@ -2396,6 +2403,7 @@ def create_app() -> Flask:
             enabled_count=sum(1 for s in all_rows if s.get("enabled")),
             total_all=len(all_rows),
             status_color={"success": "success", "partial": "warning", "error": "danger", "running": "info"},
+            model_available=models.model_availability(),
             q=q, enabled=enabled, page=page, pages=pages, total=total, per_page=per_page,
         )
 
@@ -2521,7 +2529,7 @@ def create_app() -> Flask:
     def run_page():
         if request.method == "POST":
             if engine.is_running():
-                flash("已有巡检正在执行，请稍后再试", "warning")
+                flash(i18n.t("engine.err_busy"), "warning")
                 return redirect(url_for("run_page"))
             targets = {
                 "groups": parse_ids(request.form.getlist("target_groups")),
@@ -2532,7 +2540,7 @@ def create_app() -> Flask:
             }
             scripts = parse_ids(request.form.getlist("scripts"))
             if not targets.get("all") and not targets["groups"] and not targets["servers"] and not targets["applications"]:
-                flash("请至少选择应用/分组/服务器，或勾选全部", "danger")
+                flash(i18n.t("run.err_pick_target"), "danger")
                 return redirect(url_for("run_page"))
             # 显式勾选 = 覆盖：对未绑定该脚本的所选目标给出警告（不阻断）
             if scripts:
@@ -2546,19 +2554,17 @@ def create_app() -> Flask:
                     bset = set(binds.get(int(sc_id), []))
                     missing = [s for s in chosen if int(s["id"]) not in bset]
                     if missing:
-                        names = "、".join((s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in missing[:5])
-                        more = f" 等 {len(missing)} 台" if len(missing) > 5 else ""
-                        action = "将在这些目标上覆盖运行" if (sc.get("kind") or "shell") == "shell" else "在这些目标上无绑定，将跳过"
-                        flash(f"脚本「{sc.get('name')}」未绑定到 {names}{more}，{action}", "warning")
+                        sep = i18n.t("common.list_sep")
+                        names = sep.join((s.get("hostname") or s.get("ip") or f"#{s['id']}") for s in missing[:5])
+                        more = i18n.t("run.warn_more", n=len(missing)) if len(missing) > 5 else ""
+                        action = i18n.t("run.warn_override") if (sc.get("kind") or "shell") == "shell" else i18n.t("run.warn_skip")
+                        flash(i18n.t("run.warn_unbound", name=sc.get("name"), names=names, more=more, action=action), "warning")
             mode = request.form.get("mode") or "model"
             if mode not in ("model", "raw"):
                 mode = "model"
-            if mode == "model":
-                dm = models.get_setting("default_model", "")
-                m = models.fetch_one("models", int(dm)) if dm.isdigit() else None
-                if not m or not m.get("enabled", 1):
-                    flash("未配置可用的默认模型；请先在「模型」页面配置并设为默认，或改用「仅原始结果」模式", "danger")
-                    return redirect(url_for("run_page"))
+            if mode == "model" and not models.model_availability()["available"]:
+                flash(i18n.t("run.err_no_model"), "danger")
+                return redirect(url_for("run_page"))
 
             operator_ip = g.ip  # 在请求上下文中取出，供后台线程使用
             prev_max = int(models.query("SELECT COALESCE(MAX(id), 0) AS m FROM run_history")[0]["m"])
@@ -2570,7 +2576,7 @@ def create_app() -> Flask:
                     log.exception("手动执行失败")
 
             threading.Thread(target=_worker, name="pypimeops-manual-run", daemon=True).start()
-            flash("巡检已提交后台执行", "success")
+            flash(i18n.t("run.submitted"), "success")
             return redirect(url_for("run_wait", after=prev_max))
 
         servers = models.fetch_all("servers")
@@ -2601,6 +2607,7 @@ def create_app() -> Flask:
             all_server_ids=all_server_ids,
             issue_server_ids=issue_server_ids,
             running=engine.is_running(),
+            model_available=models.model_availability(),
         )
 
     @app.route("/run/status/<int:rid>")
@@ -3357,22 +3364,20 @@ def create_app() -> Flask:
 
     @app.route("/chatbot")
     def chatbot_page():
-        settings = models.get_settings()
-        dm = (settings.get("default_model") or "").strip()
-        m = models.fetch_one("models", int(dm)) if dm.isdigit() else None
-        model_ok = bool(m and m.get("enabled", 1))
+        avail = models.model_availability()
         return render_template(
             "chatbot.html",
             history=_chat_history(),
-            model_ok=model_ok,
-            model_label=(m or {}).get("label") or "",
+            model_ok=avail["available"],
+            model_label=avail.get("label", ""),
+            model_reason=avail.get("reason", ""),
         )
 
     @app.route("/chatbot/ask", methods=["POST"])
     def chatbot_ask():
         question = (request.form.get("message") or "").strip()
         if not question:
-            return jsonify({"error": "请输入问题"})
+            return jsonify({"error": i18n.t("chatbot.err_empty_question")})
         hist = _chat_history()
         reply, err = chatbot.ask(question, hist)
         if err:
@@ -3385,13 +3390,19 @@ def create_app() -> Flask:
     @app.route("/chatbot/clear", methods=["POST"])
     def chatbot_clear():
         _chat_history().clear()
-        flash("对话已清空", "success")
+        flash(i18n.t("chatbot.cleared"), "success")
         return redirect(url_for("chatbot_page"))
 
     @app.route("/whitelist/ack", methods=["POST"])
     def whitelist_ack():
         set_setting_versioned("whitelist_ack", "true", g.ip)
-        flash("已确认安全提示", "success")
+        flash(i18n.t("banner.whitelist_ack_done"), "success")
+        return redirect(request.referrer or url_for("dashboard"))
+
+    @app.route("/model-banner/ack", methods=["POST"])
+    def model_banner_ack():
+        set_setting_versioned("model_banner_ack", "true", g.ip)
+        flash(i18n.t("model.banner_ack_done"), "success")
         return redirect(request.referrer or url_for("dashboard"))
 
     # ---- 历史/恢复通用视图

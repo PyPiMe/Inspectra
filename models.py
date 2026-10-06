@@ -264,6 +264,7 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "ssh_connect_timeout": "10",
     "ssh_command_timeout": "60",
     "whitelist_ack": "false",
+    "model_banner_ack": "false",
 }
 
 
@@ -485,6 +486,31 @@ def get_setting(key: str, default: str = "") -> str:
         return DEFAULT_SETTINGS.get(key, default)
     finally:
         conn.close()
+
+
+def model_availability() -> dict[str, Any]:
+    """统一判定是否存在可用默认模型。
+
+    Unified check for a usable default model. Returns
+    {available, reason, label, env}; reason ∈ no_default / disabled / missing_key.
+    """
+    dm = (get_setting("default_model", "") or "").strip()
+    if not dm.isdigit():
+        return {"available": False, "reason": "no_default", "label": "", "env": ""}
+    model = fetch_one("models", int(dm))
+    if not model:
+        return {"available": False, "reason": "no_default", "label": "", "env": ""}
+    label = model.get("label") or model.get("model_id") or ""
+    if not model.get("enabled", 1):
+        return {"available": False, "reason": "disabled", "label": label, "env": ""}
+    env = (model.get("api_key_env") or "").strip()
+    if env:
+        from config import get_config  # 延迟导入避免循环依赖 / lazy import to avoid cycles
+
+        secrets = get_config().load_secrets()
+        if not (secrets.get(env) or "").strip():
+            return {"available": False, "reason": "missing_key", "label": label, "env": env}
+    return {"available": True, "reason": "", "label": label, "env": env}
 
 
 def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
