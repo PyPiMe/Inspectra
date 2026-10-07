@@ -938,7 +938,11 @@ def run(
 
         # 模型分析（分批 + model_concurrency）；仅原始结果模式跳过
         model_concurrency = max(1, int(settings.get("model_concurrency", 3)))
-        batch_size = max(5, min(10, int(settings.get("ssh_batch_size", 10))))
+        try:
+            _bsz = int(settings.get("ssh_batch_size") or get_config().ssh_batch_size or 10)
+        except (TypeError, ValueError):
+            _bsz = 10
+        batch_size = max(5, min(10, _bsz))
         batch_items: list[list[dict[str, Any]]] = []
         if mode == "model":
             use_local = (model.get("data_policy") or policy) == "local"

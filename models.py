@@ -232,7 +232,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
     "models": ["label", "provider", "model_id", "base_url", "api_key_env", "temperature", "top_p", "enabled", "extra_json", "data_policy", "sanitize_overrides", "created_at"],
     "notifications": ["type", "name", "config_json", "secret_env", "language", "enabled", "created_at"],
     "run_schedule": ["name", "targets_json", "scripts_json", "cron_min", "cron_hour", "cron_dow", "mode", "last_fired_at", "enabled", "created_at"],
-    "run_history": ["started", "finished", "schedule_id", "trigger", "mode", "targets_json", "scripts_json", "status", "policy", "sanitize_hits", "error", "summary", "report_file"],
+    "run_history": ["started", "finished", "schedule_id", "trigger", "mode", "targets_json", "scripts_json", "status", "policy", "sanitize_hits", "error", "summary", "report_file", "issue_count"],
     "audit_log": ["ts", "ip", "action", "target_type", "target_id", "target_name", "detail", "status", "version_id"],
     "backup_versions": ["object_type", "object_id", "version", "action", "snapshot_json", "operator_ip", "note", "created_at"],
     "settings": ["key", "value"],

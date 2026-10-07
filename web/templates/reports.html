@@ -172,7 +172,8 @@
             {% if not fc and not wc %}<span class="badge bg-success">{{ t('reports2.no_issue') }}</span>{% endif %}
             <span class="text-muted">{{ t('reports.servers') }} {{ sm.server_count or 0 }} · {{ t('reports.duration') }} {{ r.duration or '-' }}</span>
             {% set applist = sm.apps or [] %}
-            {% for a in applist[:2] %}<span class="badge bg-{{ status_color.get(a.status, 'secondary') }}">{{ a.name }}</span>{% endfor %}
+            {% set APPSC = {'OK': 'success', 'WARN': 'warning', 'FAIL': 'danger', 'ERROR': 'danger', 'UNKNOWN': 'secondary'} %}
+            {% for a in applist[:2] %}<span class="badge bg-{{ APPSC.get((a.status or '')|upper, 'secondary') }}">{{ a.name }}</span>{% endfor %}
             {% if applist|length > 2 %}<span class="text-muted">{{ t('reports2.app_more', n=(applist|length - 2)) }}</span>{% endif %}
           </div>
         </div>

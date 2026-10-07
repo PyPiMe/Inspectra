@@ -12,7 +12,6 @@ import os
 import sqlite3
 import threading
 from datetime import datetime, timedelta, timezone
-from functools import wraps
 from typing import Any
 
 from flask import (
@@ -27,7 +26,7 @@ from flask import (
     session,
     url_for,
 )
-from markupsafe import Markup, escape
+from markupsafe import Markup
 from markdown_it import MarkdownIt
 
 import backup
@@ -160,25 +159,12 @@ def _audit_filters(args) -> tuple[list[str], list[Any]]:
 
 _AUDIT_ACTIONS = ["create", "update", "delete", "run", "restore", "rekey", "import", "export", "cleanup", "notify_failed", "model_extra_id"]
 _AUDIT_NEED_SQL = "(action IN ('delete','restore','rekey','import') OR status<>'ok' OR status IS NULL)"
-_AUDIT_ACTION_CN = {
-    "create": "新增", "update": "修改", "delete": "删除", "run": "执行", "restore": "恢复",
-    "rekey": "更换密钥", "import": "导入", "export": "导出", "cleanup": "清理",
-    "notify_failed": "告警失败", "model_extra_id": "模型异常ID", "schedule_skip": "调度跳过",
-}
 _AUDIT_ACTION_COLOR = {
     "create": "success", "update": "primary", "delete": "danger", "restore": "warning",
     "rekey": "warning", "import": "info", "export": "secondary", "run": "dark",
     "cleanup": "secondary", "notify_failed": "danger", "model_extra_id": "secondary",
     "schedule_skip": "warning",
 }
-_AUDIT_TTYPE_CN = {
-    "group": "分组", "server": "服务器", "script": "脚本", "datasource": "数据源", "model": "模型",
-    "notification": "通知", "schedule": "定时任务", "setting": "设置", "credential": "凭据",
-    "run": "运行", "report": "报告", "backup": "备份", "applog": "应用日志",
-    "server_datasource": "数据源绑定", "all": "全部",
-}
-
-
 def _duration(started: str | None, finished: str | None) -> str:
     if not started or not finished:
         return ""
@@ -223,10 +209,6 @@ def _localize_script(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-def _localize_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [_localize_script(r) for r in rows]
-
-
 def _picker_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Localized script rows for the checkbox pickers (overwrite name/desc for display)."""
     out: list[dict[str, Any]] = []
@@ -268,13 +250,6 @@ def _i18n_form_values(cur_row: dict[str, Any] | None, lang: str, base: dict[str,
     if not any(ij.get(lang, {}).values()):
         ij.pop(lang, None)
     return ij
-
-
-def _localize_named_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Attach localized lname/ldesc for applications/groups. 应用/分组本地化展示名。"""
-    for r in rows:
-        r["lname"], r["ldesc"] = i18n.localize_named(r)
-    return rows
 
 
 def _picker_named(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -598,21 +573,6 @@ def _parse_detail(raw: Any) -> Any:
         return json.loads(raw or "{}")
     except (ValueError, TypeError):
         return None
-
-
-def _detail_loader():
-    """Cached detail_json loader per run id. 报告结构化数据按 run 缓存加载（进程级缓存）。"""
-    def load(rid: int):
-        rid = int(rid)
-        if rid in _DETAIL_CACHE:
-            _DETAIL_CACHE.move_to_end(rid)
-            return _DETAIL_CACHE[rid]
-        drow = models.query("SELECT detail_json FROM run_results WHERE run_id=?", (rid,))
-        val = _parse_detail(drow[0]["detail_json"]) if drow else None
-        _detail_cache_put(rid, val)
-        return val
-
-    return load
 
 
 def _batch_detail_loader():
@@ -974,6 +934,10 @@ def delete_object(obj_type: str, obj_id: int, ip: str, name: str = "") -> None:
         snapshot = backup.snapshot_object(conn, obj_type, obj_id)
         if obj_type == "application":
             conn.execute("DELETE FROM application_members WHERE application_id=?", (obj_id,))
+        elif obj_type == "server":
+            # 服务器可作应用成员：删除时级联清理，避免悬空成员。
+            # Servers may be application members: cascade-clean on delete.
+            conn.execute("DELETE FROM application_members WHERE member_type='server' AND member_id=?", (obj_id,))
         models.delete(conn, table, obj_id)
         vid = backup.record(conn, obj_type, obj_id, "delete", snapshot, ip)
         models.write_audit(conn, ip, "delete", obj_type, obj_id, name or str(obj_id), {"deleted": True}, version_id=vid)
@@ -994,41 +958,51 @@ def set_setting_versioned(key: str, value: str, ip: str) -> None:
 
 # ------------------------------------------------------------ 引用保护
 
+def _schedules_referencing(kind: str, obj_id: int) -> list[str]:
+    """Names of schedules whose targets include the given object. 引用该对象的定时任务名。"""
+    out: list[str] = []
+    for s in models.fetch_all("run_schedule"):
+        targets = json_or(s.get("targets_json"), {})
+        ids = [int(x) for x in (targets.get(kind) or []) if str(x).strip() not in ("", "None")]
+        if obj_id in ids:
+            out.append(s.get("name") or f"#{s['id']}")
+    return out
+
+
 def references_to(obj_type: str, obj_id: int) -> list[str]:
     refs: list[str] = []
     if obj_type == "group":
         n = models.query("SELECT id, hostname FROM servers WHERE group_id=?", (obj_id,))
-        refs += [f"服务器 {r['hostname']}" for r in n]
+        refs += [i18n.t("refs.server", name=r["hostname"]) for r in n]
         for a in models.query(
             "SELECT a.name AS name FROM applications a JOIN application_members m ON m.application_id=a.id"
             " WHERE m.member_type='group' AND m.member_id=?",
             (obj_id,),
         ):
-            refs.append(f"应用 {a['name']}")
+            refs.append(i18n.t("refs.app", name=a["name"]))
+        refs += [i18n.t("refs.schedule", name=n) for n in _schedules_referencing("groups", obj_id)]
     elif obj_type == "datasource":
         n = models.query("SELECT id FROM server_datasources WHERE datasource_id=?", (obj_id,))
         if n:
-            refs.append(f"服务器×数据源绑定 {len(n)} 处")
+            refs.append(i18n.t("refs.server_ds", n=len(n)))
+        refs += [i18n.t("refs.schedule", name=n) for n in _schedules_referencing("datasources", obj_id)]
+    elif obj_type == "application":
+        refs += [i18n.t("refs.schedule", name=n) for n in _schedules_referencing("applications", obj_id)]
     elif obj_type == "script":
         for s in models.fetch_all("servers"):
             if obj_id in (json_or(s.get("scripts_json"), []) or []):
-                refs.append(f"服务器 {s['hostname']}")
+                refs.append(i18n.t("refs.server", name=s["hostname"]))
         for b in models.fetch_all("server_datasources"):
             if obj_id in (json_or(b.get("scripts_json"), []) or []):
-                refs.append(f"数据源绑定 #{b['id']}")
+                refs.append(i18n.t("refs.ds_binding_id", id=b["id"]))
     elif obj_type == "server":
         n = models.query("SELECT id FROM server_datasources WHERE server_id=?", (obj_id,))
         if n:
-            refs.append(f"数据源绑定 {len(n)} 处")
-        for a in models.query(
-            "SELECT a.name AS name FROM applications a JOIN application_members m ON m.application_id=a.id"
-            " WHERE m.member_type='server' AND m.member_id=?",
-            (obj_id,),
-        ):
-            refs.append(f"应用 {a['name']}")
+            refs.append(i18n.t("refs.ds_binding", n=len(n)))
+        refs += [i18n.t("refs.schedule", name=n) for n in _schedules_referencing("servers", obj_id)]
     elif obj_type == "credential":
         n = models.query("SELECT id, hostname FROM servers WHERE vault_key=?", (str(obj_id),))
-        refs += [f"服务器 {r['hostname']}" for r in n]
+        refs += [i18n.t("refs.server", name=r["hostname"]) for r in n]
     return refs
 
 
@@ -1114,7 +1088,7 @@ def create_app() -> Flask:
         if request.method == "POST":
             sent = request.form.get("csrf_token") or request.headers.get("X-CSRF-Token", "")
             if not sent or sent != session.get("_csrf"):
-                return "403 CSRF token 校验失败", 403
+                return i18n.t("common.csrf_fail"), 403
         return None
 
     @app.context_processor
@@ -1290,7 +1264,7 @@ def create_app() -> Flask:
 
     @app.route("/groups/<int:gid>/history")
     def groups_history(gid: int):
-        return _history_view("group", gid, "group_detail.html", "分组")
+        return _history_view("group", gid, "group_detail.html", i18n.t("nav.groups"))
 
     # ---- 应用
     def _application_members(app_id: int) -> dict[str, list[int]]:
@@ -1366,7 +1340,7 @@ def create_app() -> Flask:
 
     @app.route("/applications/<int:aid>/history")
     def applications_history(aid: int):
-        return _history_view("application", aid, "group_detail.html", "应用")
+        return _history_view("application", aid, "group_detail.html", i18n.t("nav.applications"))
 
     # ---- 服务器
     @app.route("/servers")
@@ -1568,7 +1542,7 @@ def create_app() -> Flask:
         with models.db() as conn:
             conn.execute("DELETE FROM server_datasources WHERE server_id=?", (sid,))
         delete_object("server", sid, g.ip)
-        flash("服务器已删除（含数据源绑定）", "success")
+        flash(i18n.t("servers.deleted"), "success")
         return redirect(url_for("servers"))
 
     def _render_bindings(sid: int) -> str:
@@ -1711,7 +1685,7 @@ def create_app() -> Flask:
         name = (request.form.get("name") or "").strip()
         base_url = (request.form.get("base_url") or "").strip()
         if not name or not base_url:
-            flash("名称与地址必填", "danger")
+            flash(i18n.t("datasources.err_required"), "danger")
             return redirect(url_for("datasources"))
         data = {
             "name": name,
@@ -1726,10 +1700,10 @@ def create_app() -> Flask:
         try:
             json.loads(data["labels_json"])
         except ValueError:
-            flash("默认标签需为合法 JSON", "danger")
+            flash(i18n.t("datasources.err_labels"), "danger")
             return redirect(url_for("datasources"))
         save_object("datasource", did, data, g.ip, name)
-        flash("数据源已保存", "success")
+        flash(i18n.t("datasources.saved"), "success")
         return redirect(url_for("datasources"))
 
     @app.route("/datasources/<int:did>/delete", methods=["POST"])
@@ -1739,7 +1713,7 @@ def create_app() -> Flask:
             flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
             return redirect(url_for("datasources"))
         delete_object("datasource", did, g.ip)
-        flash("数据源已删除", "success")
+        flash(i18n.t("datasources.deleted"), "success")
         return redirect(url_for("datasources"))
 
     @app.route("/datasources/test", methods=["POST"])
@@ -1752,7 +1726,7 @@ def create_app() -> Flask:
             "timeout": parse_int(request.form.get("timeout"), 10),
         }
         ok, msg = collectors.PrometheusCollector(ds, get_config().load_secrets()).test_connection()
-        flash(("连通性测试通过：" if ok else "连通性测试失败：") + msg, "success" if ok else "danger")
+        flash((i18n.t("common.test_ok") if ok else i18n.t("common.test_fail")) + msg, "success" if ok else "danger")
         return redirect(request.referrer or url_for("datasources"))
 
     @app.route("/datasources/test_ajax", methods=["POST"])
@@ -1792,11 +1766,11 @@ def create_app() -> Flask:
                         pem = vault.get_secret(conn, key)
                         _fingerprint_cache[key] = vault.fingerprint(pem)
                     except Exception:  # noqa: BLE001
-                        _fingerprint_cache[key] = "（无法解析）"
+                        _fingerprint_cache[key] = i18n.t("credentials.unparsed")
         return [
             {
                 "key": r["key"],
-                "name": r.get("name") or "（未命名）",
+                "name": r.get("name") or i18n.t("credentials.unnamed"),
                 "note": r.get("note") or "",
                 "created_at": r.get("created_at") or "",
                 "fingerprint": _fingerprint_cache.get(r["key"], ""),
@@ -1825,11 +1799,11 @@ def create_app() -> Flask:
                     try:
                         _fingerprint_cache[key] = vault.fingerprint(vault.get_secret(conn, key))
                     except Exception:  # noqa: BLE001
-                        _fingerprint_cache[key] = "（无法解析）"
+                        _fingerprint_cache[key] = i18n.t("credentials.unparsed")
         creds = [
             {
                 "key": r["key"],
-                "name": r.get("name") or "（未命名）",
+                "name": r.get("name") or i18n.t("credentials.unnamed"),
                 "note": r.get("note") or "",
                 "created_at": r.get("created_at") or "",
                 "fingerprint": _fingerprint_cache.get(r["key"], ""),
@@ -1849,7 +1823,7 @@ def create_app() -> Flask:
         name = (request.form.get("name") or "").strip()
         note = (request.form.get("note") or "").strip()
         if not name:
-            flash("凭据名必填", "danger")
+            flash(i18n.t("credentials.err_name"), "danger")
             return redirect(url_for("credentials"))
         pem = ""
         file = request.files.get("keyfile")
@@ -1858,19 +1832,19 @@ def create_app() -> Flask:
         else:
             pem = request.form.get("private_key") or ""
         if not pem.strip():
-            flash("请上传或粘贴私钥", "danger")
+            flash(i18n.t("credentials.err_key"), "danger")
             return redirect(url_for("credentials"))
         pem_bytes = vault.normalize_pem(pem.encode("utf-8"))
         try:
             fp = vault.fingerprint(pem_bytes)
         except ValueError as exc:
-            flash(f"私钥解析失败：{exc}", "danger")
+            flash(i18n.t("credentials.err_key_parse", err=exc), "danger")
             return redirect(url_for("credentials"))
         with models.db() as conn:
             key = vault.store_secret(conn, pem_bytes, name, note)
             models.write_audit(conn, g.ip, "create", "credential", key, name, {"fingerprint": fp, "note": note})
         _fingerprint_cache[key] = fp
-        flash(f"凭据「{name}」已保存（指纹 {fp[:24]}…）", "success")
+        flash(i18n.t("credentials.saved", name=name, fp=fp[:24]), "success")
         return redirect(url_for("credentials"))
 
     @app.route("/credentials/<key>/save", methods=["POST"])
@@ -1878,7 +1852,7 @@ def create_app() -> Flask:
         name = (request.form.get("name") or "").strip()
         note = (request.form.get("note") or "").strip()
         if not name:
-            flash("凭据名必填", "danger")
+            flash(i18n.t("credentials.err_name"), "danger")
             return redirect(url_for("credentials"))
         with models.db() as conn:
             old = vault.get_entry(conn, key)
@@ -1889,7 +1863,7 @@ def create_app() -> Flask:
                 conn, g.ip, "update", "credential", key, name,
                 {"old_name": old.get("name"), "new_name": name, "old_note": old.get("note"), "new_note": note},
             )
-        flash("凭据信息已更新", "success")
+        flash(i18n.t("credentials.updated"), "success")
         return redirect(url_for("credentials"))
 
     @app.route("/credentials/<key>/rekey", methods=["POST"])
@@ -1901,13 +1875,13 @@ def create_app() -> Flask:
         else:
             pem = request.form.get("private_key") or ""
         if not pem.strip():
-            flash("请上传或粘贴新私钥", "danger")
+            flash(i18n.t("credentials.err_key_new"), "danger")
             return redirect(url_for("credentials"))
         pem_bytes = vault.normalize_pem(pem.encode("utf-8"))
         try:
             new_fp = vault.fingerprint(pem_bytes)
         except ValueError as exc:
-            flash(f"私钥解析失败：{exc}", "danger")
+            flash(i18n.t("credentials.err_key_parse", err=exc), "danger")
             return redirect(url_for("credentials"))
         with models.db() as conn:
             entry = vault.get_entry(conn, key)
@@ -1923,7 +1897,7 @@ def create_app() -> Flask:
                 {"old_fingerprint": old_fp, "new_fingerprint": new_fp},
             )
         _fingerprint_cache[key] = new_fp
-        flash(f"凭据「{entry.get('name') or key}」私钥已更换（引用不变）", "success")
+        flash(i18n.t("credentials.rekeyed", name=entry.get("name") or key), "success")
         return redirect(url_for("credentials"))
 
     @app.route("/credentials/<key>/delete", methods=["POST"])
@@ -1938,7 +1912,7 @@ def create_app() -> Flask:
             vault.delete_secret(conn, key)
             models.write_audit(conn, g.ip, "delete", "credential", key, name, {"deleted": True})
         _fingerprint_cache.pop(key, None)
-        flash(f"凭据「{name}」已删除", "success")
+        flash(i18n.t("credentials.deleted", name=name), "success")
         return redirect(url_for("credentials"))
 
     # ---- 脚本
@@ -2014,7 +1988,7 @@ def create_app() -> Flask:
         if not src:
             abort(404)
         content = backup.read_script(src)
-        new_name = (src.get("name") or "脚本") + " 副本"
+        new_name = (src.get("name") or i18n.t("nav.scripts")) + i18n.t("scripts.copy_suffix")
         data = {
             "name": new_name,
             "filename": src.get("filename") or "",
@@ -2160,7 +2134,7 @@ def create_app() -> Flask:
             abort(404)
         item = _seed_item(script["seed_key"])
         if not item:
-            flash("未找到对应的内置脚本定义", "danger")
+            flash(i18n.t("scripts.err_seed_missing"), "danger")
             return redirect(url_for("script_detail", sid=sid))
         entry_zh = {"name": item["name"]["zh-CN"], "desc": item["desc"]["zh-CN"]}
         entry_en = {"name": item["name"]["en"], "desc": item["desc"]["en"]}
@@ -2296,7 +2270,7 @@ def create_app() -> Flask:
 
     @app.route("/scripts/<int:sid>/history")
     def scripts_history(sid: int):
-        return _history_view("script", sid, "script_history.html", "脚本")
+        return _history_view("script", sid, "script_history.html", i18n.t("nav.scripts"))
 
     # ---- 模型
     @app.route("/models")
@@ -2412,7 +2386,7 @@ def create_app() -> Flask:
         if not model:
             abort(404)
         ok, msg = model_client.test_connection(model, get_config().load_secrets())
-        flash(("连通性测试通过：" if ok else "连通性测试失败：") + msg, "success" if ok else "danger")
+        flash((i18n.t("common.test_ok") if ok else i18n.t("common.test_fail")) + msg, "success" if ok else "danger")
         return redirect(url_for("models_page"))
 
     @app.route("/models/test", methods=["POST"])
@@ -2426,7 +2400,7 @@ def create_app() -> Flask:
             "top_p": None,
         }
         ok, msg = model_client.test_connection(model, get_config().load_secrets())
-        flash(("连通性测试通过：" if ok else "连通性测试失败：") + msg, "success" if ok else "danger")
+        flash((i18n.t("common.test_ok") if ok else i18n.t("common.test_fail")) + msg, "success" if ok else "danger")
         return redirect(request.referrer or url_for("models_page"))
 
     @app.route("/models/test_ajax", methods=["POST"])
@@ -2501,7 +2475,7 @@ def create_app() -> Flask:
             abort(404)
         new = 0 if n.get("enabled") else 1
         save_object("notification", nid, {"enabled": new}, g.ip, n.get("name") or "", {"enabled": new})
-        flash(f"通知「{n.get('name') or nid}」已{'启用' if new else '停用'}", "success")
+        flash(i18n.t("notifications.toggled", name=n.get("name") or nid, state=i18n.t("common.enabled") if new else i18n.t("common.disabled")), "success")
         return redirect(url_for("notifications"))
 
     @app.route("/notifications/toggle_all", methods=["POST"])
@@ -2512,7 +2486,7 @@ def create_app() -> Flask:
             if int(n.get("enabled") or 0) != enable:
                 save_object("notification", n["id"], {"enabled": enable}, g.ip, n.get("name") or "", {"enabled": enable})
                 changed += 1
-        flash(f"已{'全部启用' if enable else '全部停用'}通知（变更 {changed} 条）", "success")
+        flash(i18n.t("notifications.toggled_all", action=i18n.t("notifications.enable_all") if enable else i18n.t("notifications.disable_all"), n=changed), "success")
         return redirect(url_for("notifications"))
 
     @app.route("/notifications/save", methods=["POST"])
@@ -3108,14 +3082,14 @@ def create_app() -> Flask:
 
     def _read_report(filename: str) -> str:
         if not filename:
-            return "（无报告文件）"
+            return i18n.t("report.no_file")
         cfg = get_config()
         safe = os.path.basename(filename)
         path = os.path.join(cfg.reports_dir, safe)
         if not os.path.abspath(path).startswith(os.path.abspath(cfg.reports_dir)):
-            return "（非法路径）"
+            return i18n.t("report.bad_path")
         if not os.path.isfile(path):
-            return "（报告文件不存在）"
+            return i18n.t("report.file_missing")
         with open(path, "r", encoding="utf-8", errors="replace") as fh:
             return fh.read()
 
@@ -3128,7 +3102,7 @@ def create_app() -> Flask:
                 models.delete(conn, "run_history", rid)
                 conn.execute("DELETE FROM run_results WHERE run_id=?", (rid,))
                 models.write_audit(conn, g.ip, "delete", "report", rid, row.get("report_file") or "", {"deleted": True})
-        flash("报告已删除", "success")
+        flash(i18n.t("reports.deleted"), "success")
         back = (request.form.get("back") or "").strip()
         return redirect(back if back.startswith("/") else url_for("reports"))
 
@@ -3144,7 +3118,7 @@ def create_app() -> Flask:
         else:
             ids = [i for i in (parse_int(x) for x in request.form.getlist("ids")) if i]
             if not ids:
-                flash("未选择任何报告", "warning")
+                flash(i18n.t("reports.none_selected"), "warning")
                 return redirect(url_for("reports"))
             marks = ",".join("?" for _ in ids)
             rows = models.query(f"SELECT id, report_file FROM run_history WHERE id IN ({marks})", tuple(ids))
@@ -3159,7 +3133,7 @@ def create_app() -> Flask:
                     {"deleted": True, "batch_scope": scope},
                 )
             count += 1
-        flash(f"已删除 {count} 份报告", "success")
+        flash(i18n.t("reports.deleted_n", n=count), "success")
         back = (request.form.get("back") or "").strip()
         return redirect(back if back.startswith("/") else url_for("reports"))
 
@@ -3205,7 +3179,7 @@ def create_app() -> Flask:
             pages=max(1, (total + per_page - 1) // per_page),
             action_counts=action_counts, need_count=need_count, total_all=total_all,
             audit_actions=_AUDIT_ACTIONS,
-            action_cn=_AUDIT_ACTION_CN, action_color=_AUDIT_ACTION_COLOR, ttype_cn=_AUDIT_TTYPE_CN,
+            action_color=_AUDIT_ACTION_COLOR,
             cur_action=action,
         )
 
@@ -3244,7 +3218,7 @@ def create_app() -> Flask:
             abort(404)
         vid = row.get("version_id")
         if not vid:
-            flash("该审计记录没有可恢复的备份版本（如运行/通知/导入等操作）", "warning")
+            flash(i18n.t("audit.no_version"), "warning")
             return redirect(request.referrer or url_for("audit_logs"))
         ok, msg = backup.restore(int(vid), g.ip)
         flash(msg, "success" if ok else "danger")
@@ -3308,9 +3282,9 @@ def create_app() -> Flask:
             object_type=obj_type, object_id=object_id, action=action,
             page=page, pages=pages, total=total, per_page=per_page,
             obj_count=obj_count, ver_count=ver_count,
-            objtypes=["script", "server", "group", "datasource", "model", "notification", "schedule", "setting"],
+            objtypes=["script", "server", "group", "datasource", "application", "model", "notification", "schedule", "setting"],
             actions=["create", "update", "delete", "restore"],
-            action_cn=_AUDIT_ACTION_CN, action_color=_AUDIT_ACTION_COLOR, ttype_cn=_AUDIT_TTYPE_CN,
+            action_color=_AUDIT_ACTION_COLOR,
         )
 
     @app.route("/backups/<int:vid>")
@@ -3325,7 +3299,7 @@ def create_app() -> Flask:
             current = backup.snapshot_object(conn, row["object_type"], row["object_id"])
             missing = backup.check_references(conn, row["object_type"], snapshot)
         diff = backup.diff_snapshots(current, snapshot)
-        display_name = _obj_display_name(row["object_type"], current or snapshot) or "（已删除对象）"
+        display_name = _obj_display_name(row["object_type"], current or snapshot) or i18n.t("backups.deleted_obj")
         return render_template(
             "backup_detail.html", version=row, snapshot=snapshot, current=current, diff=diff, missing=missing,
             display_name=display_name,
@@ -3374,12 +3348,12 @@ def create_app() -> Flask:
         force = bool(request.form.get("force"))
         file = request.files.get("file")
         if not file or not file.filename:
-            flash("请选择备份 JSON 文件", "danger")
+            flash(i18n.t("backups.err_pick"), "danger")
             return redirect(url_for("backups"))
         try:
             data = json.loads(file.read().decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
-            flash("备份文件解析失败", "danger")
+            flash(i18n.t("backups.err_parse"), "danger")
             return redirect(url_for("backups"))
         ok, msg = backup.import_all(data, mode=mode, force=force, operator_ip=g.ip)
         flash(msg, "success" if ok else "danger")
@@ -3447,7 +3421,7 @@ def create_app() -> Flask:
         i18n.set_fallback(models.get_setting("default_language", "zh-CN") or "zh-CN")
         with models.db() as conn:
             models.write_audit(conn, g.ip, "update", "setting", "default_language", "reload_locales", {"loaded": [x["code"] for x in i18n.languages()]})
-        flash("语言包已重新加载", "success")
+        flash(i18n.t("settings.locales_reloaded"), "success")
         return redirect(url_for("settings_page"))
 
     @app.route("/settings/locale_template")
@@ -3469,18 +3443,18 @@ def create_app() -> Flask:
                 if not isinstance(rules, list):
                     raise ValueError
             except ValueError:
-                flash("脱敏规则需为 JSON 数组", "danger")
+                flash(i18n.t("settings.err_sanitize_json"), "danger")
                 return redirect(url_for("settings_page"))
             set_setting_versioned("sanitize_rules", json.dumps(rules, ensure_ascii=False), g.ip)
         else:
             set_setting_versioned("sanitize_rules", "", g.ip)
-        flash("脱敏规则已保存", "success")
+        flash(i18n.t("settings.sanitize_saved"), "success")
         return redirect(url_for("settings_page"))
 
     @app.route("/settings/sanitize/reset", methods=["POST"])
     def settings_sanitize_reset():
         set_setting_versioned("sanitize_rules", json.dumps(sanitize.default_rules(), ensure_ascii=False), g.ip)
-        flash("已恢复内置脱敏规则", "success")
+        flash(i18n.t("settings.sanitize_reset"), "success")
         return redirect(url_for("settings_page"))
 
     @app.route("/settings/cleanup", methods=["POST"])
@@ -3489,16 +3463,16 @@ def create_app() -> Flask:
         settings = models.get_settings()
         if kind == "audit":
             n = models.cleanup_audit(int(settings.get("audit_retention_days", 90)))
-            flash(f"已清理审计日志 {n} 条", "success")
+            flash(i18n.t("settings.cleaned_audit", n=n), "success")
         elif kind == "backups":
             n = backup.cleanup(int(settings.get("backup_retention_days", 90)))
-            flash(f"已清理版本备份 {n} 条", "success")
+            flash(i18n.t("settings.cleaned_versions", n=n), "success")
         elif kind == "reports":
             n = _cleanup_reports(int(settings.get("report_retention_days", 90)))
-            flash(f"已清理报告 {n} 份", "success")
+            flash(i18n.t("settings.cleaned_reports", n=n), "success")
         elif kind == "applog":
             res = applog.cleanup(days=int(settings.get("app_log_retention_days", 7)))
-            flash(f"已清理轮转日志 {res['deleted']} 个", "success")
+            flash(i18n.t("settings.cleaned_logs", n=res["deleted"]), "success")
         return redirect(url_for("settings_page"))
 
     def _cleanup_reports(retention_days: int) -> int:
@@ -3595,7 +3569,7 @@ def create_app() -> Flask:
         remove_all = bool(request.form.get("remove_all"))
         truncate_current = bool(request.form.get("truncate_current"))
         if not days and not remove_all and not truncate_current:
-            flash("请选择清理条件（按天/全部/清空当前）", "warning")
+            flash(i18n.t("logs.err_pick"), "warning")
             return redirect(url_for("logs_page"))
         res = applog.cleanup(days=days or None, remove_all=remove_all, truncate_current=truncate_current)
         with models.db() as conn:
@@ -3603,9 +3577,9 @@ def create_app() -> Flask:
                 conn, g.ip, "cleanup", "applog", "", "应用日志",
                 {"days": days, "remove_all": remove_all, "truncate_current": truncate_current, **res},
             )
-        msg = f"已清理轮转日志 {res['deleted']} 个"
+        msg = i18n.t("logs.cleaned", n=res["deleted"])
         if res["truncated"]:
-            msg += "，并清空当前日志"
+            msg += i18n.t("logs.and_cleared")
         flash(msg, "success")
         return redirect(url_for("logs_page", file=request.form.get("file") or applog.active_log()))
 
@@ -3618,7 +3592,7 @@ def create_app() -> Flask:
             apply_log_level(level)
         if days:
             set_setting_versioned("app_log_retention_days", days, g.ip)
-        flash("日志设置已保存", "success")
+        flash(i18n.t("logs.saved"), "success")
         return redirect(url_for("logs_page"))
 
     @app.route("/logs/delete", methods=["POST"])
@@ -3627,18 +3601,26 @@ def create_app() -> Flask:
         ok = applog.delete_file(name)
         with models.db() as conn:
             models.write_audit(conn, g.ip, "delete", "applog", name, name, {"deleted": ok})
-        flash("已删除日志文件" if ok else "删除失败（活动日志不可删除）", "success" if ok else "warning")
+        flash(i18n.t("logs.deleted") if ok else i18n.t("logs.delete_fail"), "success" if ok else "warning")
         return redirect(url_for("logs_page"))
 
     # ---- 智能问答（只读，阶段一：上下文注入）
-    _chat_store: dict[str, list[dict[str, Any]]] = {}
+    # Bounded in-process session store (LRU by last use). 有界会话内存（按最近使用淘汰）。
+    _chat_store: "OrderedDict[str, list[dict[str, Any]]]" = OrderedDict()
+    _CHAT_MAX = 200
 
     def _chat_history() -> list[dict[str, Any]]:
         sid = session.get("chat_sid")
         if not sid:
             sid = base64.urlsafe_b64encode(os.urandom(16)).decode("ascii")
             session["chat_sid"] = sid
-        return _chat_store.setdefault(sid, [])
+        if sid not in _chat_store:
+            _chat_store[sid] = []
+            while len(_chat_store) > _CHAT_MAX:
+                _chat_store.popitem(last=False)
+        else:
+            _chat_store.move_to_end(sid)
+        return _chat_store[sid]
 
     @app.route("/chatbot")
     def chatbot_page():
@@ -3688,7 +3670,7 @@ def create_app() -> Flask:
         versions = backup.list_versions(obj_type, obj_id, limit=200)
         with models.db() as conn:
             current = backup.snapshot_object(conn, obj_type, obj_id)
-        display_name = _obj_display_name(obj_type, current) or "（已删除对象）"
+        display_name = _obj_display_name(obj_type, current) or i18n.t("backups.deleted_obj")
         return render_template(
             template, versions=versions, object_type=obj_type, object_id=obj_id, label=label,
             current=current, display_name=display_name,
@@ -3696,16 +3678,16 @@ def create_app() -> Flask:
 
     @app.errorhandler(404)
     def _404(_e):
-        return render_template("error.html", code=404, message="页面不存在"), 404
+        return render_template("error.html", code=404, message=i18n.t("error.404")), 404
 
     @app.errorhandler(sqlite3.IntegrityError)
     def _integrity(exc):
         log.exception("数据库约束冲突：%s", exc)
-        return render_template("error.html", code=409, message="数据库约束冲突（可能为重复数据），请返回重试"), 409
+        return render_template("error.html", code=409, message=i18n.t("error.409")), 409
 
     @app.errorhandler(500)
     def _500(_e):
-        return render_template("error.html", code=500, message="服务器内部错误"), 500
+        return render_template("error.html", code=500, message=i18n.t("error.500")), 500
 
     return app
 

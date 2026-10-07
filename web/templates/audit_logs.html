@@ -24,7 +24,7 @@
         <div class="mb-2"><label class="form-label small mb-0">{{ t('audit.target_type') }}</label>
           <select class="form-select form-select-sm" name="target_type">
             <option value="">{{ t('common.all') }}</option>
-            {% for tp in ['group','server','script','datasource','model','notification','schedule','setting','credential','run','report','backup','applog','server_datasource','all'] %}
+            {% for tp in ['group','server','script','datasource','application','model','notification','schedule','setting','credential','run','report','backup','applog','server_datasource','all'] %}
             <option value="{{ tp }}" {{ 'selected' if mods.target_type == tp else '' }}>{{ t('type.' ~ tp) }}</option>
             {% endfor %}
           </select>
@@ -158,7 +158,7 @@ function showAuditDetail(btn) {
   const diff = document.getElementById('detailDiff');
   if (obj && typeof obj === 'object' && ('old' in obj) && ('new' in obj)) {
     diff.className = 'mb-2 diff-chg p-2';
-    diff.innerHTML = '<strong>' + __t('js.changed') + '</strong><br>old: ' + escapeHtml(String(obj.old)) + '<br>new: ' + escapeHtml(String(obj.new));
+    diff.innerHTML = '<strong>' + __t('js.changed') + '</strong><br>' + __t('js.old') + escapeHtml(String(obj.old)) + '<br>' + __t('js.new') + escapeHtml(String(obj.new));
   } else { diff.className = 'mb-2 d-none'; diff.innerHTML = ''; }
 }
 </script>

@@ -11,7 +11,7 @@ import os
 from typing import Any
 
 import models
-import vault as vault_mod
+import i18n
 from config import get_config
 
 CONFIG_ORDER = ["group", "datasource", "model", "notification", "script", "server", "application", "schedule"]
@@ -76,6 +76,15 @@ def snapshot_object(conn, object_type: str, object_id: Any) -> dict[str, Any] | 
             for r in conn.execute(
                 "SELECT member_type, member_id FROM application_members WHERE application_id=? ORDER BY id",
                 (object_id,),
+            ).fetchall()
+        ]
+    elif object_type == "server":
+        # Include datasource bindings so restoring a server keeps its bindings.
+        # 快照包含服务器×数据源绑定，恢复时不丢绑定。
+        data["bindings"] = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM server_datasources WHERE server_id=? ORDER BY id", (object_id,)
             ).fetchall()
         ]
     return data
@@ -181,23 +190,26 @@ def check_references(conn, object_type: str, snapshot: dict[str, Any]) -> list[s
     if object_type == "server":
         gid = snapshot.get("group_id")
         if gid and not _exists("groups", gid):
-            missing.append(f"分组 #{gid}")
+            missing.append(i18n.t("refs.group_id", id=gid))
         vk = snapshot.get("vault_key")
         if vk:
             row = conn.execute("SELECT 1 FROM vault_entries WHERE key=?", (vk,)).fetchone()
             if row is None:
-                missing.append(f"凭据 {vk}")
+                missing.append(i18n.t("refs.credential", key=vk))
         for sid in _parse_ids(snapshot.get("scripts_json")):
             if not _exists("scripts", sid):
-                missing.append(f"脚本 #{sid}")
+                missing.append(i18n.t("refs.script_id", id=sid))
+        for b in snapshot.get("bindings") or []:
+            if not _exists("datasources", b.get("datasource_id")):
+                missing.append(i18n.t("refs.datasource_id", id=b.get("datasource_id")))
     elif object_type == "application":
         for m in snapshot.get("members") or []:
             mt = m.get("member_type")
             mid = m.get("member_id")
             if mt == "server" and not _exists("servers", mid):
-                missing.append(f"服务器 #{mid}")
+                missing.append(i18n.t("refs.server_id", id=mid))
             elif mt == "group" and not _exists("groups", mid):
-                missing.append(f"分组 #{mid}")
+                missing.append(i18n.t("refs.group_id", id=mid))
     elif object_type == "schedule":
         targets = snapshot.get("targets_json")
         try:
@@ -206,16 +218,19 @@ def check_references(conn, object_type: str, snapshot: dict[str, Any]) -> list[s
             targets = {}
         for sid in targets.get("servers", []):
             if not _exists("servers", sid):
-                missing.append(f"服务器 #{sid}")
+                missing.append(i18n.t("refs.server_id", id=sid))
         for gid in targets.get("groups", []):
             if not _exists("groups", gid):
-                missing.append(f"分组 #{gid}")
+                missing.append(i18n.t("refs.group_id", id=gid))
+        for aid in targets.get("applications", []):
+            if not _exists("applications", aid):
+                missing.append(i18n.t("refs.app_id", id=aid))
         for did in targets.get("datasources", []):
             if not _exists("datasources", did):
-                missing.append(f"数据源 #{did}")
+                missing.append(i18n.t("refs.datasource_id", id=did))
         for sid in _parse_ids(snapshot.get("scripts_json")):
             if not _exists("scripts", sid):
-                missing.append(f"脚本 #{sid}")
+                missing.append(i18n.t("refs.script_id", id=sid))
     return missing
 
 
@@ -224,22 +239,22 @@ def check_references(conn, object_type: str, snapshot: dict[str, Any]) -> list[s
 def restore(version_id: int, operator_ip: str = "") -> tuple[bool, str]:
     row = get_version(version_id)
     if not row:
-        return False, "版本不存在"
+        return False, i18n.t("backup.no_version")
     object_type = row["object_type"]
     object_id = row["object_id"]
     snapshot = parse_snapshot(row)
     if not snapshot:
-        return False, "快照为空，无法恢复"
+        return False, i18n.t("backup.empty_snapshot")
     if object_type == "setting":
         return _restore_setting(object_id, snapshot, operator_ip)
     if object_type not in models.CONFIG_TABLES:
-        return False, f"不支持恢复的对象类型：{object_type}"
+        return False, i18n.t("backup.unsupported_type", type=object_type)
 
     table = models.CONFIG_TABLES[object_type]
     with models.db() as conn:
         missing = check_references(conn, object_type, snapshot)
         if missing:
-            return False, "引用完整性校验失败，请先恢复依赖：" + "、".join(missing)
+            return False, i18n.t("backup.ref_failed") + i18n.t("common.list_sep").join(missing)
 
         existing = conn.execute(f"SELECT * FROM {table} WHERE id=?", (object_id,)).fetchone()
         if existing is None:
@@ -273,6 +288,20 @@ def restore(version_id: int, operator_ip: str = "") -> tuple[bool, str]:
                         "INSERT OR IGNORE INTO application_members (application_id, member_type, member_id) VALUES (?,?,?)",
                         (object_id, m["member_type"], m["member_id"]),
                     )
+        elif object_type == "server" and "bindings" in snapshot:
+            # Restore datasource bindings captured in the snapshot (skip for legacy snapshots).
+            # 恢复快照中的服务器×数据源绑定（旧快照无此键则不动）。
+            conn.execute("DELETE FROM server_datasources WHERE server_id=?", (object_id,))
+            bcols = models.TABLE_COLUMNS["server_datasources"]
+            for b in snapshot.get("bindings") or []:
+                cols = [c for c in bcols if c in b]
+                if not cols:
+                    continue
+                placeholders = ",".join("?" for _ in cols)
+                conn.execute(
+                    f"INSERT INTO server_datasources (id,{','.join(cols)}) VALUES (?,{placeholders})",
+                    [b.get("id")] + [b.get(c) for c in cols],
+                )
 
         vid = record(conn, object_type, object_id, action, snapshot, operator_ip, note=f"恢复版本 {row['version']}")
         models.write_audit(
@@ -285,7 +314,7 @@ def restore(version_id: int, operator_ip: str = "") -> tuple[bool, str]:
             {"version": row["version"]},
             version_id=vid,
         )
-    return True, "恢复成功"
+    return True, i18n.t("backup.restored")
 
 
 def _restore_setting(key: str, snapshot: dict[str, Any], operator_ip: str) -> tuple[bool, str]:
@@ -296,7 +325,7 @@ def _restore_setting(key: str, snapshot: dict[str, Any], operator_ip: str) -> tu
         models.set_setting(conn, key, snapshot.get("value", ""))
         vid = record(conn, "setting", key, "restore", snapshot, operator_ip, note="恢复设置")
         models.write_audit(conn, operator_ip, "restore", "setting", key, key, snapshot, version_id=vid)
-    return True, "恢复成功"
+    return True, i18n.t("backup.restored")
 
 
 # ------------------------------------------------------------ 全量导出/导入
@@ -351,7 +380,7 @@ def import_all(data: dict[str, Any], mode: str = "daily", force: bool = False, o
                     continue
                 existing += conn.execute(f"SELECT COUNT(*) AS c FROM {table}").fetchone()["c"]
             if existing and not force:
-                return False, "目标库非空：覆盖式导入需二次确认（force）"
+                return False, i18n.t("backup.migrate_force")
         return _import_migrate(data, operator_ip)
     return _import_daily(objects, operator_ip)
 
@@ -429,7 +458,7 @@ def _import_migrate(data: dict[str, Any], operator_ip: str) -> tuple[bool, str]:
                 ),
             )
         models.write_audit(conn, operator_ip, "import", "all", "", "migrate", {"mode": "migrate"})
-    return True, "覆盖式导入完成"
+    return True, i18n.t("backup.import_migrate_done")
 
 
 def _import_daily(objects: dict[str, Any], operator_ip: str) -> tuple[bool, str]:
@@ -504,7 +533,7 @@ def _import_daily(objects: dict[str, Any], operator_ip: str) -> tuple[bool, str]
                 [item.get(c) for c in cols],
             )
         models.write_audit(conn, operator_ip, "import", "all", "", "daily", {"mode": "daily"})
-    return True, "新增式导入完成"
+    return True, i18n.t("backup.import_daily_done")
 
 
 def cleanup(retention_days: int) -> int:

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import script_picker, conn_badge, label_editor %}
+{% from "_macros.html" import script_picker, conn_badge %}
 {% block title %}{{ t('nav.servers') }} {{ server.hostname }}{% endblock %}
 {% block content %}
 {% set cur_group = (groups | selectattr('id', 'equalto', server.group_id) | list | first) if server.group_id else None %}

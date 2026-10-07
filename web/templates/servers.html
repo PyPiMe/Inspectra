@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager, conn_badge, script_picker, label_editor %}
+{% from "_macros.html" import pager, conn_badge %}
 {% block title %}{{ t('nav.servers') }}{% endblock %}
 {% block content %}
 {% set back_url = url_for('servers', q=q, group_id=group_id, enabled=enabled, health=health, page=page, per_page=per_page) %}
