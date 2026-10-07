@@ -1,14 +1,16 @@
+# PyPiMeOps Docker Compose
+# 自包含镜像 + ./data 数据卷 + host 网络；端口由 config.yaml 决定，不映射 ports。
+# Self-contained image + ./data volume + host network; port comes from config.yaml, no ports mapping.
 services:
   pypimeops:
     build: .
-    image: pypimeops:latest
+    image: pypimeops:local
     container_name: pypimeops
+    network_mode: host
     restart: unless-stopped
-    # 端口由 config.yaml 决定；此处映射按自定义端口填写（示例 8080）
-    ports:
-      - "8080:8080"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-}
     volumes:
-      # 挂载数据目录，持久化数据库/凭据/报告/日志/配置
-      - ./:/app
-    working_dir: /app
-    command: ["python", "app.py"]
+      - ./data:/data

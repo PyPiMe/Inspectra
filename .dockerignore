@@ -1,0 +1,27 @@
+# 构建上下文排除项
+.git
+.gitignore
+.github
+venv
+.venv
+env
+__pycache__
+**/__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+reports
+logs
+vault
+scripts
+data
+*.db
+*.db-wal
+*.db-shm
+config.yaml
+secrets.env
+.env
+Plan.md
+AGENTS.md
+CHANGELOG.md

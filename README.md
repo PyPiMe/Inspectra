@@ -153,12 +153,31 @@ sudo systemctl daemon-reload && sudo systemctl enable --now pypimeops
 
 ### Docker
 
+自包含镜像 + `./data` 数据卷 + `network_mode: host`：代码在镜像内，数据持久化在 `./data`，容器入口自动生成配置/密钥并初始化（不依赖宿主 Python）。
+
 ```bash
-cp config.yaml.example config.yaml && cp secrets.env.example secrets.env
+# 1) 准备环境变量（PUID/PGID/TZ）
+cp .env.example .env            # 按需修改；TZ 留空=UTC
+# 2) 构建并后台启动
 docker compose up -d --build
+docker compose ps               # 应显示 healthy
+sudo ./deploy/install.sh install --mode docker   # 或使用一键脚本
 ```
 
-端口由 `config.yaml` 决定，`docker-compose.yml` 的端口映射按自定义端口填写。
+- 数据目录：`./data`（`config.yaml`、`secrets.env`、`pypimeops.db`、`vault/`、`scripts/`、`reports/`、`logs/`）。
+- 属主：容器以 `PUID:PGID` 运行；建议设为宿主 `./data` 所有者（`sudo chown -R $PUID:$PGID ./data`）。
+- 时区：`TZ` 留空 = UTC；需本地时间请填如 `Asia/Shanghai`。
+- 网络：`host` 模式，端口由 `config.yaml` 决定、保留真实客户端 IP（利于 IP 白名单）；不映射端口。
+- 健康检查：镜像内置（读 `/data/config.yaml` 的 `port` 请求 `/`）。
+
+单命令（等价，不使用 compose）：
+
+```bash
+docker build -t pypimeops:local .
+docker run -d --name pypimeops --network host --restart unless-stopped \
+  -e PUID=1000 -e PGID=1000 -e TZ=Asia/Shanghai \
+  -v "$PWD/data:/data" pypimeops:local
+```
 
 ## 配置说明
 

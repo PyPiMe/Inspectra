@@ -139,6 +139,16 @@ ensure_user_and_dirs() {
   chmod 700 "$APP_DIR/vault" 2>/dev/null || true
 }
 
+setup_env_file() {
+  if [ ! -f "$APP_DIR/.env" ]; then
+    log "生成 .env（Docker 环境变量）"
+    cp "$APP_DIR/.env.example" "$APP_DIR/.env"
+  else
+    ok ".env 已存在，跳过"
+  fi
+  mkdir -p "$APP_DIR/data"
+}
+
 place_code() {
   if [ -n "$REPO" ]; then
     if [ -d "$APP_DIR/.git" ]; then
@@ -276,6 +286,16 @@ do_install() {
     need_root
     install_system_deps
   fi
+  # Docker 模式：镜像自包含，初始化交容器入口，不依赖宿主 Python/venv/init。
+  # Docker mode: the image is self-contained; init runs in the container.
+  if [ "$MODE" = docker ]; then
+    mkdir -p "$APP_DIR"
+    place_code
+    setup_env_file
+    register_docker
+    print_next_steps
+    return 0
+  fi
   if ! find_python; then
     if [ "$INSTALL_DEPS" -eq 1 ]; then
       die "已尝试安装系统依赖，仍未找到 Python $MIN_PY+。请手动安装后用 --python 指定。"
@@ -293,7 +313,6 @@ do_install() {
   fix_perms
   case "$MODE" in
     systemd) register_systemd ;;
-    docker) register_docker ;;
     dev) ok "dev 模式：跳过服务注册" ;;
     *) die "未知模式：$MODE" ;;
   esac
@@ -302,7 +321,7 @@ do_install() {
 
 do_upgrade() {
   case "$MODE" in systemd|docker) need_root ;; esac
-  find_python || true
+  [ "$MODE" = docker ] || find_python || true
   log "升级前整机备份"
   ( cd "$APP_DIR" && bash backup.sh ) || warn "backup.sh 执行失败，请确认后继续"
   # 失败兜底：即使后续步骤出错也把服务拉起来，避免升级中断导致停服
@@ -314,9 +333,13 @@ do_upgrade() {
     docker) ( cd "$APP_DIR" && docker compose down ) || true ;;
   esac
   place_code
-  setup_venv
-  run_init
-  fix_perms
+  if [ "$MODE" = docker ]; then
+    setup_env_file
+  else
+    setup_venv
+    run_init
+    fix_perms
+  fi
   case "$MODE" in
     systemd) systemctl start "$SERVICE_NAME" ;;
     docker) register_docker ;;

@@ -232,13 +232,33 @@ sudo systemctl daemon-reload && sudo systemctl enable --now pypimeops
 
 ### Docker
 
+Self-contained image + `./data` volume + `network_mode: host`: the code lives in the
+image, data persists under `./data`, and the entrypoint generates config/secrets and
+initializes automatically (no host Python needed).
+
 ```bash
-cp config.yaml.example config.yaml && cp secrets.env.example secrets.env
+# 1) Prepare environment variables (PUID/PGID/TZ)
+cp .env.example .env            # adjust as needed; TZ empty = UTC
+# 2) Build and start in the background
 docker compose up -d --build
+docker compose ps               # should show healthy
+sudo ./deploy/install.sh install --mode docker   # or use the one-shot script
 ```
 
-The port is determined by `config.yaml`; set the mapping in `docker-compose.yml`
-accordingly.
+- Data dir: `./data` (`config.yaml`, `secrets.env`, `pypimeops.db`, `vault/`, `scripts/`, `reports/`, `logs/`).
+- Ownership: the container runs as `PUID:PGID`; set it to the host `./data` owner (`sudo chown -R $PUID:$PGID ./data`).
+- Timezone: `TZ` empty = UTC; set e.g. `Asia/Shanghai` for local time.
+- Network: `host` mode; the port comes from `config.yaml` and real client IPs are preserved (good for the IP allowlist); no port mapping.
+- Healthcheck: built into the image (reads `port` from `/data/config.yaml` and probes `/`).
+
+Single command (equivalent, without compose):
+
+```bash
+docker build -t pypimeops:local .
+docker run -d --name pypimeops --network host --restart unless-stopped \
+  -e PUID=1000 -e PGID=1000 -e TZ=Asia/Shanghai \
+  -v "$PWD/data:/data" pypimeops:local
+```
 
 ## Configuration
 
