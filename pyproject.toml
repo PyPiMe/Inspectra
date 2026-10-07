@@ -1,0 +1,43 @@
+# Metadata & license declaration
+# 元数据与许可声明
+# 本项目按“应用/服务”方式部署（venv + systemd/Docker），不作为可安装的
+# Python 包分发；依赖清单以 requirements.txt 为准，此处仅提供项目元数据与许可证。
+#
+# This project is deployed as an application/service (venv + systemd/Docker),
+# not distributed as an installable Python package; the dependency list lives in
+# requirements.txt. This file only declares project metadata and the license.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pypimeops"
+dynamic = ["version"]
+description = "Server O&M inspection web console: SSH scripts + Prometheus metrics, with optional LLM analysis."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "The PyPiMeOps Authors" }]
+keywords = ["monitoring", "inspection", "prometheus", "ssh", "operations", "flask"]
+classifiers = [
+  "License :: OSI Approved :: Apache Software License",
+  "Environment :: Web Environment",
+  "Framework :: Flask",
+  "Intended Audience :: System Administrators",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: System :: Monitoring",
+]
+
+[tool.setuptools]
+# Disable package auto-discovery (application project).
+# 无安装期的包发现（应用型项目）。
+packages = []
+
+[tool.setuptools.dynamic]
+# Version is sourced from config.APP_VERSION (single source of truth).
+# 版本取自 config.APP_VERSION（单一来源）。
+version = { attr = "config.APP_VERSION" }

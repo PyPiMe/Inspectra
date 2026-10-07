@@ -14,6 +14,10 @@ import yaml
 _DEFAULT_CONFIG = "config.yaml"
 _config: "Config | None" = None
 
+# Application version (SemVer). Single source of truth; keep pyproject/README/CHANGELOG in sync.
+# 应用版本（SemVer），单一来源；请同步 pyproject/README/CHANGELOG。
+APP_VERSION = "0.1.0"
+
 
 class Config:
     def __init__(self, data: dict[str, Any], base_dir: str):

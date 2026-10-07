@@ -1,4 +1,16 @@
 # PyPiMeOps Python 依赖（Python 3.12，venv 隔离安装，锁具体版本）
+#
+# Licenses of direct dependencies:
+# 各直接依赖许可：
+#   Flask / markupsafe = BSD-3-Clause
+#   requests           = Apache-2.0
+#   PyYAML             = MIT
+#   cryptography       = Apache-2.0 OR BSD-3-Clause
+#   markdown-it-py     = MIT
+#   paramiko           = LGPL-2.1
+#     English: used as an unmodified library; redistribute only with its notice and allow replacement.
+#     中文：作为未修改的库使用；再分发须保留其声明并允许替换该库。
+# 详见 THIRD_PARTY_NOTICES.md。
 Flask==3.0.3
 paramiko==3.4.0
 requests==2.32.3

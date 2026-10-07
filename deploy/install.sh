@@ -345,6 +345,11 @@ do_uninstall() {
 }
 
 do_status() {
+  local ver=""
+  if [ -x "$APP_DIR/venv/bin/python" ]; then
+    ver="$("$APP_DIR/venv/bin/python" -c "import sys; sys.path.insert(0, '$APP_DIR'); from config import APP_VERSION; print(APP_VERSION)" 2>/dev/null || true)"
+  fi
+  if [ -n "$ver" ]; then echo "版本：$ver"; fi
   case "$MODE" in
     systemd) systemctl status "$SERVICE_NAME" --no-pager || true; echo "日志：journalctl -u $SERVICE_NAME -f" ;;
     docker) ( cd "$APP_DIR" && docker compose ps ) || true; echo "日志：docker compose logs -f" ;;

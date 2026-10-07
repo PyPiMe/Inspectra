@@ -45,6 +45,11 @@
   <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('settings_locale_template') }}">{{ t('settings.download_template') }}</a>
 </div>
 <div class="form-text mt-1">{{ t('settings.reload_locales_hint') | safe }}</div>
+
+<hr>
+<h6 class="text-muted mt-3">{{ t('settings.about') }}</h6>
+<div class="form-text">{{ t('common.version') }}: {{ app_version }} · {{ t('settings.license') }}: Apache-2.0</div>
+<div class="form-text">{{ t('settings.changelog_hint') | safe }}</div>
 {% endblock %}
 
 {% block scripts %}

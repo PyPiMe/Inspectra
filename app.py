@@ -40,7 +40,7 @@ import models
 import notify
 import sanitize
 import vault
-from config import get_config, load_config, set_config
+from config import APP_VERSION, get_config, load_config, set_config
 import scheduler as scheduler_mod
 from scheduler import Scheduler
 
@@ -1086,6 +1086,7 @@ def create_app() -> Flask:
             "client_ip": g.get("ip", ""),
             "now_local": now_local_str(models.utcnow()),
             "site_title": (settings.get("site_title") or "").strip() or "PyPiMeOps",
+            "app_version": APP_VERSION,
             "whitelist_empty": not (settings.get("allowed_ips") or "").strip(),
             "whitelist_ack": settings.get("whitelist_ack") == "true",
             "model_available": models.model_availability(),
@@ -3621,7 +3622,7 @@ def main(argv: list[str] | None = None) -> int:
 
     host = args.host or cfg.host
     port = args.port or cfg.port
-    log.info("PyPiMeOps 启动于 http://%s:%s（单进程）", host, port)
+    log.info("PyPiMeOps %s 启动于 http://%s:%s（单进程）", APP_VERSION, host, port)
     app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
     return 0
 
