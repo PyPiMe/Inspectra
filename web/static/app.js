@@ -8,11 +8,6 @@ window.pypimeops = {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : '';
   },
-  async post(url, data) {
-    const body = new URLSearchParams(Object.assign({ csrf_token: this.csrf() }, data || {}));
-    const res = await fetch(url, { method: 'POST', body });
-    return res.json();
-  },
 };
 
 // 复制文本到剪贴板（兼容非安全上下文），btn 可选用于“已复制”反馈
@@ -61,25 +56,6 @@ function toggleFold(id, btn) {
   if (btn) btn.textContent = el.classList.contains('folded') ? __t('js.expand', '展开') : __t('js.collapse', '折叠');
 }
 
-// 快捷时间范围：填入表单的 start/end（本地时间），0=今天
-function setRange(days, formId) {
-  const form = document.getElementById(formId);
-  if (!form) return;
-  const pad = (n) => String(n).padStart(2, '0');
-  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
-  const now = new Date();
-  let start;
-  if (days === 0) {
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-  } else {
-    start = new Date(now.getTime() - days * 86400000);
-  }
-  const s = form.querySelector('[name="start"]');
-  const e = form.querySelector('[name="end"]');
-  if (s) s.value = fmt(start);
-  if (e) e.value = fmt(now);
-  form.submit();
-}
 
 // HTML 转义
 function escapeHtml(s) {

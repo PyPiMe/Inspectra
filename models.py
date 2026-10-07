@@ -520,16 +520,6 @@ def set_setting(conn: sqlite3.Connection, key: str, value: str) -> None:
     )
 
 
-def get_int_setting(key: str, default: int) -> int:
-    try:
-        return int(get_setting(key, str(default)))
-    except (TypeError, ValueError):
-        return default
-
-
-def get_bool_setting(key: str, default: bool = False) -> bool:
-    return get_setting(key, "true" if default else "false").strip().lower() in ("1", "true", "yes", "on")
-
 
 # ---------------------------------------------------------------- audit & versions
 

@@ -45,7 +45,7 @@ def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
             row = models.fetch_one("applications", int(aid))
             if row:
                 a["name"] = i18n.localize_named(row, lang)[0]
-        elif a.get("name") in ("未归属", "__unassigned__"):
+        elif a.get("name") == "__unassigned__":
             a["name"] = i18n.t_for(lang, "reports2.unassigned")
     for it in s.get("issues") or []:
         aids = it.get("app_ids") or []
@@ -55,7 +55,7 @@ def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
                 row = models.fetch_one("applications", int(aid))
                 names.append(i18n.localize_named(row, lang)[0] if row else f"#{aid}")
             it["app"] = "、".join(names)
-        elif it.get("app") in ("未归属", "__unassigned__"):
+        elif it.get("app") == "__unassigned__":
             it["app"] = i18n.t_for(lang, "reports2.unassigned")
         sid = it.get("script_id")
         if sid:

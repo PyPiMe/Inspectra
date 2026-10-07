@@ -120,7 +120,7 @@ def localize_script(row: dict[str, Any], lang: str | None = None) -> tuple[str, 
     """Resolve a script's (name, desc, meta_name) for a language.
 
     Unified fallback: requested lang -> en -> base literal (name/desc; meta falls
-    back to the base name, i.e. the script body `# NAME`).
+    back to the base script name).
     解析脚本展示名称/说明/元数据名：统一回退 当前 → en → 基座。
     """
     lang = lang or current()
@@ -228,10 +228,6 @@ def js_dict() -> dict[str, str]:
                 out[k] = v
     return out
 
-
-def missing_keys(code: str) -> list[str]:
-    base = set(_locales.get(BASE_LANG, {}))
-    return sorted(base - set(_locales.get(code, {})))
 
 
 def template_dict() -> dict[str, str]:

@@ -49,20 +49,6 @@ class CollectResult:
     hard_fact: bool = False
     meta: dict[str, Any] = field(default_factory=dict)
 
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "server_id": self.server_id,
-            "server_name": self.server_name,
-            "source": self.source,
-            "script_id": self.script_id,
-            "script_name": self.script_name,
-            "kind": self.kind,
-            "status": self.status,
-            "output": self.output,
-            "error": self.error,
-            "hard_fact": self.hard_fact,
-            "meta": self.meta,
-        }
 
 
 # ------------------------------------------------------------------ 元数据解析
@@ -115,13 +101,6 @@ def parse_condition(text: str) -> tuple[str, str] | None:
     return None
 
 
-def parse_threshold(text: str) -> tuple[str, float] | None:
-    """兼容旧接口：仅数值阈值。"""
-    m = _NUM_CMP_RE.match(text or "")
-    if not m:
-        return None
-    return m.group(1), float(m.group(2))
-
 
 def _as_float(v: Any) -> float | None:
     try:
@@ -144,10 +123,6 @@ def eval_condition(op: str, limit: str, value: str) -> bool:
         return str(value) != str(limit)
     return False
 
-
-def eval_threshold(op: str, limit: float, value: float) -> bool:
-    """兼容旧接口：数值阈值判定。"""
-    return eval_condition(op, str(limit), str(value))
 
 
 def condition_label(op: str, limit: str) -> str:
@@ -291,12 +266,6 @@ def instance_matcher(regex: str) -> str:
     """构造 `instance=~"<regex>"` 匹配器（已做 PromQL 转义）。"""
     return f'instance=~"{promql_escape(regex)}"'
 
-
-def inject_instance(content: str, matcher: str | None) -> str:
-    """把 `$instance` 占位符替换为给定的匹配器串（可为多个匹配器，逗号分隔）。"""
-    if not matcher:
-        return content
-    return content.replace("$instance", matcher)
 
 
 def _prom_error(resp) -> str:

@@ -4,7 +4,7 @@
 """
 from __future__ import annotations
 
-import hashlib
+
 import json
 import logging
 import os
@@ -69,10 +69,6 @@ def is_running() -> bool:
     return _run_lock.locked()
 
 
-def current_run_id() -> int | None:
-    return _current_run_id
-
-
 # ------------------------------------------------------------ 输出预处理/截断
 
 _KEY_RE = re.compile(r"(ERROR|FAIL|CRIT|EXCEPTION|FATAL|WARN)", re.IGNORECASE)
@@ -126,10 +122,6 @@ def preprocess_output(text: str, max_bytes: int) -> tuple[str, bool]:
         body += f"\n[... 省略 {omitted} 行 ...]\n"
     body += "\n".join(tail)
     return body, True
-
-
-def _sha256(text: str) -> str:
-    return hashlib.sha256((text or "").encode("utf-8", "replace")).hexdigest()
 
 
 # ------------------------------------------------------------ 目标解析

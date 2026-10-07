@@ -37,12 +37,6 @@ class ModelError(RuntimeError):
     pass
 
 
-def api_key(model: dict[str, Any], secrets: dict[str, str]) -> str:
-    env = (model.get("api_key_env") or "").strip()
-    if not env:
-        return ""
-    return secrets.get(env, "")
-
 
 def resolve_key(model: dict[str, Any], secrets: dict[str, str]) -> str:
     """取 API key；若配置了 api_key_env 但 secrets.env 中缺失/为空则给出明确错误。

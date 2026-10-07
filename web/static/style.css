@@ -75,8 +75,6 @@ body { font-size: 14px; }
 .diff-chg { background: #fff3cd; }
 
 /* 折叠长文本 */
-.fold-wrap { position: relative; }
-.fold-wrap.folded { max-height: 12rem; overflow: hidden; }
 
 /* 脚本复选框面板 */
 .script-picker .sp-list {

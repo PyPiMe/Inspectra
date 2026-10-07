@@ -195,19 +195,6 @@ def paginate(rows_sql: str, count_sql: str, params: list[Any], page: int, per_pa
     return rows, total, page, pages
 
 
-def _localize_script(row: dict[str, Any]) -> dict[str, Any]:
-    """Attach localized display fields (lname/ldesc/lmeta) and dirty flag to a script row."""
-    name, desc, meta = i18n.localize_script(row)
-    row["lname"] = name
-    row["ldesc"] = desc
-    row["lmeta"] = meta
-    if row.get("seed_key"):
-        content = backup.read_script(row)
-        row["dirty"] = bool(content) and content_hash(content) != (row.get("seed_hash") or "")
-    else:
-        row["dirty"] = False
-    return row
-
 
 def _picker_scripts(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Localized script rows for the checkbox pickers (overwrite name/desc for display)."""
@@ -348,13 +335,13 @@ def _localize_summary(
                 it["item"] = i18n.localize_item(row, it["item_key"])
         if it.get("app_ids"):
             it["app"] = _app_label(it["app_ids"], amap)
-        elif it.get("app") in ("未归属", "__unassigned__"):
+        elif it.get("app") == engine.UNASSIGNED:
             it["app"] = i18n.t("reports2.unassigned")
     for a in summary.get("apps") or []:
         aid = a.get("id")
         if aid:
             a["name"] = amap.get(int(aid), a.get("name"))
-        elif a.get("name") in ("未归属", "__unassigned__"):
+        elif a.get("name") == engine.UNASSIGNED:
             a["name"] = i18n.t("reports2.unassigned")
     summary["issues"] = issues
     return summary
@@ -996,9 +983,8 @@ def references_to(obj_type: str, obj_id: int) -> list[str]:
             if obj_id in (json_or(b.get("scripts_json"), []) or []):
                 refs.append(i18n.t("refs.ds_binding_id", id=b["id"]))
     elif obj_type == "server":
-        n = models.query("SELECT id FROM server_datasources WHERE server_id=?", (obj_id,))
-        if n:
-            refs.append(i18n.t("refs.ds_binding", n=len(n)))
+        # Datasource bindings are cascaded on delete, so they don't block; only
+        # external references (schedules) do. 绑定随删除级联，不作为阻断引用。
         refs += [i18n.t("refs.schedule", name=n) for n in _schedules_referencing("servers", obj_id)]
     elif obj_type == "credential":
         n = models.query("SELECT id, hostname FROM servers WHERE vault_key=?", (str(obj_id),))
@@ -1017,7 +1003,7 @@ def create_app() -> Flask:
     with models.db() as conn:
         cur = conn.execute(
             "UPDATE run_history SET status='error', finished=?, error=? WHERE status='running'",
-            (models.utcnow(), "服务重启，运行中断"),
+            (models.utcnow(), "service_restarted"),
         )
         if cur.rowcount:
             logging.getLogger("pypimeops.app").warning("标记 %s 条中断运行（服务重启）", cur.rowcount)
@@ -1334,6 +1320,10 @@ def create_app() -> Flask:
 
     @app.route("/applications/<int:aid>/delete", methods=["POST"])
     def applications_delete(aid: int):
+        refs = references_to("application", aid)
+        if refs:
+            flash(i18n.t("common.err_referenced", refs=i18n.t("common.list_sep").join(refs)), "danger")
+            return redirect(url_for("applications"))
         delete_object("application", aid, g.ip)
         flash(i18n.t("applications.deleted"), "success")
         return redirect(url_for("applications"))
@@ -1539,6 +1529,10 @@ def create_app() -> Flask:
 
     @app.route("/servers/<int:sid>/delete", methods=["POST"])
     def servers_delete(sid: int):
+        refs = references_to("server", sid)
+        if refs:
+            flash(i18n.t("common.err_referenced", refs=i18n.t("common.list_sep").join(refs)), "danger")
+            return redirect(url_for("servers"))
         with models.db() as conn:
             conn.execute("DELETE FROM server_datasources WHERE server_id=?", (sid,))
         delete_object("server", sid, g.ip)
@@ -1664,7 +1658,7 @@ def create_app() -> Flask:
                     {
                         "binding_id": r["binding_id"],
                         "server_id": r["server_id"],
-                        "hostname": r["hostname"] or f"(已删除服务器 #{r['server_id']})",
+                        "hostname": r["hostname"] or i18n.t("servers.deleted_id", id=r["server_id"]),
                         "ip": r["ip"] or "",
                         "prom_instance": r["prom_instance"] or "",
                         "script_count": len(json_or(r["scripts_json"], []) or []),
@@ -1715,19 +1709,6 @@ def create_app() -> Flask:
         delete_object("datasource", did, g.ip)
         flash(i18n.t("datasources.deleted"), "success")
         return redirect(url_for("datasources"))
-
-    @app.route("/datasources/test", methods=["POST"])
-    def datasources_test():
-        ds = {
-            "base_url": request.form.get("base_url"),
-            "auth_type": request.form.get("auth_type") or "none",
-            "secret_env": request.form.get("secret_env") or "",
-            "verify_tls": 1 if request.form.get("verify_tls") else 0,
-            "timeout": parse_int(request.form.get("timeout"), 10),
-        }
-        ok, msg = collectors.PrometheusCollector(ds, get_config().load_secrets()).test_connection()
-        flash((i18n.t("common.test_ok") if ok else i18n.t("common.test_fail")) + msg, "success" if ok else "danger")
-        return redirect(request.referrer or url_for("datasources"))
 
     @app.route("/datasources/test_ajax", methods=["POST"])
     def datasources_test_ajax():
@@ -2118,15 +2099,6 @@ def create_app() -> Flask:
         back = (request.form.get("back") or "").strip()
         return redirect(back if back.startswith("/") else url_for("script_usage", sid=sid))
 
-    @app.route("/scripts/<int:sid>/unbind/<int:server_id>", methods=["POST"])
-    def scripts_unbind_server(sid: int, server_id: int):
-        if not models.fetch_one("scripts", sid):
-            abort(404)
-        n = _unbind_script(sid, only_servers={server_id})
-        flash(i18n.t("scripts.unbound_one", n=n), "success")
-        back = _safe_back(url_for("script_detail", sid=sid))
-        return redirect(back)
-
     @app.route("/scripts/<int:sid>/restore", methods=["POST"])
     def scripts_restore(sid: int):
         script = models.fetch_one("scripts", sid)
@@ -2388,20 +2360,6 @@ def create_app() -> Flask:
         ok, msg = model_client.test_connection(model, get_config().load_secrets())
         flash((i18n.t("common.test_ok") if ok else i18n.t("common.test_fail")) + msg, "success" if ok else "danger")
         return redirect(url_for("models_page"))
-
-    @app.route("/models/test", methods=["POST"])
-    def models_test():
-        model = {
-            "model_id": request.form.get("model_id"),
-            "base_url": request.form.get("base_url"),
-            "api_key_env": request.form.get("api_key_env") or "",
-            "extra_json": request.form.get("extra_json") or "",
-            "temperature": None,
-            "top_p": None,
-        }
-        ok, msg = model_client.test_connection(model, get_config().load_secrets())
-        flash((i18n.t("common.test_ok") if ok else i18n.t("common.test_fail")) + msg, "success" if ok else "danger")
-        return redirect(request.referrer or url_for("models_page"))
 
     @app.route("/models/test_ajax", methods=["POST"])
     def models_test_ajax():
@@ -2838,21 +2796,6 @@ def create_app() -> Flask:
             issue_server_ids=issue_server_ids,
             running=engine.is_running(),
             model_available=models.model_availability(),
-        )
-
-    @app.route("/run/status/<int:rid>")
-    def run_status(rid: int):
-        row = models.fetch_one("run_history", rid)
-        if not row:
-            return jsonify({"error": "not found"}), 404
-        return jsonify(
-            {
-                "id": row["id"],
-                "status": row["status"],
-                "summary": json_or(row.get("summary"), {}),
-                "report_file": row.get("report_file"),
-                "finished": row.get("finished"),
-            }
         )
 
     @app.route("/run/wait")
@@ -3563,26 +3506,6 @@ def create_app() -> Flask:
             headers={"Content-Disposition": f"attachment; filename={selected}"},
         )
 
-    @app.route("/logs/cleanup", methods=["POST"])
-    def logs_cleanup():
-        days = parse_int(request.form.get("days"), 0)
-        remove_all = bool(request.form.get("remove_all"))
-        truncate_current = bool(request.form.get("truncate_current"))
-        if not days and not remove_all and not truncate_current:
-            flash(i18n.t("logs.err_pick"), "warning")
-            return redirect(url_for("logs_page"))
-        res = applog.cleanup(days=days or None, remove_all=remove_all, truncate_current=truncate_current)
-        with models.db() as conn:
-            models.write_audit(
-                conn, g.ip, "cleanup", "applog", "", "应用日志",
-                {"days": days, "remove_all": remove_all, "truncate_current": truncate_current, **res},
-            )
-        msg = i18n.t("logs.cleaned", n=res["deleted"])
-        if res["truncated"]:
-            msg += i18n.t("logs.and_cleared")
-        flash(msg, "success")
-        return redirect(url_for("logs_page", file=request.form.get("file") or applog.active_log()))
-
     @app.route("/logs/settings", methods=["POST"])
     def logs_settings():
         level = (request.form.get("app_log_level") or "").strip()
@@ -3593,15 +3516,6 @@ def create_app() -> Flask:
         if days:
             set_setting_versioned("app_log_retention_days", days, g.ip)
         flash(i18n.t("logs.saved"), "success")
-        return redirect(url_for("logs_page"))
-
-    @app.route("/logs/delete", methods=["POST"])
-    def logs_delete():
-        name = request.form.get("file") or ""
-        ok = applog.delete_file(name)
-        with models.db() as conn:
-            models.write_audit(conn, g.ip, "delete", "applog", name, name, {"deleted": ok})
-        flash(i18n.t("logs.deleted") if ok else i18n.t("logs.delete_fail"), "success" if ok else "warning")
         return redirect(url_for("logs_page"))
 
     # ---- 智能问答（只读，阶段一：上下文注入）

@@ -13,7 +13,7 @@
   {% for v in versions %}
     <tr>
       <td>v{{ v.version }}</td>
-      <td>{{ v.action }}</td>
+      <td>{{ t('audit.' ~ v.action) }}</td>
       <td>{{ v.created_at|local }}</td>
       <td>{{ v.operator_ip }}</td>
       <td class="small">{{ v.note }}</td>

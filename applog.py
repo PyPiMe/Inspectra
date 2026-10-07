@@ -177,17 +177,3 @@ def cleanup(
             pass
     return {"deleted": deleted, "truncated": truncated}
 
-
-def delete_file(name: str) -> bool:
-    """删除指定轮转文件（不允许删除活动日志）。"""
-    name = safe_name(name)
-    if name == ACTIVE_LOG:
-        return False
-    path = log_path(name)
-    try:
-        if os.path.isfile(path):
-            os.remove(path)
-            return True
-    except OSError:
-        pass
-    return False
