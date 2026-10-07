@@ -21,8 +21,8 @@
   </form>
 </div>
 
-<table class="table table-sm table-hover">
-  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('models.provider') }}</th><th>{{ t('models.model_id') }}</th><th>{{ t('models.base_url') }}</th><th>{{ t('models.policy') }}</th><th>{{ t('models.default') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
+<table class="table table-sm table-hover align-middle">
+  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('models.provider') }}</th><th>{{ t('models.model_id') }}</th><th>{{ t('models.base_url') }}</th><th>{{ t('models.policy') }}</th><th>{{ t('models.default') }}</th><th>{{ t('common.status') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for m in models %}
     <tr>
@@ -32,7 +32,7 @@
       <td class="small">{{ m.base_url }}</td>
       <td>{{ m.data_policy }}</td>
       <td>{% if default_model == m.id|string %}<span class="badge bg-success">{{ t('models.default') }}</span>{% endif %}</td>
-      <td>{{ t('common.yes') if m.enabled else t('common.no') }}</td>
+      <td>{% if m.enabled %}<span class="badge bg-success">{{ t('common.enabled') }}</span>{% else %}<span class="badge bg-secondary">{{ t('common.disabled') }}</span>{% endif %}</td>
       <td class="text-nowrap">
         <form method="post" action="{{ url_for('models_test_saved', mid=m.id) }}" class="d-inline">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-secondary">{{ t('models.test') }}</button>
@@ -42,6 +42,9 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-success">{{ t('models.set_default') }}</button>
         </form>
         {% endif %}
+        <form method="post" action="{{ url_for('models_toggle', mid=m.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm {{ 'btn-outline-warning' if m.enabled else 'btn-outline-success' }}">{{ t('common.disable') if m.enabled else t('common.enable') }}</button>
+        </form>
         <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#edit{{ m.id }}">{{ t('common.edit') }}</button>
         <form method="post" action="{{ url_for('models_delete', mid=m.id) }}" class="d-inline" onsubmit="return confirm('{{ t('common.confirm_delete') }}')">
           <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
@@ -59,43 +62,56 @@
   <form method="post" action="{{ url_for('models_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="modal-header"><h5 class="modal-title">{{ t('models.new') }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body row g-2">
-      <div class="col-md-4"><label class="form-label">{{ t('models.preset') }}</label>
-        <select class="form-select" onchange="applyPreset(this, 'createModel')">
-          <option value="">--</option>
-          {% for k, v in PROVIDER_PRESETS.items() %}<option value="{{ k }}" data-url="{{ v.base_url }}" data-env="{{ v.api_key_env }}" data-extra="{{ v.extra_json }}" data-temp="{{ v.temperature }}" data-topp="{{ v.top_p }}">{{ v.label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="label" required></div>
-      <div class="col-md-4"><label class="form-label">provider</label><input class="form-control" name="provider" value="openai_compat"></div>
-      <div class="col-md-8"><label class="form-label">{{ t('models.base_url') }}</label><input class="form-control" name="base_url" required></div>
-      <div class="col-md-4"><label class="form-label">{{ t('models.key_env') }}</label><input class="form-control" name="api_key_env" placeholder="DEEPSEEK_API_KEY"></div>
-      <div class="col-md-6"><label class="form-label">{{ t('models.model_id') }}</label>
-        <div class="input-group mb-1">
-          <select class="form-select" id="createModel-modelSelect" onchange="document.getElementById('createModel-model_id').value=this.value">
-            <option value="">{{ t('models.model_select_ph') }}</option>
+    <div class="modal-body">
+      <h6 class="text-muted">{{ t('models.section_conn') }}</h6>
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label">{{ t('models.preset') }}</label>
+          <select class="form-select" onchange="applyPreset(this, 'createModel')">
+            <option value="">--</option>
+            {% for k, v in PROVIDER_PRESETS.items() %}<option value="{{ k }}" data-url="{{ v.base_url }}" data-env="{{ v.api_key_env }}" data-extra="{{ v.extra_json }}" data-temp="{{ v.temperature }}" data-topp="{{ v.top_p }}">{{ v.label }}</option>{% endfor %}
           </select>
-          <button type="button" class="btn btn-outline-secondary" onclick="pullModels('createModel', this)">{{ t('models.pull') }}</button>
         </div>
-        <input class="form-control" name="model_id" id="createModel-model_id" placeholder="{{ t('models.model_id_ph') }}" required>
+        <div class="col-md-4"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="label" required></div>
+        <div class="col-md-4"><label class="form-label">{{ t('models.base_url') }}</label><input class="form-control" name="base_url" required></div>
+        <div class="col-md-6"><label class="form-label">{{ t('models.key_env') }}</label><input class="form-control" name="api_key_env" placeholder="DEEPSEEK_API_KEY"></div>
+        <div class="col-md-6"><label class="form-label">{{ t('models.model_id') }}</label>
+          <div class="input-group">
+            <select class="form-select" id="createModel-modelSelect" onchange="document.getElementById('createModel-model_id').value=this.value">
+              <option value="">{{ t('models.model_select_ph') }}</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="pullModels('createModel', this)">{{ t('models.pull') }}</button>
+          </div>
+          <input class="form-control" name="model_id" id="createModel-model_id" placeholder="{{ t('models.model_id_ph') }}" required>
+        </div>
+        <div class="col-12 d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-outline-secondary" onclick="testModelForm('createModel', this)">{{ t('models.test_conn') }}</button>
+          <span id="createModel-result" class="small"></span>
+        </div>
       </div>
-      <div class="col-md-6 d-flex align-items-end gap-2">
-        <button type="button" class="btn btn-outline-secondary" onclick="testModelForm('createModel', this)">{{ t('models.test_conn') }}</button>
-        <span id="createModel-result" class="small"></span>
+
+      <button class="btn btn-sm btn-outline-secondary mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#advCreate">{{ t('models.section_advanced') }}</button>
+      <div class="collapse mt-2" id="advCreate">
+        <div class="row g-2">
+          <div class="col-md-3"><label class="form-label">{{ t('models.provider') }}</label><input class="form-control" name="provider" value="openai_compat"></div>
+          <div class="col-md-3"><label class="form-label">{{ t('models.temperature') }}</label><input class="form-control" name="temperature" placeholder="{{ t('models.temp_ph') }}"></div>
+          <div class="col-md-3"><label class="form-label">{{ t('models.top_p') }}</label><input class="form-control" name="top_p"></div>
+          <div class="col-md-3"><label class="form-label">{{ t('models.extra_tpl') }}</label>
+            <select class="form-select" onchange="document.getElementById('createModel-extra_json').value=this.value">
+              {% for tp in EXTRA_JSON_TEMPLATES %}<option value="{{ tp.value }}">{{ tp.label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-12"><label class="form-label">{{ t('models.extra') }}</label><input class="form-control" name="extra_json" id="createModel-extra_json" placeholder='{"thinking": {"type": "disabled"}}'></div>
+        </div>
       </div>
-      <div class="col-md-3"><label class="form-label">{{ t('models.policy') }}</label>
-        <select class="form-select" name="data_policy"><option value="cloud">cloud</option><option value="local">local</option></select>
+
+      <h6 class="text-muted mt-3">{{ t('models.section_policy') }}</h6>
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label">{{ t('models.policy') }}</label>
+          <select class="form-select" name="data_policy"><option value="cloud">cloud</option><option value="local">local</option></select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
+        <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="set_default" {{ 'checked' if not model_available.available else '' }}><label class="form-check-label">{{ t('models.set_default') }}</label></div></div>
       </div>
-      <div class="col-md-3"><label class="form-label">temperature</label><input class="form-control" name="temperature" placeholder="{{ t('models.temp_ph') }}"></div>
-      <div class="col-md-3"><label class="form-label">top_p</label><input class="form-control" name="top_p"></div>
-      <div class="col-md-3"><label class="form-label">{{ t('models.extra_tpl') }}</label>
-        <select class="form-select" onchange="document.getElementById('createModel-extra_json').value=this.value">
-          {% for tp in EXTRA_JSON_TEMPLATES %}<option value="{{ tp.value }}">{{ tp.label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="col-12"><label class="form-label">{{ t('models.extra') }}</label><input class="form-control" name="extra_json" id="createModel-extra_json" placeholder='{"thinking": {"type": "disabled"}}'></div>
-      <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" checked><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
-      <div class="col-md-6 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="set_default"><label class="form-check-label">{{ t('models.set_default') }}</label></div></div>
     </div>
     <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>
@@ -106,43 +122,57 @@
   <form method="post" action="{{ url_for('models_save') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="id" value="{{ m.id }}">
     <div class="modal-header"><h5 class="modal-title">{{ t('models.edit_title', name=m.label) }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-    <div class="modal-body row g-2">
-      <div class="col-md-4"><label class="form-label">{{ t('models.preset_reselect') }}</label>
-        <select class="form-select" onchange="applyPreset(this, 'edit{{ m.id }}')">
-          <option value="">--</option>
-          {% for k, v in PROVIDER_PRESETS.items() %}<option value="{{ k }}" data-url="{{ v.base_url }}" data-env="{{ v.api_key_env }}" data-extra="{{ v.extra_json }}" data-temp="{{ v.temperature }}" data-topp="{{ v.top_p }}">{{ v.label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="col-md-4"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="label" value="{{ m.label }}" required></div>
-      <div class="col-md-4"><label class="form-label">provider</label><input class="form-control" name="provider" value="{{ m.provider }}"></div>
-      <div class="col-md-8"><label class="form-label">{{ t('models.base_url') }}</label><input class="form-control" name="base_url" value="{{ m.base_url }}" required></div>
-      <div class="col-md-4"><label class="form-label">{{ t('models.key_env') }}</label><input class="form-control" name="api_key_env" value="{{ m.api_key_env }}"></div>
-      <div class="col-md-6"><label class="form-label">{{ t('models.model_id') }}</label>
-        <div class="input-group mb-1">
-          <select class="form-select" id="edit{{ m.id }}-modelSelect" onchange="document.getElementById('edit{{ m.id }}-model_id').value=this.value">
-            <option value="">{{ t('models.model_select_ph') }}</option>
+    <div class="modal-body">
+      <h6 class="text-muted">{{ t('models.section_conn') }}</h6>
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label">{{ t('models.preset_reselect') }}</label>
+          <select class="form-select" onchange="applyPreset(this, 'edit{{ m.id }}')">
+            <option value="">--</option>
+            {% for k, v in PROVIDER_PRESETS.items() %}<option value="{{ k }}" data-url="{{ v.base_url }}" data-env="{{ v.api_key_env }}" data-extra="{{ v.extra_json }}" data-temp="{{ v.temperature }}" data-topp="{{ v.top_p }}">{{ v.label }}</option>{% endfor %}
           </select>
-          <button type="button" class="btn btn-outline-secondary" onclick="pullModels('edit{{ m.id }}', this)">{{ t('models.pull') }}</button>
         </div>
-        <input class="form-control" name="model_id" id="edit{{ m.id }}-model_id" value="{{ m.model_id }}" required>
+        <div class="col-md-4"><label class="form-label">{{ t('common.name') }}</label><input class="form-control" name="label" value="{{ m.label }}" required></div>
+        <div class="col-md-4"><label class="form-label">{{ t('models.base_url') }}</label><input class="form-control" name="base_url" value="{{ m.base_url }}" required></div>
+        <div class="col-md-6"><label class="form-label">{{ t('models.key_env') }}</label><input class="form-control" name="api_key_env" value="{{ m.api_key_env }}"></div>
+        <div class="col-md-6"><label class="form-label">{{ t('models.model_id') }}</label>
+          <div class="input-group">
+            <select class="form-select" id="edit{{ m.id }}-modelSelect" onchange="document.getElementById('edit{{ m.id }}-model_id').value=this.value">
+              <option value="">{{ t('models.model_select_ph') }}</option>
+            </select>
+            <button type="button" class="btn btn-outline-secondary" onclick="pullModels('edit{{ m.id }}', this)">{{ t('models.pull') }}</button>
+          </div>
+          <input class="form-control" name="model_id" id="edit{{ m.id }}-model_id" value="{{ m.model_id }}" required>
+        </div>
+        <div class="col-12 d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-outline-secondary" onclick="testModelForm('edit{{ m.id }}', this)">{{ t('models.test_conn') }}</button>
+          <span id="edit{{ m.id }}-result" class="small"></span>
+        </div>
       </div>
-      <div class="col-md-6 d-flex align-items-end gap-2">
-        <button type="button" class="btn btn-outline-secondary" onclick="testModelForm('edit{{ m.id }}', this)">{{ t('models.test_conn') }}</button>
-        <span id="edit{{ m.id }}-result" class="small"></span>
+
+      <button class="btn btn-sm btn-outline-secondary mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#advEdit{{ m.id }}">{{ t('models.section_advanced') }}</button>
+      <div class="collapse mt-2" id="advEdit{{ m.id }}">
+        <div class="row g-2">
+          <div class="col-md-3"><label class="form-label">{{ t('models.provider') }}</label><input class="form-control" name="provider" value="{{ m.provider }}"></div>
+          <div class="col-md-3"><label class="form-label">{{ t('models.temperature') }}</label><input class="form-control" name="temperature" value="{{ m.temperature if m.temperature is not none else '' }}"></div>
+          <div class="col-md-3"><label class="form-label">{{ t('models.top_p') }}</label><input class="form-control" name="top_p" value="{{ m.top_p if m.top_p is not none else '' }}"></div>
+          <div class="col-md-3"><label class="form-label">{{ t('models.extra_tpl') }}</label>
+            <select class="form-select" onchange="document.getElementById('edit{{ m.id }}-extra_json').value=this.value">
+              {% for tp in EXTRA_JSON_TEMPLATES %}<option value="{{ tp.value }}">{{ tp.label }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="col-md-6"><label class="form-label">{{ t('models.extra') }}</label><input class="form-control" name="extra_json" id="edit{{ m.id }}-extra_json" value="{{ m.extra_json }}"></div>
+          <div class="col-md-6"><label class="form-label">{{ t('models.sanitize_overrides') }}</label><input class="form-control" name="sanitize_overrides" value="{{ m.sanitize_overrides }}"></div>
+        </div>
       </div>
-      <div class="col-md-3"><label class="form-label">{{ t('models.policy') }}</label>
-        <select class="form-select" name="data_policy"><option value="cloud" {{ 'selected' if m.data_policy=='cloud' else '' }}>cloud</option><option value="local" {{ 'selected' if m.data_policy=='local' else '' }}>local</option></select>
+
+      <h6 class="text-muted mt-3">{{ t('models.section_policy') }}</h6>
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label">{{ t('models.policy') }}</label>
+          <select class="form-select" name="data_policy"><option value="cloud" {{ 'selected' if m.data_policy=='cloud' else '' }}>cloud</option><option value="local" {{ 'selected' if m.data_policy=='local' else '' }}>local</option></select>
+        </div>
+        <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if m.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
+        <div class="col-md-4 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="set_default" {{ 'checked' if default_model == m.id|string else '' }}><label class="form-check-label">{{ t('models.set_default') }}</label></div></div>
       </div>
-      <div class="col-md-3"><label class="form-label">temperature</label><input class="form-control" name="temperature" value="{{ m.temperature if m.temperature is not none else '' }}"></div>
-      <div class="col-md-3"><label class="form-label">top_p</label><input class="form-control" name="top_p" value="{{ m.top_p if m.top_p is not none else '' }}"></div>
-      <div class="col-md-3"><label class="form-label">{{ t('models.extra_tpl') }}</label>
-        <select class="form-select" onchange="document.getElementById('edit{{ m.id }}-extra_json').value=this.value">
-          {% for tp in EXTRA_JSON_TEMPLATES %}<option value="{{ tp.value }}">{{ tp.label }}</option>{% endfor %}
-        </select>
-      </div>
-      <div class="col-md-6"><label class="form-label">extra_json</label><input class="form-control" name="extra_json" id="edit{{ m.id }}-extra_json" value="{{ m.extra_json }}"></div>
-      <div class="col-md-6"><label class="form-label">{{ t('models.sanitize_overrides') }}</label><input class="form-control" name="sanitize_overrides" value="{{ m.sanitize_overrides }}"></div>
-      <div class="col-12"><div class="form-check"><input class="form-check-input" type="checkbox" name="enabled" {{ 'checked' if m.enabled else '' }}><label class="form-check-label">{{ t('common.enabled') }}</label></div></div>
     </div>
     <div class="modal-footer"><button class="btn btn-primary">{{ t('common.save') }}</button></div>
   </form>

@@ -832,9 +832,6 @@ def references_to(obj_type: str, obj_id: int) -> list[str]:
         n = models.query("SELECT id FROM server_datasources WHERE datasource_id=?", (obj_id,))
         if n:
             refs.append(f"服务器×数据源绑定 {len(n)} 处")
-    elif obj_type == "model":
-        if models.get_setting("default_model", "") == str(obj_id):
-            refs.append("默认模型设置")
     elif obj_type == "script":
         for s in models.fetch_all("servers"):
             if obj_id in (json_or(s.get("scripts_json"), []) or []):
@@ -2121,10 +2118,11 @@ def create_app() -> Flask:
         model_id = (request.form.get("model_id") or "").strip()
         base_url = (request.form.get("base_url") or "").strip()
         if not label or not model_id or not base_url:
-            flash("名称/模型标识/地址必填", "danger")
+            flash(i18n.t("models.err_required"), "danger")
             return redirect(url_for("models_page"))
         temperature = request.form.get("temperature")
         top_p = request.form.get("top_p")
+        enabled = 1 if request.form.get("enabled") else 0
         data = {
             "label": label,
             "provider": request.form.get("provider") or "openai_compat",
@@ -2133,32 +2131,65 @@ def create_app() -> Flask:
             "api_key_env": (request.form.get("api_key_env") or "").strip(),
             "temperature": float(temperature) if temperature not in (None, "") else None,
             "top_p": float(top_p) if top_p not in (None, "") else None,
-            "enabled": 1 if request.form.get("enabled") else 0,
+            "enabled": enabled,
             "extra_json": (request.form.get("extra_json") or "{}").strip() or "{}",
             "data_policy": request.form.get("data_policy") or models.get_setting("default_data_policy", "cloud"),
             "sanitize_overrides": (request.form.get("sanitize_overrides") or "").strip(),
             "created_at": models.utcnow(),
         }
-        save_object("model", mid, data, g.ip, label)
-        if request.form.get("set_default"):
-            set_setting_versioned("default_model", str(mid or ""), g.ip)
-        flash("模型已保存", "success")
+        new_id = save_object("model", mid, data, g.ip, label)
+        # 默认模型动线：配置 → 启用 → 自动成为默认。
+        # Default-model flow: configure -> enable -> auto-become default.
+        if not enabled:
+            if models.get_setting("default_model", "") == str(new_id):
+                set_setting_versioned("default_model", "", g.ip)
+                flash(i18n.t("models.disabled_default"), "warning")
+            else:
+                flash(i18n.t("models.saved"), "success")
+        elif request.form.get("set_default"):
+            set_setting_versioned("default_model", str(new_id), g.ip)
+            flash(i18n.t("models.saved_default"), "success")
+        elif not models.model_availability()["available"]:
+            set_setting_versioned("default_model", str(new_id), g.ip)
+            flash(i18n.t("models.saved_auto_default"), "success")
+        else:
+            flash(i18n.t("models.saved"), "success")
+        return redirect(url_for("models_page"))
+
+    @app.route("/models/<int:mid>/toggle", methods=["POST"])
+    def models_toggle(mid: int):
+        m = models.fetch_one("models", mid)
+        if not m:
+            abort(404)
+        new_enabled = 0 if m.get("enabled") else 1
+        save_object("model", mid, {"enabled": new_enabled}, g.ip, m.get("label") or "")
+        if new_enabled:
+            flash(i18n.t("models.enabled_toast"), "success")
+            if not models.model_availability()["available"]:
+                set_setting_versioned("default_model", str(mid), g.ip)
+                flash(i18n.t("models.auto_default_toast"), "success")
+        elif models.get_setting("default_model", "") == str(mid):
+            set_setting_versioned("default_model", "", g.ip)
+            flash(i18n.t("models.disabled_default"), "warning")
+        else:
+            flash(i18n.t("models.disabled_toast"), "success")
         return redirect(url_for("models_page"))
 
     @app.route("/models/<int:mid>/delete", methods=["POST"])
     def models_delete(mid: int):
-        refs = references_to("model", mid)
-        if refs:
-            flash(i18n.t("common.err_referenced", refs="、".join(refs)), "danger")
-            return redirect(url_for("models_page"))
+        was_default = models.get_setting("default_model", "") == str(mid)
         delete_object("model", mid, g.ip)
-        flash("模型已删除", "success")
+        if was_default:
+            set_setting_versioned("default_model", "", g.ip)
+            flash(i18n.t("models.deleted_default"), "warning")
+        else:
+            flash(i18n.t("models.deleted"), "success")
         return redirect(url_for("models_page"))
 
     @app.route("/models/<int:mid>/default", methods=["POST"])
     def models_default(mid: int):
         set_setting_versioned("default_model", str(mid), g.ip)
-        flash("已设为默认模型", "success")
+        flash(i18n.t("models.set_default_done"), "success")
         return redirect(url_for("models_page"))
 
     @app.route("/models/<int:mid>/test", methods=["POST"])
@@ -3122,7 +3153,6 @@ def create_app() -> Flask:
         return render_template(
             "settings.html",
             settings=models.get_settings(),
-            models=models.fetch_all("models"),
             sanitize_rules=sanitize._parse_rules(models.get_setting("sanitize_rules", "")),
             audit_count=models.query("SELECT COUNT(*) AS c FROM audit_log")[0]["c"],
             backup_count=models.query("SELECT COUNT(*) AS c FROM backup_versions")[0]["c"],
@@ -3137,7 +3167,6 @@ def create_app() -> Flask:
             "default_language",
             "app_log_level",
             "allowed_ips",
-            "default_model",
             "concurrency",
             "model_concurrency",
             "model_request_timeout",

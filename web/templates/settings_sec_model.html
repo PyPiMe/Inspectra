@@ -1,7 +1,12 @@
 <div class="col-md-6"><label class="form-label">{{ t('settings.default_model') }}</label>
-  <select class="form-select" name="default_model"><option value="">-</option>
-    {% for m in models %}<option value="{{ m.id }}" {{ 'selected' if settings.default_model == m.id|string else '' }}>{{ m.label }} ({{ m.model_id }})</option>{% endfor %}
-  </select>
+  <div>
+    {% if model_available.available %}
+      <span class="badge bg-success">{{ t('models.default') }}</span> {{ model_available.label }}
+    {% else %}
+      <span class="text-muted">{{ t('settings.default_model_none') }}</span>
+    {% endif %}
+    <a class="ms-1" href="{{ url_for('models_page') }}">{{ t('settings.default_model_go') }}</a>
+  </div>
   <div class="form-text">{{ t('settings.default_model_hint') }}</div></div>
 <div class="col-md-3"><label class="form-label">{{ t('settings.data_policy') }}</label>
   <select class="form-select" name="default_data_policy">
