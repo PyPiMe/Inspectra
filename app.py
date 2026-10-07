@@ -4,13 +4,14 @@ from __future__ import annotations
 import argparse
 import base64
 import ipaddress
+from collections import OrderedDict
 import json
 import logging
 import logging.handlers
 import os
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from typing import Any
 
@@ -342,15 +343,27 @@ def _localize_detail(detail: dict[str, Any] | None):
     return detail
 
 
-def _localize_summary(summary: dict[str, Any] | None) -> dict[str, Any]:
-    """Localize summary app/script names by the viewer language. 摘要应用/脚本名按查看语言解析。"""
+def _localize_summary(
+    summary: dict[str, Any] | None,
+    script_rows: dict[int, dict[str, Any]] | None = None,
+    app_names: dict[int, str] | None = None,
+) -> dict[str, Any]:
+    """Localize summary app/script names by the viewer language. 摘要应用/脚本名按查看语言解析。
+
+    Optional precomputed maps let callers batch the lookups across many runs.
+    可选预计算映射，便于跨多次运行批量复用。
+    """
     if not summary:
         return summary or {}
     issues = summary.get("issues") or []
-    rows = _script_row_map([it.get("script_id") for it in issues])
-    aid_set = {i for it in issues for i in (it.get("app_ids") or [])}
-    aid_set |= {a.get("id") for a in (summary.get("apps") or []) if a.get("id")}
-    amap = _application_name_map(aid_set)
+    if script_rows is None:
+        script_rows = _script_row_map([it.get("script_id") for it in issues])
+    if app_names is None:
+        aid_set = {i for it in issues for i in (it.get("app_ids") or [])}
+        aid_set |= {a.get("id") for a in (summary.get("apps") or []) if a.get("id")}
+        app_names = _application_name_map(aid_set)
+    rows = script_rows
+    amap = app_names
     for it in issues:
         sid = it.get("script_id")
         row = rows.get(int(sid)) if sid else None
@@ -566,32 +579,196 @@ def _report_target_maps() -> tuple[dict, dict, dict, dict]:
     return apps, groups, servers_map, group_servers
 
 
-def _detail_loader():
-    """Cached detail_json loader per run id. 报告结构化数据按 run 缓存加载。"""
-    cache: dict[int, Any] = {}
+# Parsed detail_json is immutable once written, so a bounded process-wide cache
+# is safe and makes repeat report/dashboard loads fast.
+# 明细写入后不变，可用有界进程内缓存，重复加载提速。
+_DETAIL_CACHE: "OrderedDict[int, Any]" = OrderedDict()
+_DETAIL_CACHE_MAX = 500
 
+
+def _detail_cache_put(rid: int, val: Any) -> None:
+    _DETAIL_CACHE[int(rid)] = val
+    _DETAIL_CACHE.move_to_end(int(rid))
+    while len(_DETAIL_CACHE) > _DETAIL_CACHE_MAX:
+        _DETAIL_CACHE.popitem(last=False)
+
+
+def _parse_detail(raw: Any) -> Any:
+    try:
+        return json.loads(raw or "{}")
+    except (ValueError, TypeError):
+        return None
+
+
+def _detail_loader():
+    """Cached detail_json loader per run id. 报告结构化数据按 run 缓存加载（进程级缓存）。"""
     def load(rid: int):
-        if rid not in cache:
-            drow = models.query("SELECT detail_json FROM run_results WHERE run_id=?", (rid,))
-            try:
-                cache[rid] = json.loads(drow[0]["detail_json"] or "{}") if drow else None
-            except (ValueError, TypeError):
-                cache[rid] = None
-        return cache[rid]
+        rid = int(rid)
+        if rid in _DETAIL_CACHE:
+            _DETAIL_CACHE.move_to_end(rid)
+            return _DETAIL_CACHE[rid]
+        drow = models.query("SELECT detail_json FROM run_results WHERE run_id=?", (rid,))
+        val = _parse_detail(drow[0]["detail_json"]) if drow else None
+        _detail_cache_put(rid, val)
+        return val
 
     return load
 
 
-def _need_target_count() -> int:
-    """Global count of targets whose latest run still needs attention. 需关注目标数（全局）。"""
+def _batch_detail_loader():
+    """Load all detail_json in one query and parse lazily (shared process cache)."""
+    raw: dict[int, str] = {}
+    for dr in models.query("SELECT run_id, detail_json FROM run_results"):
+        raw[int(dr["run_id"])] = dr["detail_json"]
+
+    def load(rid: int):
+        rid = int(rid)
+        if rid in _DETAIL_CACHE:
+            _DETAIL_CACHE.move_to_end(rid)
+            return _DETAIL_CACHE[rid]
+        val = _parse_detail(raw.get(rid)) if rid in raw else None
+        _detail_cache_put(rid, val)
+        return val
+
+    return load
+
+
+def _need_target_summary() -> dict[str, int]:
+    """Global needs-attention counts by target type / severity. 需关注计数（按目标类型/严重级）。
+
+    Grouping only needs raw `issues`/`targets_json` (not localized names), and all
+    details are batch-loaded once — avoids one query per run.
+    分组仅需原始 issues/targets_json（无需本地化名），且一次性批量加载明细，避免逐次运行查询。
+    """
     rows = []
     for r in models.fetch_all("run_history", order="id DESC"):
         d = dict(r)
-        d["summary_obj"] = _localize_summary(json_or(d.get("summary"), {}))
+        sm = json_or(d.get("summary"), {})
+        d["summary_obj"] = sm
+        iss = sm.get("issues") or []
+        d["fail_count"] = sum(1 for it in iss if (it.get("status") or "").upper() in ("FAIL", "ERROR"))
+        d["warn_count"] = sum(1 for it in iss if (it.get("status") or "").upper() == "WARN")
         rows.append(d)
     apps, groups, servers_map, grp = _report_target_maps()
-    need, _ = _group_runs_by_target(rows, apps, groups, servers_map, grp, _detail_loader())
-    return len(need)
+    detail_of = _batch_detail_loader()
+
+    # Resolve each target's latest run that has structured evidence (lazy detail
+    # load; no need to parse every run's detail). 每个目标只取“最新一份有证据的运行”。
+    resolved: dict[tuple, tuple[bool, dict]] = {}
+    for d in rows:
+        for typ, tid, _name in _run_targets(d, apps, groups, servers_map):
+            if (typ, tid) in resolved:
+                continue
+            det = detail_of(d["id"])
+            if not det or not det.get("apps"):
+                continue
+            resolved[(typ, tid)] = (_target_attention(d, det, typ, tid, grp), d)
+    need = [(k, r) for k, (bad, r) in resolved.items() if bad]
+    return {
+        "targets": len(need),
+        "apps": sum(1 for k, _r in need if k[0] == "app"),
+        "servers": sum(1 for k, _r in need if k[0] == "server"),
+        "fail": sum(int(r.get("fail_count") or 0) for _k, r in need),
+        "warn": sum(int(r.get("warn_count") or 0) for _k, r in need),
+    }
+
+
+def _need_target_count() -> int:
+    """Global count of targets whose latest run still needs attention. 需关注目标数（全局）。"""
+    return _need_target_summary()["targets"]
+
+
+def _stale_server_ids(servers: list[dict[str, Any]], days: int = 7) -> set[int]:
+    """Server ids not covered by a run within `days` (or never). 长期未巡检的服务器 id。"""
+    if not servers:
+        return set()
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    seen: dict[int, str] = {}
+    rows = models.query(
+        "SELECT rr.detail_json AS dj, rh.started AS started FROM run_results rr "
+        "JOIN run_history rh ON rh.id = rr.run_id ORDER BY rh.id DESC LIMIT 200"
+    )
+    for r in rows:
+        try:
+            d = json.loads(r["dj"] or "{}")
+        except (ValueError, TypeError):
+            continue
+        for a in d.get("apps", []):
+            for sv in a.get("servers", []):
+                sid = sv.get("server_id")
+                if sid and int(sid) not in seen:
+                    seen[int(sid)] = r["started"] or ""
+        if len(seen) >= len(servers):
+            break  # all servers already seen in recent runs / 近期运行已覆盖全部服务器
+    return {int(s["id"]) for s in servers if not seen.get(int(s["id"])) or seen[int(s["id"])] < cutoff}
+
+
+def _coverage_sets(servers: list[dict[str, Any]]) -> dict[str, Any]:
+    """Coverage/config-health server id sets (shared by dashboard & servers filter).
+
+    Only enabled servers are considered (disabled servers are intentionally off).
+    仅统计已启用服务器（整台停用属有意关闭，不计入配置缺口）。
+    """
+    servers = [s for s in servers if s.get("enabled", 1)]
+    binds = models.fetch_all("server_datasources")
+    ds_by_server: dict[int, list[dict[str, Any]]] = {}
+    for b in binds:
+        ds_by_server.setdefault(int(b["server_id"]), []).append(b)
+    unconfigured: set[int] = set()
+    unbound: set[int] = set()
+    disabled: set[int] = set()
+    for s in servers:
+        sid = int(s["id"])
+        if server_conn_type(s, sid in ds_by_server) == "未配置":
+            unconfigured.add(sid)
+        shells = json_or(s.get("scripts_json"), [])
+        # "Configured" ignores enabled state; "disabled" = configured but no active binding.
+        # 配置维度不看启用与否；未启用 = 已配置绑定但全部停用（且无 Shell 脚本）。
+        with_scripts = [b for b in ds_by_server.get(sid, []) if json_or(b.get("scripts_json"), [])]
+        if not shells and not with_scripts:
+            unbound.add(sid)
+        elif not shells and with_scripts and not any(b.get("enabled", 1) for b in with_scripts):
+            disabled.add(sid)
+    return {
+        "total": len(servers),
+        "unconfigured": unconfigured,
+        "unbound": unbound,
+        "disabled": disabled,
+        "stale": _stale_server_ids(servers),
+    }
+
+
+def _dashboard_coverage(servers: list[dict[str, Any]]) -> dict[str, int]:
+    """Config-health counters for the dashboard. 仪表盘「覆盖与配置健康」计数。"""
+    sets = _coverage_sets(servers)
+    return {
+        "total": sets["total"],
+        "unconfigured": len(sets["unconfigured"]),
+        "unbound": len(sets["unbound"]),
+        "disabled": len(sets["disabled"]),
+        "stale": len(sets["stale"]),
+    }
+
+
+def _time_ago(ts: str | None) -> str:
+    """Localized relative time from a stored UTC timestamp. 相对时间（本地化）。"""
+    if not ts:
+        return ""
+    try:
+        dt = datetime.fromisoformat(ts)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        secs = int((datetime.now(timezone.utc) - dt).total_seconds())
+    except (ValueError, TypeError):
+        return ""
+    secs = max(0, secs)
+    if secs < 60:
+        return i18n.t("dashboard.ago_just_now")
+    if secs < 3600:
+        return i18n.t("dashboard.ago_minutes", n=secs // 60)
+    if secs < 86400:
+        return i18n.t("dashboard.ago_hours", n=secs // 3600)
+    return i18n.t("dashboard.ago_days", n=secs // 86400)
 
 
 _EXTRA_TEMPLATE_KEYS = [
@@ -1010,31 +1187,56 @@ def create_app() -> Flask:
     # ---- 仪表盘
     @app.route("/dashboard")
     def dashboard():
-        runs = models.query("SELECT * FROM run_history ORDER BY id DESC LIMIT 10")
         servers = models.fetch_all("servers")
+        schedules = models.fetch_all("run_schedule")
+        stats = {
+            "servers": len(servers),
+            "applications": len([a for a in models.fetch_all("applications") if a.get("enabled", 1)]),
+            "groups": len(models.fetch_all("groups")),
+            "datasources": len(models.fetch_all("datasources")),
+            "scripts": len(models.fetch_all("scripts")),
+            "models": len(models.fetch_all("models")),
+            "notifications": len(models.fetch_all("notifications")),
+        }
+        runs = models.query("SELECT * FROM run_history ORDER BY id DESC LIMIT 1")
         latest = runs[0] if runs else None
         summary = _localize_summary(json_or((latest or {}).get("summary"), {}))
-        applications = _localize_named_rows([a for a in models.fetch_all("applications") if a.get("enabled", 1)])
-        apps_health = summary.get("apps") or []
-        if not apps_health:
-            amap = engine.application_servers()
-            apps_health = [
-                {"name": a["lname"] or a["name"], "status": "-", "server_count": len(amap.get(int(a["id"]), []))}
-                for a in applications
-            ]
+        latest_info = None
+        if latest:
+            latest_info = {
+                "id": latest["id"],
+                "status": latest["status"],
+                "trigger": latest.get("trigger") or "",
+                "started": latest.get("started"),
+                "ago": _time_ago(latest.get("started")),
+                "server_count": summary.get("server_count") or 0,
+            }
+        # 今日巡检次数（本地日 00:00 起）。Today's run count (since local midnight).
+        today_cut = local_input_to_utc(datetime.now().strftime("%Y-%m-%dT00:00"))
+        today_runs = 0
+        if today_cut:
+            today_runs = models.query("SELECT COUNT(*) AS c FROM run_history WHERE started>=?", (today_cut,))[0]["c"] or 0
+        # 下次定时巡检：启用任务里最近的一次触发。Next scheduled run among enabled schedules.
+        next_at = None
+        for s in schedules:
+            if not s.get("enabled"):
+                continue
+            nr = scheduler_mod.next_runs(s, 1)
+            if nr and (next_at is None or nr[0] < next_at):
+                next_at = nr[0]
         return render_template(
             "dashboard.html",
-            runs=runs,
-            servers=servers,
+            stats=stats,
             latest=latest,
-            summary=summary,
-            apps_health=apps_health,
-            group_count=len(models.fetch_all("groups")),
-            application_count=len(applications),
-            script_count=len(models.fetch_all("scripts")),
-            datasource_count=len(models.fetch_all("datasources")),
-            model_count=len(models.fetch_all("models")),
-            notification_count=len(models.fetch_all("notifications")),
+            latest_info=latest_info,
+            running=engine.is_running(),
+            enabled_schedules=sum(1 for s in schedules if s.get("enabled")),
+            total_schedules=len(schedules),
+            today_runs=today_runs,
+            next_at_str=next_at.strftime("%Y-%m-%d %H:%M") if next_at else "",
+            need=_need_target_summary(),
+            coverage=_dashboard_coverage(servers),
+            model_available=models.model_availability(),
         )
 
     # ---- 分组
@@ -1183,6 +1385,18 @@ def create_app() -> Flask:
         if enabled in ("0", "1"):
             where.append("enabled=?")
             params.append(int(enabled))
+        # 「覆盖与配置健康」下钻筛选（与仪表盘一致）。
+        # Coverage/config-health drill-down (mirrors the dashboard).
+        health = request.args.get("health") or ""
+        health_count = 0
+        if health in ("unconfigured", "unbound", "disabled", "stale"):
+            hids = sorted(_coverage_sets(models.fetch_all("servers"))[health])
+            health_count = len(hids)
+            if hids:
+                where.append("id IN (" + ",".join("?" for _ in hids) + ")")
+                params.extend(hids)
+            else:
+                where.append("1=0")
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         rows, total, page, pages = paginate(
             f"SELECT * FROM servers{clause} ORDER BY id DESC",
@@ -1203,7 +1417,7 @@ def create_app() -> Flask:
             datasources=models.fetch_all("datasources"),
             prom_scripts=_picker_scripts(models.fetch_all("scripts", "kind='promql'")),
             conn_types=conn_types,
-            q=q, group_id=group_id, enabled=enabled,
+            q=q, group_id=group_id, enabled=enabled, health=health, health_count=health_count,
             page=page, pages=pages, total=total, per_page=per_page,
         )
 
@@ -2766,9 +2980,33 @@ def create_app() -> Flask:
         if status == "need":
             # Judgement is per target's LATEST run in the current window (trigger/time),
             # computed from structured detail (target dimension). 「需关注」按目标最新一次运行判定。
-            all_rows = [_decorate(dict(r)) for r in models.query(f"SELECT * FROM run_history{clause} ORDER BY id DESC", tuple(params))]
+            raw_rows = [dict(r) for r in models.query(f"SELECT * FROM run_history{clause} ORDER BY id DESC", tuple(params))]
             _apps, _groups, _servers, _grp_srv = _report_target_maps()
-            need, recovered = _group_runs_by_target(all_rows, _apps, _groups, _servers, _grp_srv, _detail_loader())
+            # Precompute localization maps once across all runs, and batch-load details.
+            # 跨运行一次性构建本地化映射，并批量加载明细（避免逐运行查询）。
+            _sids: set[int] = set()
+            _aids: set[int] = set()
+            for d in raw_rows:
+                sm0 = json_or(d.get("summary"), {})
+                for it in sm0.get("issues") or []:
+                    if it.get("script_id"):
+                        _sids.add(int(it["script_id"]))
+                    _aids.update(int(x) for x in (it.get("app_ids") or []) if x)
+                for a in sm0.get("apps") or []:
+                    if a.get("id"):
+                        _aids.add(int(a["id"]))
+            _script_rows = _script_row_map(_sids)
+            _app_names = _application_name_map(_aids)
+            all_rows = []
+            for d in raw_rows:
+                sm = _localize_summary(json_or(d.get("summary"), {}), script_rows=_script_rows, app_names=_app_names)
+                d["summary_obj"] = sm
+                d["duration"] = _duration(d.get("started"), d.get("finished"))
+                iss = sm.get("issues") or []
+                d["fail_count"] = sum(1 for it in iss if (it.get("status") or "").upper() in ("FAIL", "ERROR"))
+                d["warn_count"] = sum(1 for it in iss if (it.get("status") or "").upper() == "WARN")
+                all_rows.append(d)
+            need, recovered = _group_runs_by_target(all_rows, _apps, _groups, _servers, _grp_srv, _batch_detail_loader())
             result_filter = result in ("success", "partial", "error", "running")
 
             def _prep(entries):

@@ -1,64 +1,66 @@
 {% extends "base.html" %}
 {% block title %}{{ t('nav.dashboard') }}{% endblock %}
 {% block content %}
-<div class="row g-3 mb-3">
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ servers|length }}</div><div class="text-muted small">{{ t('nav.servers') }}</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ group_count }}</div><div class="text-muted small">{{ t('nav.groups') }}</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ application_count }}</div><div class="text-muted small">{{ t('nav.applications') }}</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ script_count }}</div><div class="text-muted small">{{ t('nav.scripts') }}</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ datasource_count }}</div><div class="text-muted small">{{ t('nav.datasources') }}</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ model_count }}</div><div class="text-muted small">{{ t('nav.models') }}</div></div></div></div>
-  <div class="col-6 col-md-2"><div class="card text-center"><div class="card-body"><div class="fs-4">{{ notification_count }}</div><div class="text-muted small">{{ t('nav.notifications') }}</div></div></div></div>
+<h4 class="mb-3">{{ t('dashboard.title') }}{% if running %} <span class="badge bg-warning text-dark">{{ t('banner.running') }}</span>{% endif %}</h4>
+
+{# ① 规模概览 #}
+<h6 class="text-muted">{{ t('dashboard.scale') }}</h6>
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('servers') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.servers }}</div><div class="text-muted small">{{ t('nav.servers') }}</div></div></div></a></div>
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('applications') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.applications }}</div><div class="text-muted small">{{ t('nav.applications') }}</div></div></div></a></div>
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('groups') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.groups }}</div><div class="text-muted small">{{ t('nav.groups') }}</div></div></div></a></div>
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('datasources') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.datasources }}</div><div class="text-muted small">{{ t('nav.datasources') }}</div></div></div></a></div>
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('scripts') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.scripts }}</div><div class="text-muted small">{{ t('nav.scripts') }}</div></div></div></a></div>
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('models_page') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.models }}</div><div class="text-muted small">{{ t('nav.models') }}</div></div></div></a></div>
+  <div class="col-6 col-md-3"><a class="text-decoration-none" href="{{ url_for('notifications') }}"><div class="card text-center"><div class="card-body py-2"><div class="fs-4">{{ stats.notifications }}</div><div class="text-muted small">{{ t('nav.notifications') }}</div></div></div></a></div>
 </div>
 
-{% if latest %}
-<div class="card mb-3">
-  <div class="card-header">{{ t('dashboard.latest_run') }} #{{ latest.id }}
-    <span class="badge bg-{{ 'success' if latest.status=='success' else ('warning' if latest.status=='partial' else 'danger') }}">{{ latest.status }}</span>
+{# ② 巡检态势：节奏（时间/调度）+ 结果聚合（按目标最新证据，非单次运行） #}
+<h6 class="text-muted">{{ t('dashboard.situation') }}</h6>
+<div class="card mb-3"><div class="card-body py-2">
+  <div class="d-flex align-items-center gap-2 flex-wrap mb-2 small text-muted">
+    {% if running %}<span class="badge bg-warning text-dark">{{ t('banner.running') }}</span>
+    {% else %}<span class="badge bg-secondary">{{ t('dashboard.idle') }}</span>{% endif %}
+    <span>{{ t('dashboard.last_inspect') }}：{{ latest_info.ago if latest_info else t('dashboard.no_run') }}</span>
+    <span>· {{ t('dashboard.today_runs') }} {{ today_runs }}</span>
+    <span class="ms-auto">{{ t('dashboard.next_run') }}：{{ next_at_str or t('dashboard.no_schedule') }} · {{ enabled_schedules }}/{{ total_schedules }}</span>
   </div>
-  <div class="card-body">
-    <div class="row">
-      <div class="col-md-3"><strong>{{ t('dashboard.start') }}</strong><br>{{ latest.started|local }}</div>
-      <div class="col-md-3"><strong>{{ t('dashboard.end') }}</strong><br>{{ latest.finished|local }}</div>
-      <div class="col-md-3"><strong>{{ t('dashboard.server_count') }}</strong><br>{{ summary.server_count or 0 }}</div>
-      <div class="col-md-3"><strong>{{ t('dashboard.errors') }}</strong><br>{{ summary.error_count or 0 }} / {{ summary.uncertain_count or 0 }}</div>
+  <div class="row text-center g-2">
+    <div class="col-6 col-md-3"><div class="fs-4">{{ need.targets }}</div><div class="text-muted small">{{ t('dashboard.need_targets') }}</div></div>
+    <div class="col-6 col-md-3"><div class="fs-4">{{ need.apps }}</div><div class="text-muted small">{{ t('dashboard.need_apps') }}</div></div>
+    <div class="col-6 col-md-3"><div class="fs-4 text-danger">{{ need.fail }}</div><div class="text-muted small">{{ t('dashboard.need_fail') }}</div></div>
+    <div class="col-6 col-md-3"><div class="fs-4 text-warning">{{ need.warn }}</div><div class="text-muted small">{{ t('dashboard.need_warn') }}</div></div>
+  </div>
+  <div class="mt-2"><a class="btn btn-sm btn-outline-danger" href="{{ url_for('reports', status='need') }}">{{ t('dashboard.go_need') }}</a></div>
+</div></div>
+
+{# ④ 覆盖与配置健康 #}
+<h6 class="text-muted">{{ t('dashboard.coverage') }}</h6>
+<div class="card mb-4"><div class="card-body py-2">
+  <div class="text-muted small mb-1">{{ t('dashboard.cov_server_section') }} <span>· {{ t('dashboard.cov_enabled_only', n=coverage.total) }}</span></div>
+  <div class="row text-center g-2">
+    <div class="col-6 col-md-3">
+      {% if coverage.unconfigured %}<a class="text-decoration-none" href="{{ url_for('servers', health='unconfigured') }}"><div class="fs-4 text-warning">{{ coverage.unconfigured }}</div><div class="text-muted small">{{ t('dashboard.cov_unconfigured') }}</div></a>
+      {% else %}<div class="fs-4">{{ coverage.unconfigured }}</div><div class="text-muted small">{{ t('dashboard.cov_unconfigured') }}</div>{% endif %}
     </div>
-    <a class="btn btn-sm btn-primary mt-2" href="{{ url_for('report_detail', rid=latest.id) }}">{{ t('dashboard.view_report') }}</a>
+    <div class="col-6 col-md-3">
+      {% if coverage.unbound %}<a class="text-decoration-none" href="{{ url_for('servers', health='unbound') }}"><div class="fs-4 text-warning">{{ coverage.unbound }}</div><div class="text-muted small">{{ t('dashboard.cov_unbound') }}</div></a>
+      {% else %}<div class="fs-4">{{ coverage.unbound }}</div><div class="text-muted small">{{ t('dashboard.cov_unbound') }}</div>{% endif %}
+    </div>
+    <div class="col-6 col-md-3">
+      {% if coverage.disabled %}<a class="text-decoration-none" href="{{ url_for('servers', health='disabled') }}"><div class="fs-4 text-warning">{{ coverage.disabled }}</div><div class="text-muted small">{{ t('dashboard.cov_disabled') }}</div></a>
+      {% else %}<div class="fs-4">{{ coverage.disabled }}</div><div class="text-muted small">{{ t('dashboard.cov_disabled') }}</div>{% endif %}
+    </div>
+    <div class="col-6 col-md-3">
+      {% if coverage.stale %}<a class="text-decoration-none" href="{{ url_for('servers', health='stale') }}"><div class="fs-4 text-warning">{{ coverage.stale }}</div><div class="text-muted small">{{ t('dashboard.cov_stale') }}</div></a>
+      {% else %}<div class="fs-4">{{ coverage.stale }}</div><div class="text-muted small">{{ t('dashboard.cov_stale') }}</div>{% endif %}
+    </div>
   </div>
-</div>
-{% endif %}
-
-<h5>{{ t('dashboard.app_health') }}</h5>
-<table class="table table-sm table-hover mb-4">
-  <thead><tr><th>{{ t('nav.applications') }}</th><th>{{ t('dashboard.server_count') }}</th><th>{{ t('common.status') }}</th></tr></thead>
-  <tbody>
-  {% for a in apps_health %}
-    <tr>
-      <td>{{ a.name }}</td>
-      <td>{{ a.server_count }}</td>
-      <td><span class="badge bg-{{ 'success' if a.status in ('OK', '正常') else ('warning' if a.status in ('WARN', '警告') else ('danger' if a.status in ('FAIL', '失败', 'ERROR', '异常') else 'secondary')) }}">{{ a.status }}</span></td>
-    </tr>
-  {% else %}
-    <tr><td colspan="3" class="text-muted">{{ t('dashboard.no_apps') }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
-
-<h5>{{ t('dashboard.recent') }}</h5>
-<table class="table table-sm table-hover">
-  <thead><tr><th>{{ t('dashboard.trigger') }}</th><th>{{ t('dashboard.start') }}</th><th>{{ t('dashboard.end') }}</th><th>{{ t('common.status') }}</th><th>{{ t('dashboard.report') }}</th></tr></thead>
-  <tbody>
-  {% for r in runs %}
-    <tr>
-      <td>{{ r.trigger }}</td>
-      <td>{{ r.started|local }}</td>
-      <td>{{ r.finished|local }}</td>
-      <td><span class="badge bg-{{ 'success' if r.status=='success' else ('warning' if r.status=='partial' else ('secondary' if r.status=='running' else 'danger')) }}">{{ r.status }}</span></td>
-      <td><a href="{{ url_for('report_detail', rid=r.id) }}">{{ t('common.view') }}</a></td>
-    </tr>
-  {% else %}
-    <tr><td colspan="5" class="text-muted">{{ t('dashboard.no_runs') }}</td></tr>
-  {% endfor %}
-  </tbody>
-</table>
+  <hr class="my-2">
+  <div class="text-muted small mb-1">{{ t('dashboard.model_config') }}</div>
+  <div class="d-flex align-items-center gap-2">
+    {% if model_available.available %}<span class="badge bg-success">{{ t('dashboard.model_ok') }}</span> <span>{{ model_available.label }}</span>
+    {% else %}<span class="badge bg-warning text-dark">{{ t('dashboard.model_missing') }}</span> <a href="{{ url_for('models_page') }}">{{ t('model.banner_cta') }}</a>{% endif %}
+  </div>
+</div></div>
 {% endblock %}

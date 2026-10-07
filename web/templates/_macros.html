@@ -53,11 +53,13 @@
 
 {% macro status_badge(s) %}
 {% set st = (s or '') | lower %}
-{% if st in ('success', 'ok') %}<span class="badge bg-success">{{ s }}</span>
-{% elif st in ('partial', 'warn') %}<span class="badge bg-warning text-dark">{{ s }}</span>
-{% elif st in ('error', 'fail') %}<span class="badge bg-danger">{{ s }}</span>
-{% elif st == 'running' %}<span class="badge bg-info text-dark">{{ s }}</span>
-{% else %}<span class="badge bg-secondary">{{ s or 'UNKNOWN' }}</span>{% endif %}
+{% set lbl = t('status.' ~ st) %}
+{% if lbl == 'status.' ~ st %}{% set lbl = s or 'UNKNOWN' %}{% endif %}
+{% if st in ('success', 'ok') %}<span class="badge bg-success">{{ lbl }}</span>
+{% elif st in ('partial', 'warn') %}<span class="badge bg-warning text-dark">{{ lbl }}</span>
+{% elif st in ('error', 'fail') %}<span class="badge bg-danger">{{ lbl }}</span>
+{% elif st == 'running' %}<span class="badge bg-info text-dark">{{ lbl }}</span>
+{% else %}<span class="badge bg-secondary">{{ lbl }}</span>{% endif %}
 {% endmacro %}
 
 {% macro json_view(obj, ident) %}
