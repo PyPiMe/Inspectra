@@ -1,4 +1,10 @@
 body { font-size: 14px; }
+
+/* 顶部导航：多词标签不换行；收紧间距以便单行容纳较多菜单；IP 仅超宽屏显示 */
+.navbar .nav-link { white-space: nowrap; padding-left: .3rem; padding-right: .3rem; font-size: .85rem; }
+.navbar .navbar-brand { font-size: 1rem; }
+.navbar-ip { display: none; }
+@media (min-width: 1600px) { .navbar-ip { display: inline; } }
 .report-pre {
   white-space: pre-wrap;
   word-break: break-word;
