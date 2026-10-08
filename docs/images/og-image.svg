@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="Inspectra">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#312e81"/>
+      <stop offset="0.55" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="120" y="150" width="150" height="150" rx="34" fill="#ffffff" opacity="0.14"/>
+  <g transform="translate(135 165) scale(4.8)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="14.31" y1="8" x2="20.05" y2="17.94"/>
+    <line x1="9.69" y1="8" x2="21.17" y2="8"/>
+    <line x1="7.38" y1="12" x2="13.12" y2="2.06"/>
+    <line x1="9.69" y1="16" x2="3.95" y2="6.06"/>
+    <line x1="14.31" y1="16" x2="2.83" y2="16"/>
+    <line x1="16.62" y1="12" x2="10.88" y2="21.94"/>
+  </g>
+  <text x="330" y="245" fill="#ffffff" font-family="Segoe UI, Arial, sans-serif" font-size="92" font-weight="700" letter-spacing="1">Inspectra</text>
+  <text x="334" y="315" fill="#e0e7ff" font-family="Segoe UI, Arial, sans-serif" font-size="40">Server O&amp;M inspection console</text>
+  <text x="334" y="375" fill="#c7d2fe" font-family="Segoe UI, Arial, sans-serif" font-size="30">SSH scripts + Prometheus metrics · optional LLM · reports &amp; alerts</text>
+  <text x="120" y="560" fill="#c7d2fe" font-family="Segoe UI, Arial, sans-serif" font-size="28">Flask · single process · SQLite · bilingual (zh-CN / en)</text>
+</svg>

@@ -1123,6 +1123,12 @@ def create_app() -> Flask:
             return fp
         return ":".join(parts[:4]) + " … " + ":".join(parts[-4:])
 
+    # ---- 站点图标兜底：浏览器默认请求 /favicon.ico
+    # ---- Site icon fallback: browsers request /favicon.ico by default.
+    @app.route("/favicon.ico")
+    def favicon_ico():
+        return redirect(url_for("static", filename="favicon.ico"))
+
     # ---- 语言切换
     @app.route("/lang/<code>")
     def set_language(code: str):

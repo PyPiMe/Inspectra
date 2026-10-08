@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="64" viewBox="0 0 300 64" role="img" aria-label="Inspectra">
+  <rect width="64" height="64" rx="14" fill="#4f46e5"/>
+  <g transform="translate(3.2 3.2) scale(2.4)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/>
+    <line x1="14.31" y1="8" x2="20.05" y2="17.94"/>
+    <line x1="9.69" y1="8" x2="21.17" y2="8"/>
+    <line x1="7.38" y1="12" x2="13.12" y2="2.06"/>
+    <line x1="9.69" y1="16" x2="3.95" y2="6.06"/>
+    <line x1="14.31" y1="16" x2="2.83" y2="16"/>
+    <line x1="16.62" y1="12" x2="10.88" y2="21.94"/>
+  </g>
+  <text x="84" y="45" fill="#4f46e5" font-family="Segoe UI, Arial, sans-serif" font-size="38" font-weight="700">Inspectra</text>
+</svg>

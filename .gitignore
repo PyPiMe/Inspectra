@@ -19,3 +19,6 @@ AGENTS.md
 
 # 用户自定义语言包（运行时，不入 git）
 locales/custom/
+
+# 本地开发/截图工具（不入 git）
+devtools/

@@ -740,6 +740,7 @@
   "collect.no_data_hint": "; the instance was derived from the server IP; if it is exposed by hostname, set prom_instance in the binding or a datasource default label",
   "collect.no_data_output": "No data (Prometheus returned empty; check the instance label and metric name{hint})",
   "collect.err_threshold": "Threshold breached: {detail}",
+  "meta.description": "Server O&M inspection web console: dual-channel collection via SSH scripts + Prometheus metrics, optional LLM analysis, aggregated reports and alerts.",
   "meta.warn_threshold": "Missing `# THRESHOLD` (info-only: add `# DISPLAY: true`)",
   "meta.warn_unit": "Recommend adding `# UNIT`",
   "meta.err_mode": "`# MODE` supports only instant|range",

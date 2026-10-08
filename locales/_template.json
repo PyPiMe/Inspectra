@@ -740,6 +740,7 @@
   "collect.no_data_hint": "；该实例由服务器 IP 自动推导，若目标实例以主机名暴露，请在绑定中填写 prom_instance 或数据源默认标签",
   "collect.no_data_output": "无数据（Prometheus 返回空结果：请核对实例标签与指标名是否存在{hint}）",
   "collect.err_threshold": "阈值越界：{detail}",
+  "meta.description": "服务器运维巡检 Web 管理端：SSH 脚本 + Prometheus 指标双通道采集，可选大模型解读，生成聚合报告与告警。",
   "meta.warn_threshold": "缺少 `# THRESHOLD`（纯信息类请加 `# DISPLAY: true`）",
   "meta.warn_unit": "建议补充 `# UNIT`",
   "meta.err_mode": "`# MODE` 仅支持 instant|range",

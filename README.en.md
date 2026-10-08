@@ -2,6 +2,8 @@
 
 **English** | [简体中文](README.md)
 
+<p align="center"><img src="docs/images/logo.png" alt="Inspectra" width="300"></p>
+
 **Inspectra** is a **standalone server O&M inspection web app**. For all applications an
 organization exposes internally or externally, it collects server/VM metrics over two
 channels — **SSH scripts** and **Prometheus metrics** — generates inspection reports based
@@ -50,6 +52,27 @@ sends SMTP / DingTalk alerts on anomalies. Intranet-first deployment.
 
 > Core concepts: an **application** is the first-class unit for ordinary users; a **group**
 > is a reusable server set; a server belongs to one group but can be in many applications.
+
+## Screenshots
+
+> Captured from **desensitized demo data** — unrelated to any real environment.
+
+| Dashboard | Inspection report |
+| --- | --- |
+| ![Dashboard](docs/images/en/dashboard.png) | ![Report](docs/images/en/report-detail.png) |
+| Overall health, inspection posture and coverage | Grouped by application → server → script item, per-item threshold verdict |
+
+| Run now | Script editor |
+| --- | --- |
+| ![Run](docs/images/en/run.png) | ![Script editor](docs/images/en/script-editor.png) |
+| Target/script selection and execution preview | Two-pane Shell / PromQL editor with header metadata |
+
+| Chatbot (read-only) | Audit log |
+| --- | --- |
+| ![Chatbot](docs/images/en/chatbot.png) | ![Audit](docs/images/en/audit.png) |
+| Natural-language Q&A (requires a model) | Write-operation audit, rollback with versions |
+
+More screens in [`docs/images/en/`](docs/images/en/): servers, applications, groups, scripts, settings.
 
 ## Feature overview
 
