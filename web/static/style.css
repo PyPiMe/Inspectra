@@ -17,6 +17,7 @@ body { font-size: 14px; }
 .log-line-debug { color: #adb5bd; }
 .log-box mark { background: #fff3cd; padding: 0; }
 .table td, .table th { vertical-align: middle; }
+.cell-truncate { max-width: 22rem; }
 
 /* 报告 Markdown 渲染 */
 .report-md h1, .report-md h2, .report-md h3 { margin-top: 1.1rem; margin-bottom: .5rem; }

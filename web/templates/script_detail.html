@@ -104,10 +104,7 @@
   <a class="btn btn-outline-secondary" href="{{ back or url_for('scripts') }}">{{ t('server_detail.back_list') }}</a>
   {% if script.id %}
   <a class="btn btn-outline-secondary" href="{{ url_for('scripts_history', sid=script.id) }}">{{ t('common.history') }}</a>
-  <form method="post" action="{{ url_for('scripts_clone', sid=script.id) }}" class="d-inline">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-    <button class="btn btn-outline-secondary">{{ t('scripts.clone') }}</button>
-  </form>
+  <a class="btn btn-outline-secondary" href="{{ url_for('script_new', copy=script.id, back=back or url_for('scripts')) }}">{{ t('scripts.clone') }}</a>
   {% endif %}
 </div>
 

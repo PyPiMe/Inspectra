@@ -10,6 +10,38 @@ window.inspectra = {
   },
 };
 
+// 通用批量选择：行复选框(.row-cb) + [data-batch-all] + [data-batch-bar] + 隐藏表单。
+// Generic batch selection: row checkboxes + select-all + bar + hidden form.
+function initBatch() {
+  const rows = [...document.querySelectorAll('input.row-cb')];
+  const bar = document.querySelector('[data-batch-bar]');
+  if (!rows.length || !bar) return;
+  const all = document.querySelector('[data-batch-all]');
+  const cnt = bar.querySelector('[data-batch-count]');
+  const checked = () => rows.filter((c) => c.checked);
+  const refresh = () => {
+    const n = checked().length;
+    if (cnt) cnt.textContent = n;
+    bar.classList.toggle('d-none', n === 0);
+  };
+  if (all) all.addEventListener('change', () => { rows.forEach((c) => { c.checked = all.checked; }); refresh(); });
+  rows.forEach((c) => c.addEventListener('change', refresh));
+  const clr = bar.querySelector('[data-batch-clear]');
+  if (clr) clr.addEventListener('click', () => { rows.forEach((c) => { c.checked = false; }); if (all) all.checked = false; refresh(); });
+  const del = bar.querySelector('[data-batch-delete]');
+  if (del) del.addEventListener('click', () => {
+    const sel = checked();
+    if (!sel.length) return;
+    if (!confirm((del.dataset.confirm || '').replace('{n}', sel.length))) return;
+    const form = document.getElementById(del.dataset.form);
+    if (!form) return;
+    form.querySelectorAll('input[name="ids"]').forEach((x) => x.remove());
+    sel.forEach((c) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = 'ids'; i.value = c.value; form.appendChild(i); });
+    form.submit();
+  });
+  refresh();
+}
+
 // 复制文本到剪贴板（兼容非安全上下文），btn 可选用于“已复制”反馈
 function copyText(text, btn) {
   const done = () => {
@@ -231,5 +263,5 @@ function initLabelEditors(root) {
     renderRows();
   });
 }
-document.addEventListener('DOMContentLoaded', () => initLabelEditors());
+document.addEventListener('DOMContentLoaded', () => { initLabelEditors(); initBatch(); });
 document.addEventListener('shown.bs.modal', () => initLabelEditors());

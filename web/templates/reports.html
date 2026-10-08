@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager %}
+{% from "_macros.html" import pager, batch_bar, select_page_row %}
 {% block title %}{{ t('reports.title') }}{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -73,22 +73,11 @@
 {# Selection/batch controls apply to the flat list only; the grouped "needs attention"
    view is read-only. 选择/批量仅用于扁平列表；分组「需关注」视图为只读。 #}
 {% if grouped is not defined %}
-<div class="alert alert-light border py-1 px-2 mb-2 d-none" id="uiBatchBar">
-  <div class="d-flex flex-wrap align-items-center gap-2">
-    <span class="small">{{ t('reports.selected_prefix') }}<strong id="uiSelCount">0</strong>{{ t('reports.selected_suffix') }}</span>
-    <button type="button" class="btn btn-sm btn-outline-danger" id="uiBatchDelete">{{ t('reports.batch_delete') }}</button>
-    <button type="button" class="btn btn-sm btn-outline-danger ui-danger" data-scope="filtered" data-confirm="{{ t('reports.confirm_filtered', n=total) }}">{{ t('reports.delete_filtered') }}（{{ total }}）</button>
-    <button type="button" class="btn btn-sm btn-danger ui-danger" data-scope="all">{{ t('reports.clear_all') }}（{{ total_all }}）</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" id="uiBatchClear">{{ t('common.cancel_select') }}</button>
-  </div>
-</div>
-{% endif %}
-
-{# Grouped "needs attention" view has no flat page select-all. 分组视图不提供全选当前页。 #}
-{% if grouped is not defined %}
-<div class="d-flex align-items-center gap-2 mb-2">
-  <div class="form-check m-0"><input class="form-check-input" type="checkbox" id="uiSelectAll"><label class="form-check-label small" for="uiSelectAll">{{ t('common.select_page') }}</label></div>
-</div>
+{% call batch_bar('uiBatchForm') %}
+  <button type="button" class="btn btn-sm btn-outline-danger ui-danger" data-scope="filtered" data-confirm="{{ t('reports.confirm_filtered', n=total) }}">{{ t('reports.delete_filtered') }}（{{ total }}）</button>
+  <button type="button" class="btn btn-sm btn-danger ui-danger" data-scope="all">{{ t('reports.clear_all') }}（{{ total_all }}）</button>
+{% endcall %}
+{{ select_page_row() }}
 {% endif %}
 
 {% if grouped is defined %}
@@ -205,28 +194,17 @@
   <input type="hidden" name="trigger" value="{{ trigger }}">
   <input type="hidden" name="start" value="{{ start }}">
   <input type="hidden" name="end" value="{{ end }}">
-  <div id="uiBatchIds"></div>
 </form>
 {% endblock %}
 
 {% block scripts %}
 <script>
 (function () {
-  const cbs = [...document.querySelectorAll('.row-cb')];
-  const selAll = document.getElementById('uiSelectAll');
-  const bar = document.getElementById('uiBatchBar');
-  const cnt = document.getElementById('uiSelCount');
+  // 选择/全选/计数/取消 由 app.js initBatch() 统一处理；这里只保留报告页特有逻辑。
+  // Selection is handled by initBatch(); keep only report-specific logic here.
   const bform = document.getElementById('uiBatchForm');
   const bscope = document.getElementById('uiBatchScope');
-  const bIds = document.getElementById('uiBatchIds');
-  const checked = () => cbs.filter((c) => c.checked);
-  function refresh() {
-    const n = checked().length;
-    if (cnt) cnt.textContent = n;
-    if (bar) bar.classList.toggle('d-none', n === 0);
-  }
-  if (selAll) selAll.addEventListener('change', () => { cbs.forEach((c) => { c.checked = selAll.checked; }); refresh(); });
-  cbs.forEach((c) => c.addEventListener('change', refresh));
+  const checked = () => [...document.querySelectorAll('.row-cb:checked')];
   document.querySelectorAll('.rep-card[data-href]').forEach((c) => {
     c.addEventListener('click', (e) => {
       if (e.target.closest('input,button,a,form,label')) return;
@@ -235,22 +213,16 @@
   });
   function submitBatch(scope, msg, skipConfirm) {
     if (!skipConfirm && !confirm(msg)) return;
-    bscope.value = scope; bIds.innerHTML = '';
+    bscope.value = scope;
+    bform.querySelectorAll('input[name="ids"]').forEach((x) => x.remove());
     if (scope === 'selected') {
       checked().forEach((c) => {
         const i = document.createElement('input');
-        i.type = 'hidden'; i.name = 'ids'; i.value = c.value; bIds.appendChild(i);
+        i.type = 'hidden'; i.name = 'ids'; i.value = c.value; bform.appendChild(i);
       });
     }
     bform.submit();
   }
-  const bdel = document.getElementById('uiBatchDelete');
-  if (bdel) bdel.addEventListener('click', () => {
-    if (!checked().length) { alert(__t('js.pick_first')); return; }
-    submitBatch('selected', __t('js.confirm_selected').replace('{n}', checked().length));
-  });
-  const bclr = document.getElementById('uiBatchClear');
-  if (bclr) bclr.addEventListener('click', () => { cbs.forEach((c) => { c.checked = false; }); if (selAll) selAll.checked = false; refresh(); });
   document.querySelectorAll('.ui-danger').forEach((b) => b.addEventListener('click', () => {
     if (b.dataset.scope === 'all') {
       const kw = prompt(__t('js.clear_prompt'));
@@ -260,7 +232,6 @@
     }
     submitBatch(b.dataset.scope, b.dataset.confirm);
   }));
-  refresh();
 })();
 
 (function () {

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager, conn_badge %}
+{% from "_macros.html" import pager, conn_badge, batch_bar, select_page_row %}
 {% block title %}{{ t('nav.servers') }}{% endblock %}
 {% block content %}
 {% set back_url = url_for('servers', q=q, group_id=group_id, enabled=enabled, health=health, page=page, per_page=per_page) %}
@@ -42,12 +42,15 @@
 </div>
 {% endif %}
 
+{{ batch_bar('serversBatchForm') }}
+{{ select_page_row() }}
 <table class="table table-sm table-hover">
-  <thead><tr><th>{{ t('servers.hostname') }}</th><th>{{ t('common.ip') }}</th><th>{{ t('servers.conn') }}</th><th>{{ t('servers.ssh_port') }}</th><th>{{ t('servers.user') }}</th><th>{{ t('servers.group') }}</th><th>{{ t('servers.credential') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
+  <thead><tr><th></th><th>{{ t('servers.hostname') }}</th><th>{{ t('common.ip') }}</th><th>{{ t('servers.conn') }}</th><th>{{ t('servers.ssh_port') }}</th><th>{{ t('servers.user') }}</th><th>{{ t('servers.group') }}</th><th>{{ t('servers.credential') }}</th><th>{{ t('common.enabled') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for s in servers %}
     {% set ct = conn_types.get(s.id, t('servers.not_configured')) %}
     <tr>
+      <td><input class="form-check-input mt-0 row-cb" type="checkbox" value="{{ s.id }}"></td>
       <td><a href="{{ url_for('server_detail', sid=s.id, back=back_url) }}">{{ s.hostname }}</a>
         {% if s.vm_ident %} <span class="badge bg-light text-dark border" title="{{ t('servers.vm_ident') }}">VM: {{ s.vm_ident }}</span>{% endif %}</td>
       <td>{{ s.ip }}</td>
@@ -58,19 +61,18 @@
       <td>{{ cred_names.get(s.vault_key) if s.vault_key else '-' }}</td>
       <td>{{ t('common.yes') if s.enabled else t('common.no') }}</td>
       <td class="text-nowrap">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_detail', sid=s.id, back=back_url) }}">{{ t('common.details') }}</a>
         <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('server_new', copy=s.id, back=back_url) }}">{{ t('servers.copy') }}</a>
-        <form method="post" action="{{ url_for('servers_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('servers.confirm_delete') }}')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
-        </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="9" class="text-muted">{{ t('servers.empty') }}</td></tr>
+    <tr><td colspan="10" class="text-muted">{{ t('servers.empty') }}</td></tr>
   {% endfor %}
   </tbody>
 </table>
 {{ pager('servers', {'q': q, 'group_id': group_id, 'enabled': enabled, 'health': health}, page, pages, total, per_page) }}
 
+<form id="serversBatchForm" method="post" action="{{ url_for('servers_batch_delete') }}" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="back" value="{{ back_url }}">
+</form>
 {% endblock %}

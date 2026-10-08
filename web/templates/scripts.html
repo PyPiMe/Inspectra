@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_macros.html" import pager %}
+{% from "_macros.html" import pager, batch_bar, select_page_row %}
 {% block title %}{{ t('scripts.title') }}{% endblock %}
 {% block content %}
 <h4>{{ t('scripts.title') }}</h4>
@@ -42,39 +42,40 @@
   </form>
 </div>
 
+{{ batch_bar('scriptsBatchForm') }}
+{{ select_page_row() }}
 <table class="table table-sm table-hover">
-  <thead><tr><th>{{ t('common.name') }}</th><th>{{ t('common.type') }}</th><th>{{ t('scripts.filename') }}</th><th>{{ t('common.desc') }}</th><th>{{ t('scripts.updated') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
+  <thead><tr><th></th><th>{{ t('common.name') }}</th><th>{{ t('common.desc') }}</th><th>{{ t('scripts.updated') }}</th><th>{{ t('common.actions') }}</th></tr></thead>
   <tbody>
   {% for s in scripts %}
     <tr>
+      <td><input class="form-check-input mt-0 row-cb" type="checkbox" value="{{ s.id }}"></td>
       <td><a href="{{ url_for('script_detail', sid=s.id, back=back_url) }}">{{ s.lname }}</a>
+        <span class="badge bg-{{ 'primary' if s.kind=='shell' else 'info' }}">{{ s.kind }}</span>
         {% if s.meta_warn %} <span class="badge bg-warning text-dark" title="{{ t('scripts.meta_warning') }}">!</span>{% endif %}
         {% if s.seed_key %}<span class="badge bg-light text-secondary border" title="{{ t('scripts.builtin') }}">{{ t('scripts.builtin') }}</span>{% endif %}
         {% if s.dirty %}<span class="badge bg-warning text-dark" title="{{ t('scripts.modified_hint') }}">{{ t('scripts.modified') }}</span>{% endif %}
         {% for tg in s.tags %}<span class="badge text-bg-light text-dark border">{{ tg }}</span>{% endfor %}
       </td>
-      <td><span class="badge bg-{{ 'primary' if s.kind=='shell' else 'info' }}">{{ s.kind }}</span></td>
-      <td>{{ s.filename }}</td>
-      <td class="small">{{ s.ldesc }}</td>
+      <td class="small"><div class="text-truncate cell-truncate" title="{{ s.ldesc }}">{{ s.ldesc }}</div></td>
       <td class="small">{{ s.updated_at|local }}</td>
       <td class="text-nowrap">
-        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('script_detail', sid=s.id, back=back_url) }}">{{ t('common.edit') }}</a>
-        <form method="post" action="{{ url_for('scripts_clone', sid=s.id) }}" class="d-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-secondary">{{ t('scripts.clone') }}</button>
-        </form>
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('script_new', copy=s.id, back=back_url) }}">{{ t('scripts.clone') }}</a>
         <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_history', sid=s.id) }}">{{ t('common.history') }}</a>
         {% set uc = usage_counts.get(s.id, 0) %}
         {% if uc %}<a class="btn btn-sm btn-outline-secondary" href="{{ url_for('script_usage', sid=s.id, back=back_url) }}">{{ t('scripts.usage_count', n=uc) }}</a>{% endif %}
-        <form method="post" action="{{ url_for('scripts_delete', sid=s.id) }}" class="d-inline" onsubmit="return confirm('{{ t('common.confirm_delete') }}')">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><button class="btn btn-sm btn-outline-danger">{{ t('common.delete') }}</button>
-        </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="6" class="text-muted">{% if name or kind or desc %}{{ t('scripts.empty') }}{% else %}{{ t('scripts.empty_seed') }}{% endif %}</td></tr>
+    <tr><td colspan="5" class="text-muted">{% if name or kind or desc %}{{ t('scripts.empty') }}{% else %}{{ t('scripts.empty_seed') }}{% endif %}</td></tr>
   {% endfor %}
   </tbody>
 </table>
 
 {{ pager('scripts', params, page, pages, total, per_page) }}
+
+<form id="scriptsBatchForm" method="post" action="{{ url_for('scripts_batch_delete') }}" class="d-none">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  <input type="hidden" name="back" value="{{ back_url }}">
+</form>
 {% endblock %}

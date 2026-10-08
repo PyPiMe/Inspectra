@@ -467,7 +467,7 @@
   "run.datasources_hint": "仅对 Prometheus 目标生效；不选=全部数据源",
   "run.groups": "分组",
   "run.applications": "应用",
-  "run.hint": "不选脚本则按服务器绑定执行；受全局单 run 互斥约束",
+  "run.hint": "不选脚本则按服务器绑定执行；同一时刻只执行一个巡检任务",
   "run.mode": "③ 分析模式",
   "run.mode_model_desc": "采集 → 脱敏 → 模型分析 → 报告/告警（需配置默认模型）",
   "run.mode_raw_desc": "采集 → 直接生成报告（原始输出 + 阈值判定），不调用模型",
@@ -1077,5 +1077,9 @@
   "js.old": "old: ",
   "js.new": "new: ",
   "common.csrf_fail": "403 CSRF token 校验失败",
-  "servers.deleted_id": "(已删除服务器 #{id})"
+  "servers.deleted_id": "(已删除服务器 #{id})",
+  "common.delete_selected": "删除所选",
+  "common.confirm_delete_selected": "确认删除选中的 {n} 项？此操作不可恢复。",
+  "common.batch_deleted": "已删除 {n} 项",
+  "common.batch_skipped": "跳过 {n} 项（被引用）"
 }

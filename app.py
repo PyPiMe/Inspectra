@@ -922,8 +922,9 @@ def delete_object(obj_type: str, obj_id: int, ip: str, name: str = "") -> None:
         if obj_type == "application":
             conn.execute("DELETE FROM application_members WHERE application_id=?", (obj_id,))
         elif obj_type == "server":
-            # 服务器可作应用成员：删除时级联清理，避免悬空成员。
-            # Servers may be application members: cascade-clean on delete.
+            # 服务器删除级联清理其数据源绑定与应用成员，避免悬空。
+            # Cascade-clean datasource bindings and application members on server delete.
+            conn.execute("DELETE FROM server_datasources WHERE server_id=?", (obj_id,))
             conn.execute("DELETE FROM application_members WHERE member_type='server' AND member_id=?", (obj_id,))
         models.delete(conn, table, obj_id)
         vid = backup.record(conn, obj_type, obj_id, "delete", snapshot, ip)
@@ -990,6 +991,23 @@ def references_to(obj_type: str, obj_id: int) -> list[str]:
         n = models.query("SELECT id, hostname FROM servers WHERE vault_key=?", (str(obj_id),))
         refs += [i18n.t("refs.server", name=r["hostname"]) for r in n]
     return refs
+
+
+def _batch_delete(obj_type: str, ids: list[int], ip: str) -> tuple[int, list[str]]:
+    """Delete many objects, skipping referenced ones. 批量删除，跳过被引用对象。
+
+    Returns (deleted_count, skipped_names). 被引用者不删除，返回其展示名。
+    """
+    deleted = 0
+    skipped: list[str] = []
+    for oid in ids:
+        if references_to(obj_type, oid):
+            row = models.fetch_one(models.CONFIG_TABLES[obj_type], oid)
+            skipped.append(_obj_display_name(obj_type, row) or f"#{oid}")
+            continue
+        delete_object(obj_type, oid, ip)
+        deleted += 1
+    return deleted, skipped
 
 
 # ------------------------------------------------------------ 应用工厂
@@ -1524,7 +1542,7 @@ def create_app() -> Flask:
                     "datasource_id": did,
                     "prom_instance": (request.form.get("prom_instance") or "").strip(),
                     "labels_json": (request.form.get("labels_json") or "{}").strip() or "{}",
-                    "scripts_json": prom_ids,
+                    "scripts_json": json.dumps(prom_ids),
                     "enabled": 1,
                 }]
             with models.db() as conn:
@@ -1540,11 +1558,23 @@ def create_app() -> Flask:
         if refs:
             flash(i18n.t("common.err_referenced", refs=i18n.t("common.list_sep").join(refs)), "danger")
             return redirect(url_for("servers"))
-        with models.db() as conn:
-            conn.execute("DELETE FROM server_datasources WHERE server_id=?", (sid,))
         delete_object("server", sid, g.ip)
         flash(i18n.t("servers.deleted"), "success")
         return redirect(url_for("servers"))
+
+    @app.route("/servers/batch_delete", methods=["POST"])
+    def servers_batch_delete():
+        ids = [i for i in (parse_int(x) for x in request.form.getlist("ids")) if i]
+        back = (request.form.get("back") or "").strip()
+        back = back if back.startswith("/") else url_for("servers")
+        if not ids:
+            flash(i18n.t("reports.none_selected"), "warning")
+            return redirect(back)
+        deleted, skipped = _batch_delete("server", ids, g.ip)
+        flash(i18n.t("common.batch_deleted", n=deleted), "success")
+        if skipped:
+            flash(i18n.t("common.batch_skipped", n=len(skipped)), "warning")
+        return redirect(back)
 
     def _render_bindings(sid: int) -> str:
         """渲染服务器的数据源绑定区块（含弹窗），供页面内 AJAX 局部刷新。
@@ -1970,37 +2000,39 @@ def create_app() -> Flask:
             page=page, per_page=per_page, total=total, pages=pages,
         )
 
-    @app.route("/scripts/<int:sid>/clone", methods=["POST"])
-    def scripts_clone(sid: int):
-        src = models.fetch_one("scripts", sid)
-        if not src:
-            abort(404)
-        content = backup.read_script(src)
-        new_name = (src.get("name") or i18n.t("nav.scripts")) + i18n.t("scripts.copy_suffix")
-        data = {
-            "name": new_name,
-            "filename": src.get("filename") or "",
-            "kind": src.get("kind") or "shell",
-            "desc": src.get("desc") or "",
-            "updated_at": models.utcnow(),
-        }
-        new_id = save_object("script", None, data, g.ip, new_name, script_content=content)
-        flash(i18n.t("scripts.cloned", name=src.get("name") or ""), "success")
-        return redirect(url_for("script_detail", sid=new_id))
-
     @app.route("/scripts/help")
     def scripts_help():
         return render_template("scripts_help.html")
 
     @app.route("/scripts/new")
     def script_new():
+        """Full-page create; `?copy=<id>` prefills from an existing script (saved on submit only)."""
+        copy_id = parse_int(request.args.get("copy"))
+        src = models.fetch_one("scripts", copy_id) if copy_id else None
+        if src:
+            content = backup.read_script(src)
+            lname, ldesc, _ = i18n.localize_script(src)
+            suffix = i18n.t("scripts.copy_suffix")
+            fname = src.get("filename") or ""
+            script = {
+                "id": 0,
+                "name": lname + suffix,
+                "lname": lname + suffix,
+                "filename": (fname + "-copy") if fname else "",
+                "kind": src.get("kind") or "shell",
+                "desc": ldesc,
+                "tags_json": src.get("tags_json") or "[]",
+            }
+        else:
+            content = ""
+            script = {"id": 0, "name": "", "filename": "", "kind": "shell", "desc": "", "tags_json": "[]"}
         return render_template(
             "script_detail.html",
-            script={"id": 0, "name": "", "filename": "", "kind": "shell", "desc": ""},
-            content="",
-            i18n_map={},
-            languages=i18n.languages(),
+            script=script,
+            content=content,
             current_lang=i18n.current(),
+            back=request.args.get("back", ""),
+            meta_warnings=collectors.meta_warnings(content, script.get("kind") or "shell") if content else [],
         )
 
     def _unbind_script(sid: int, only_servers: set[int] | None = None) -> int:
@@ -2223,6 +2255,20 @@ def create_app() -> Flask:
         delete_object("script", sid, g.ip)
         flash(i18n.t("scripts.deleted"), "success")
         return redirect(url_for("scripts"))
+
+    @app.route("/scripts/batch_delete", methods=["POST"])
+    def scripts_batch_delete():
+        ids = [i for i in (parse_int(x) for x in request.form.getlist("ids")) if i]
+        back = (request.form.get("back") or "").strip()
+        back = back if back.startswith("/") else url_for("scripts")
+        if not ids:
+            flash(i18n.t("reports.none_selected"), "warning")
+            return redirect(back)
+        deleted, skipped = _batch_delete("script", ids, g.ip)
+        flash(i18n.t("common.batch_deleted", n=deleted), "success")
+        if skipped:
+            flash(i18n.t("common.batch_skipped", n=len(skipped)), "warning")
+        return redirect(back)
 
     @app.route("/scripts/validate", methods=["POST"])
     def scripts_validate():

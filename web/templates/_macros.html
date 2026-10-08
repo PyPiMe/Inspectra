@@ -124,3 +124,20 @@
   <textarea class="form-control form-control-sm le-json d-none mt-1" rows="2" spellcheck="false"></textarea>
 </div>
 {% endmacro %}
+
+{% macro batch_bar(form_id, confirm_key='common.confirm_delete_selected') %}
+<div class="alert alert-light border py-1 px-2 mb-2 d-none" data-batch-bar>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <span class="small">{{ t('reports.selected_prefix') }}<strong data-batch-count>0</strong>{{ t('reports.selected_suffix') }}</span>
+    <button type="button" class="btn btn-sm btn-outline-danger" data-batch-delete data-form="{{ form_id }}" data-confirm="{{ t(confirm_key) }}">{{ t('common.delete_selected') }}</button>
+    {% if caller %}{{ caller() }}{% endif %}
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-batch-clear>{{ t('common.cancel_select') }}</button>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro select_page_row() %}
+<div class="d-flex align-items-center gap-2 mb-2">
+  <div class="form-check m-0"><input class="form-check-input" type="checkbox" data-batch-all><label class="form-check-label small">{{ t('common.select_page') }}</label></div>
+</div>
+{% endmacro %}

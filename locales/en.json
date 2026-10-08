@@ -467,7 +467,7 @@
   "run.datasources_hint": "Prometheus targets only; empty = all data sources",
   "run.groups": "Groups",
   "run.applications": "Applications",
-  "run.hint": "Without scripts it runs bindings; global single-run lock applies",
+  "run.hint": "Without scripts it runs bindings; only one inspection runs at a time",
   "run.mode": "③ Analysis mode",
   "run.mode_model_desc": "collect → sanitize → model → report/alert (needs default model)",
   "run.mode_raw_desc": "collect → report directly (raw + threshold), no model",
@@ -1077,5 +1077,9 @@
   "js.old": "old: ",
   "js.new": "new: ",
   "common.csrf_fail": "403 CSRF token validation failed",
-  "servers.deleted_id": "(deleted server #{id})"
+  "servers.deleted_id": "(deleted server #{id})",
+  "common.delete_selected": "Delete selected",
+  "common.confirm_delete_selected": "Delete {n} selected item(s)? This cannot be undone.",
+  "common.batch_deleted": "Deleted {n} item(s)",
+  "common.batch_skipped": "Skipped {n} item(s) (referenced)"
 }
