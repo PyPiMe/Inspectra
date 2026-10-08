@@ -80,7 +80,7 @@ async function sendChat(text) {
   if (text == null) chatInput.value = '';
   const thinking = appendBubble('assistant', __t('js.chat_thinking'));
   try {
-    const body = new URLSearchParams({ csrf_token: window.pypimeops.csrf(), message: msg });
+    const body = new URLSearchParams({ csrf_token: window.inspectra.csrf(), message: msg });
     const d = await (await fetch('{{ url_for("chatbot_ask") }}', { method: 'POST', body })).json();
     if (d.reply_html) {
       thinking.innerHTML = d.reply_html;

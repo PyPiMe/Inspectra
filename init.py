@@ -243,7 +243,7 @@ def reset() -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="PyPiMeOps 初始化")
+    parser = argparse.ArgumentParser(description="Inspectra 初始化")
     parser.add_argument("--config", default=None, help="config.yaml 路径（默认 ./config.yaml）")
     parser.add_argument("--force", action="store_true", help="重置并重建（危险）")
     parser.add_argument("-y", "--yes", action="store_true", help="跳过确认")

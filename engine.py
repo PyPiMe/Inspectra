@@ -27,7 +27,7 @@ import sanitize
 import vault
 from config import get_config
 
-log = logging.getLogger("pypimeops.engine")
+log = logging.getLogger("inspectra.engine")
 
 # Language-neutral marker for the "unassigned" application bucket (localized on display).
 # 未归属应用桶的语言中立标记（展示时本地化）。
@@ -607,7 +607,7 @@ def _build_detail(app_groups: list[dict[str, Any]]) -> dict[str, Any]:
 
 def _report_markdown(ctx: dict[str, Any]) -> str:
     lines: list[str] = []
-    lines.append(i18n.t("report_md.title", site=ctx.get("site_title") or "PyPiMeOps", id=ctx["run_id"]))
+    lines.append(i18n.t("report_md.title", site=ctx.get("site_title") or "Inspectra", id=ctx["run_id"]))
     lines.append("")
     lines.append(i18n.t("report_md.trigger", trigger=ctx["trigger"]))
     lines.append(i18n.t("report_md.mode", mode=i18n.t("notify.mode_raw" if ctx.get("mode") == "raw" else "notify.mode_model")))
@@ -1153,7 +1153,7 @@ def run(
             "finished": finished,
             "policy": policy,
             "targets_label": targets_label,
-            "site_title": (settings.get("site_title") or "").strip() or "PyPiMeOps",
+            "site_title": (settings.get("site_title") or "").strip() or "Inspectra",
             "servers": servers_out,
             "app_groups": app_groups,
             "selected_count": len(servers),

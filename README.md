@@ -1,8 +1,8 @@
-# PyPiMeOps
+# Inspectra
 
 [English](README.en.md) | 简体中文
 
-**PyPiMeOps** 是一个**独立的服务器运维巡检 Web 应用**：面向单位部署的、对内/对外提供服务的各类应用，
+**Inspectra** 是一个**独立的服务器运维巡检 Web 应用**：面向单位部署的、对内/对外提供服务的各类应用，
 通过「SSH 脚本 + Prometheus 指标」双通道采集服务器/虚拟机指标，按脚本内置的阈值与建议生成巡检报告，
 可选接入大模型做进一步解读，并在异常时通过 SMTP / 钉钉告警。纯内网部署优先。
 
@@ -77,7 +77,7 @@
 - **备份**：
   - **手动全量导出**（`/backups` → 导入导出，JSON）：部署并测试通过后，建议**手动生成一份全量备份**留存。
   - **自动**：每次配置变更自动版本快照；`install.sh upgrade` 会先执行 `backup.sh` 整机备份（便于部署/测试阶段回滚）。
-  - **整机灾备**：`bash backup.sh` 备份 `pypimeops.db` + `vault/` + `scripts/` + `secrets.env`；**`vault.key` 与 `vault.enc` 必须同时还原**。
+  - **整机灾备**：`bash backup.sh` 备份 `inspectra.db` + `vault/` + `scripts/` + `secrets.env`；**`vault.key` 与 `vault.enc` 必须同时还原**。
 
 ## 安全模型（纯内网优先）
 
@@ -127,7 +127,7 @@ python3 -m venv venv                     # Python 需 ≥3.11（3.12 推荐）
 
 ```bash
 sudo ./deploy/install.sh install \
-  --app-dir /opt/pypimeops --user pypimeops \
+  --app-dir /opt/inspectra --user inspectra \
   --host 0.0.0.0 --port 8080 --mode systemd
 ```
 
@@ -139,16 +139,16 @@ sudo ./deploy/install.sh install \
 ### 手动部署（systemd）
 
 ```bash
-sudo useradd -r -s /sbin/nologin pypimeops
-sudo mkdir -p /opt/pypimeops && sudo chown -R pypimeops:pypimeops /opt/pypimeops
-git clone <repo> /opt/pypimeops
-python3 -m venv /opt/pypimeops/venv
-/opt/pypimeops/venv/bin/pip install -r /opt/pypimeops/requirements.txt
-cd /opt/pypimeops && cp config.yaml.example config.yaml && cp secrets.env.example secrets.env && chmod 600 secrets.env
-/opt/pypimeops/venv/bin/python init.py
-sudo sed -e 's|__APP_DIR__|/opt/pypimeops|g' -e 's|__SVC_USER__|pypimeops|g' \
-  deploy/pypimeops.service | sudo tee /etc/systemd/system/pypimeops.service
-sudo systemctl daemon-reload && sudo systemctl enable --now pypimeops
+sudo useradd -r -s /sbin/nologin inspectra
+sudo mkdir -p /opt/inspectra && sudo chown -R inspectra:inspectra /opt/inspectra
+git clone <repo> /opt/inspectra
+python3 -m venv /opt/inspectra/venv
+/opt/inspectra/venv/bin/pip install -r /opt/inspectra/requirements.txt
+cd /opt/inspectra && cp config.yaml.example config.yaml && cp secrets.env.example secrets.env && chmod 600 secrets.env
+/opt/inspectra/venv/bin/python init.py
+sudo sed -e 's|__APP_DIR__|/opt/inspectra|g' -e 's|__SVC_USER__|inspectra|g' \
+  deploy/inspectra.service | sudo tee /etc/systemd/system/inspectra.service
+sudo systemctl daemon-reload && sudo systemctl enable --now inspectra
 ```
 
 ### Docker
@@ -164,7 +164,7 @@ docker compose ps               # 应显示 healthy
 sudo ./deploy/install.sh install --mode docker   # 或使用一键脚本
 ```
 
-- 数据目录：`./data`（`config.yaml`、`secrets.env`、`pypimeops.db`、`vault/`、`scripts/`、`reports/`、`logs/`）。
+- 数据目录：`./data`（`config.yaml`、`secrets.env`、`inspectra.db`、`vault/`、`scripts/`、`reports/`、`logs/`）。
 - 属主：容器以 `PUID:PGID` 运行；建议设为宿主 `./data` 所有者（`sudo chown -R $PUID:$PGID ./data`）。
 - 时区：`TZ` 留空 = UTC；需本地时间请填如 `Asia/Shanghai`。
 - 网络：`host` 模式，端口由 `config.yaml` 决定、保留真实客户端 IP（利于 IP 白名单）；不映射端口。
@@ -173,10 +173,10 @@ sudo ./deploy/install.sh install --mode docker   # 或使用一键脚本
 单命令（等价，不使用 compose）：
 
 ```bash
-docker build -t pypimeops:local .
-docker run -d --name pypimeops --network host --restart unless-stopped \
+docker build -t inspectra:local .
+docker run -d --name inspectra --network host --restart unless-stopped \
   -e PUID=1000 -e PGID=1000 -e TZ=Asia/Shanghai \
-  -v "$PWD/data:/data" pypimeops:local
+  -v "$PWD/data:/data" inspectra:local
 ```
 
 ## 配置说明
@@ -187,7 +187,7 @@ docker run -d --name pypimeops --network host --restart unless-stopped \
 |----|------|
 | `host` / `port` | Web 监听地址/端口（**唯一权威**；`--host/--port` 可选覆盖） |
 | `paths.*` | scripts/reports/vault/logs/known_hosts/db 路径 |
-| `paths.vault_key` | 可选：`vault.key` 外置路径（也可用环境变量 `PYPIMEOPS_VAULT_KEY_PATH`） |
+| `paths.vault_key` | 可选：`vault.key` 外置路径（也可用环境变量 `INSPECTRA_VAULT_KEY_PATH`） |
 | `secrets_env` | 密钥文件路径 |
 | `poll_interval` | 调度轮询间隔（秒） |
 | `ssh_batch_size` | 批次大小（模型分批 5~10 台） |
@@ -270,8 +270,8 @@ docker run -d --name pypimeops --network host --restart unless-stopped \
 - 升级：`sudo ./deploy/install.sh upgrade`（自动先 `backup.sh` → 停服 → 更新 → pip → init → 启服）
 - 回滚：停服 → 还原 `backup.sh` 备份 → 启服
 - 卸载：`sudo ./deploy/install.sh uninstall`（二次确认后删数据；`--keep-data` 保留）
-- 状态：`sudo ./deploy/install.sh status` / `systemctl status pypimeops` / `journalctl -u pypimeops -f`
-- 排障：`logs/pypimeops.log`、端口占用、目录权限（`vault/` 700、`secrets.env`/`vault.key` 600）
+- 状态：`sudo ./deploy/install.sh status` / `systemctl status inspectra` / `journalctl -u inspectra -f`
+- 排障：`logs/inspectra.log`、端口占用、目录权限（`vault/` 700、`secrets.env`/`vault.key` 600）
 
 ## 常见问题（FAQ）
 

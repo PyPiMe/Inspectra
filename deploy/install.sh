@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# PyPiMeOps 一键安装/升级/卸载/状态脚本
+# Inspectra 一键安装/升级/卸载/状态脚本
 # 用法：
 #   ./deploy/install.sh install   [选项]
 #   ./deploy/install.sh upgrade   [选项]
@@ -7,14 +7,14 @@
 #   ./deploy/install.sh status    [选项]
 set -euo pipefail
 
-APP_DIR="/opt/pypimeops"
-SVC_USER="pypimeops"
+APP_DIR="/opt/inspectra"
+SVC_USER="inspectra"
 WEB_HOST="0.0.0.0"
 WEB_PORT="8080"
 MODE="systemd"
 PYTHON=""   # 空=自动探测（3.12/3.13/3.11/3.10/python3）
 MIN_PY="3.11"
-SERVICE_NAME="pypimeops"
+SERVICE_NAME="inspectra"
 REPO=""
 SRC_DIR=""
 INSTALL_DEPS=0
@@ -35,13 +35,13 @@ usage() {
   cat <<'EOF'
 
 选项：
-  --app-dir DIR        安装目录（默认 /opt/pypimeops）
-  --user NAME          服务用户（默认 pypimeops）
+  --app-dir DIR        安装目录（默认 /opt/inspectra）
+  --user NAME          服务用户（默认 inspectra）
   --host HOST          Web 监听地址（默认 0.0.0.0）
   --port PORT          Web 监听端口（默认 8080）
   --mode MODE          systemd|docker|dev（默认 systemd）
   --python BIN         指定 Python 解释器（默认自动探测 3.12/3.13/3.11/3.10/python3，需 >= 3.11）
-  --service-name NAME  systemd 服务名（默认 pypimeops）
+  --service-name NAME  systemd 服务名（默认 inspectra）
   --repo URL           git 仓库地址（与 --src 二选一，可选）
   --src DIR            本地源码目录（可选）
   --install-deps       自动安装系统依赖（默认仅检测提示）
@@ -244,7 +244,7 @@ run_init() {
 register_systemd() {
   log "注册 systemd 服务 $SERVICE_NAME"
   sed -e "s|__APP_DIR__|$APP_DIR|g" -e "s|__SVC_USER__|$SVC_USER|g" \
-    "$APP_DIR/deploy/pypimeops.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
+    "$APP_DIR/deploy/inspectra.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload
   systemctl enable --now "$SERVICE_NAME"
 }

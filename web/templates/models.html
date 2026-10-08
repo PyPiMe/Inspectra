@@ -202,7 +202,7 @@ async function pullModels(modalId, btn) {
   const old = btn.textContent;
   btn.disabled = true; btn.textContent = __t('js.pulling');
   try {
-    const body = new URLSearchParams({ csrf_token: window.pypimeops.csrf(), base_url: q('base_url'), api_key_env: q('api_key_env'), extra_json: q('extra_json') });
+    const body = new URLSearchParams({ csrf_token: window.inspectra.csrf(), base_url: q('base_url'), api_key_env: q('api_key_env'), extra_json: q('extra_json') });
     const d = await (await fetch('{{ url_for("models_list_ajax") }}', { method: 'POST', body })).json();
     if (d.ok && d.models && d.models.length) {
       sel.innerHTML = '<option value="">' + __t('js.select_model') + '</option>';
@@ -219,7 +219,7 @@ async function pullModels(modalId, btn) {
 async function testModelForm(modalId, btn) {
   const modal = document.getElementById(modalId);
   const val = (n) => { const el = modal.querySelector(`[name="${n}"]`); return el ? el.value : ''; };
-  const body = new URLSearchParams({ csrf_token: window.pypimeops.csrf(), base_url: val('base_url'), model_id: val('model_id'), api_key_env: val('api_key_env'), extra_json: val('extra_json') });
+  const body = new URLSearchParams({ csrf_token: window.inspectra.csrf(), base_url: val('base_url'), model_id: val('model_id'), api_key_env: val('api_key_env'), extra_json: val('extra_json') });
   const out = document.getElementById(modalId + '-result');
   out.textContent = __t('js.testing'); out.className = 'small text-muted';
   try {

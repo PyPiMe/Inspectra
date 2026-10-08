@@ -1,4 +1,4 @@
-"""PyPiMeOps Web 入口：路由 + IP 白名单中间件 + CSRF + 调度线程启动。"""
+"""Inspectra Web 入口：路由 + IP 白名单中间件 + CSRF + 调度线程启动。"""
 from __future__ import annotations
 
 import argparse
@@ -44,7 +44,7 @@ from config import APP_VERSION, get_config, load_config, set_config
 import scheduler as scheduler_mod
 from scheduler import Scheduler
 
-log = logging.getLogger("pypimeops.app")
+log = logging.getLogger("inspectra.app")
 scheduler = Scheduler()
 
 # 报告 Markdown 渲染：禁用原始 HTML（转义），仅启用表格扩展，防存储型 XSS
@@ -752,7 +752,7 @@ def _render_report_md(run: dict[str, Any], summary: dict[str, Any], detail: dict
     按当前语言由结构化数据（summary/detail）生成报告 Markdown。
     """
     t = i18n.t
-    site = models.get_setting("site_title", "PyPiMeOps") or "PyPiMeOps"
+    site = models.get_setting("site_title", "Inspectra") or "Inspectra"
     lines: list[str] = [t("report_md.title", site=site, id=run.get("id")), ""]
     trig_key = "report_md.trigger_" + (run.get("trigger") or "")
     trig = t(trig_key)
@@ -846,7 +846,7 @@ _NOISY_LOGGERS = ("werkzeug", "paramiko", "cryptography", "urllib3", "requests")
 
 
 def apply_log_level(level: str | None) -> None:
-    """应用日志级别（pypimeops.* 与日志文件），保存设置后即时生效。"""
+    """应用日志级别（inspectra.* 与日志文件），保存设置后即时生效。"""
     lvl = getattr(logging, (level or "INFO").strip().upper(), logging.INFO)
     logging.getLogger().setLevel(lvl)
     for h in (_file_handler, _console_handler):
@@ -865,7 +865,7 @@ def setup_logging() -> None:
     root = logging.getLogger()
     if _file_handler is None:
         _file_handler = logging.handlers.RotatingFileHandler(
-            os.path.join(cfg.logs_dir, "pypimeops.log"),
+            os.path.join(cfg.logs_dir, "inspectra.log"),
             maxBytes=5 * 1024 * 1024,
             backupCount=5,
             encoding="utf-8",
@@ -1006,7 +1006,7 @@ def create_app() -> Flask:
             (models.utcnow(), "service_restarted"),
         )
         if cur.rowcount:
-            logging.getLogger("pypimeops.app").warning("标记 %s 条中断运行（服务重启）", cur.rowcount)
+            logging.getLogger("inspectra.app").warning("标记 %s 条中断运行（服务重启）", cur.rowcount)
     setup_logging()
 
     app = Flask(__name__, template_folder="web/templates", static_folder="web/static")
@@ -1085,7 +1085,7 @@ def create_app() -> Flask:
             "csrf_token": g.get("csrf", ""),
             "client_ip": g.get("ip", ""),
             "now_local": now_local_str(models.utcnow()),
-            "site_title": (settings.get("site_title") or "").strip() or "PyPiMeOps",
+            "site_title": (settings.get("site_title") or "").strip() or "Inspectra",
             "app_version": APP_VERSION,
             "whitelist_empty": not (settings.get("allowed_ips") or "").strip(),
             "whitelist_ack": settings.get("whitelist_ack") == "true",
@@ -2709,7 +2709,7 @@ def create_app() -> Flask:
             except Exception:  # noqa: BLE001
                 log.exception("定时任务立即执行失败")
 
-        threading.Thread(target=_worker, name=f"pypimeops-sched-run-{sid}", daemon=True).start()
+        threading.Thread(target=_worker, name=f"inspectra-sched-run-{sid}", daemon=True).start()
         flash(i18n.t("schedules.run_submitted"), "success")
         return redirect(url_for("run_wait", after=prev_max))
 
@@ -2764,7 +2764,7 @@ def create_app() -> Flask:
                 except Exception:  # noqa: BLE001
                     log.exception("手动执行失败")
 
-            threading.Thread(target=_worker, name="pypimeops-manual-run", daemon=True).start()
+            threading.Thread(target=_worker, name="inspectra-manual-run", daemon=True).start()
             flash(i18n.t("run.submitted"), "success")
             return redirect(url_for("run_wait", after=prev_max))
 
@@ -2993,7 +2993,7 @@ def create_app() -> Flask:
         return Response(
             md,
             mimetype="text/markdown",
-            headers={"Content-Disposition": f"attachment; filename=pypimeops_report_{rid}.md"},
+            headers={"Content-Disposition": f"attachment; filename=inspectra_report_{rid}.md"},
         )
 
     @app.route("/reports/<int:rid>")
@@ -3283,7 +3283,7 @@ def create_app() -> Flask:
         return Response(
             payload,
             mimetype="application/json",
-            headers={"Content-Disposition": "attachment; filename=pypimeops_backup.json"},
+            headers={"Content-Disposition": "attachment; filename=inspectra_backup.json"},
         )
 
     @app.route("/backups/import", methods=["POST"])
@@ -3608,7 +3608,7 @@ def create_app() -> Flask:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="PyPiMeOps Web")
+    parser = argparse.ArgumentParser(description="Inspectra Web")
     parser.add_argument("--config", default=None, help="config.yaml 路径（默认 ./config.yaml）")
     parser.add_argument("--host", default=None, help="覆盖 config.yaml 的 host")
     parser.add_argument("--port", type=int, default=None, help="覆盖 config.yaml 的 port")
@@ -3622,7 +3622,7 @@ def main(argv: list[str] | None = None) -> int:
 
     host = args.host or cfg.host
     port = args.port or cfg.port
-    log.info("PyPiMeOps %s 启动于 http://%s:%s（单进程）", APP_VERSION, host, port)
+    log.info("Inspectra %s 启动于 http://%s:%s（单进程）", APP_VERSION, host, port)
     app.run(host=host, port=port, debug=False, threaded=True, use_reloader=False)
     return 0
 

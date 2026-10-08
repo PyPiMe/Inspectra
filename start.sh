@@ -45,5 +45,5 @@ fi
 echo "[*] 初始化（幂等）"
 ./venv/bin/python init.py
 
-echo "[*] 启动 PyPiMeOps（host/port 读 config.yaml）"
+echo "[*] 启动 Inspectra（host/port 读 config.yaml）"
 exec ./venv/bin/python app.py "$@"

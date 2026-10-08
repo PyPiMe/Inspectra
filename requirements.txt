@@ -1,4 +1,4 @@
-# PyPiMeOps Python 依赖（Python 3.12，venv 隔离安装，锁具体版本）
+# Inspectra Python 依赖（Python 3.12，venv 隔离安装，锁具体版本）
 #
 # Licenses of direct dependencies:
 # 各直接依赖许可：

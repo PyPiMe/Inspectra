@@ -16,7 +16,7 @@ import models
 import sanitize
 from config import get_config
 
-log = logging.getLogger("pypimeops.chatbot")
+log = logging.getLogger("inspectra.chatbot")
 
 MAX_QUESTION = 2000
 MAX_HISTORY = 20          # 参与上下文的历史消息条数上限

@@ -1,4 +1,4 @@
-# PyPiMeOps 启动配置模板（复制为 config.yaml 后按需修改）
+# Inspectra 启动配置模板（复制为 config.yaml 后按需修改）
 # config.yaml 仅存放启动参数；其余运行时可变项在 Web「设置」页（settings 表）配置。
 # 端口语义：此处 host/port 为唯一权威；app.py --host/--port 为可选覆盖。
 
@@ -11,8 +11,8 @@ paths:
   vault:   ./vault
   logs:    ./logs
   known_hosts: ./vault/known_hosts
-  db: ./pypimeops.db
-  # vault_key: /etc/pypimeops/vault.key   # 可选：vault.key 外置（也可用环境变量 PYPIMEOPS_VAULT_KEY_PATH）
+  db: ./inspectra.db
+  # vault_key: /etc/inspectra/vault.key   # 可选：vault.key 外置（也可用环境变量 INSPECTRA_VAULT_KEY_PATH）
 
 secrets_env: ./secrets.env
 

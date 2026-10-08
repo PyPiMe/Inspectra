@@ -77,9 +77,9 @@ def _localize_summary_for(summary: dict[str, Any], lang: str) -> dict[str, Any]:
 
 def _site_title() -> str:
     try:
-        return (models.get_setting("site_title", "PyPiMeOps") or "PyPiMeOps").strip() or "PyPiMeOps"
+        return (models.get_setting("site_title", "Inspectra") or "Inspectra").strip() or "Inspectra"
     except Exception:  # noqa: BLE001
-        return "PyPiMeOps"
+        return "Inspectra"
 
 
 def _parse_json(raw: Any) -> dict[str, Any]:

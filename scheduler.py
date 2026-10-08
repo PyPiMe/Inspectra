@@ -1,6 +1,6 @@
 """内置调度线程：每 poll_interval 秒扫描 run_schedule 表。
 
-- 统一按 PyPiMeOps 主机本地时区校验与触发
+- 统一按 Inspectra 主机本地时区校验与触发
 - last_fired_at 保证同分钟仅触发一次
 - run_history.schedule_id 检查该任务是否有进行中的 run
 - 全局单 run 互斥（与手动统一）
@@ -18,7 +18,7 @@ import engine
 import i18n
 import models
 
-log = logging.getLogger("pypimeops.scheduler")
+log = logging.getLogger("inspectra.scheduler")
 
 _WEEKDAY_KEYS = ["weekday.0", "weekday.1", "weekday.2", "weekday.3", "weekday.4", "weekday.5", "weekday.6"]
 
@@ -196,7 +196,7 @@ class Scheduler:
         if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
-        self._thread = threading.Thread(target=self._loop, name="pypimeops-scheduler", daemon=True)
+        self._thread = threading.Thread(target=self._loop, name="inspectra-scheduler", daemon=True)
         self._thread.start()
         log.info("调度线程已启动，轮询间隔 %ss", self.poll_interval)
 
@@ -278,4 +278,4 @@ class Scheduler:
             finally:
                 self._inflight.discard(sid)
 
-        threading.Thread(target=_worker, name=f"pypimeops-run-{sid}", daemon=True).start()
+        threading.Thread(target=_worker, name=f"inspectra-run-{sid}", daemon=True).start()

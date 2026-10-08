@@ -12,7 +12,7 @@ from typing import Any
 
 from config import get_config
 
-ACTIVE_LOG = "pypimeops.log"
+ACTIVE_LOG = "inspectra.log"
 _TS_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d{3}")
 
 

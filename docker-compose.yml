@@ -1,11 +1,11 @@
-# PyPiMeOps Docker Compose
+# Inspectra Docker Compose
 # 自包含镜像 + ./data 数据卷 + host 网络；端口由 config.yaml 决定，不映射 ports。
 # Self-contained image + ./data volume + host network; port comes from config.yaml, no ports mapping.
 services:
-  pypimeops:
+  inspectra:
     build: .
-    image: pypimeops:local
-    container_name: pypimeops
+    image: inspectra:local
+    container_name: inspectra
     network_mode: host
     restart: unless-stopped
     environment:

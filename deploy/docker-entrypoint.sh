@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# PyPiMeOps 容器入口：幂等生成配置/密钥 → 对齐属主 → 初始化 → 启动。
+# Inspectra 容器入口：幂等生成配置/密钥 → 对齐属主 → 初始化 → 启动。
 # Idempotent container entrypoint: generate config/secrets, align ownership, init, then run.
 set -euo pipefail
 
 DATA_DIR="${DATA_DIR:-/data}"
 PUID="${PUID:-1000}"
 PGID="${PGID:-1000}"
-APP_USER="pypimeops"
+APP_USER="inspectra"
 
 log() { printf '[entrypoint] %s\n' "$*"; }
 
@@ -60,5 +60,5 @@ chown -R "$PUID:$PGID" "$DATA_DIR"
 log "初始化数据库与内置种子（init.py）"
 gosu "$PUID:$PGID" python /app/init.py --config "$DATA_DIR/config.yaml"
 
-log "启动 PyPiMeOps"
+log "启动 Inspectra"
 exec gosu "$PUID:$PGID" python /app/app.py --config "$DATA_DIR/config.yaml"

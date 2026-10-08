@@ -1,8 +1,8 @@
-# PyPiMeOps
+# Inspectra
 
 **English** | [简体中文](README.md)
 
-**PyPiMeOps** is a **standalone server O&M inspection web app**. For all applications an
+**Inspectra** is a **standalone server O&M inspection web app**. For all applications an
 organization exposes internally or externally, it collects server/VM metrics over two
 channels — **SSH scripts** and **Prometheus metrics** — generates inspection reports based
 on thresholds and advice declared in the scripts, optionally adds LLM interpretation, and
@@ -147,7 +147,7 @@ sends SMTP / DingTalk alerts on anomalies. Intranet-first deployment.
     testing, generate a **full backup** manually and keep it.
   - **Automatic**: a version snapshot on every config change; `install.sh upgrade` runs
     `backup.sh` (full machine backup) first, easing rollback during deploy/test.
-  - **Full-machine DR**: `bash backup.sh` backs up `pypimeops.db` + `vault/` + `scripts/`
+  - **Full-machine DR**: `bash backup.sh` backs up `inspectra.db` + `vault/` + `scripts/`
     + `secrets.env`; **`vault.key` and `vault.enc` must be restored together**.
 
 ## Security model (intranet-first)
@@ -206,7 +206,7 @@ model (optional) → notifications → groups → applications → script bindin
 
 ```bash
 sudo ./deploy/install.sh install \
-  --app-dir /opt/pypimeops --user pypimeops \
+  --app-dir /opt/inspectra --user inspectra \
   --host 0.0.0.0 --port 8080 --mode systemd
 ```
 
@@ -218,16 +218,16 @@ sudo ./deploy/install.sh install \
 ### Manual deployment (systemd)
 
 ```bash
-sudo useradd -r -s /sbin/nologin pypimeops
-sudo mkdir -p /opt/pypimeops && sudo chown -R pypimeops:pypimeops /opt/pypimeops
-git clone <repo> /opt/pypimeops
-python3 -m venv /opt/pypimeops/venv
-/opt/pypimeops/venv/bin/pip install -r /opt/pypimeops/requirements.txt
-cd /opt/pypimeops && cp config.yaml.example config.yaml && cp secrets.env.example secrets.env && chmod 600 secrets.env
-/opt/pypimeops/venv/bin/python init.py
-sudo sed -e 's|__APP_DIR__|/opt/pypimeops|g' -e 's|__SVC_USER__|pypimeops|g' \
-  deploy/pypimeops.service | sudo tee /etc/systemd/system/pypimeops.service
-sudo systemctl daemon-reload && sudo systemctl enable --now pypimeops
+sudo useradd -r -s /sbin/nologin inspectra
+sudo mkdir -p /opt/inspectra && sudo chown -R inspectra:inspectra /opt/inspectra
+git clone <repo> /opt/inspectra
+python3 -m venv /opt/inspectra/venv
+/opt/inspectra/venv/bin/pip install -r /opt/inspectra/requirements.txt
+cd /opt/inspectra && cp config.yaml.example config.yaml && cp secrets.env.example secrets.env && chmod 600 secrets.env
+/opt/inspectra/venv/bin/python init.py
+sudo sed -e 's|__APP_DIR__|/opt/inspectra|g' -e 's|__SVC_USER__|inspectra|g' \
+  deploy/inspectra.service | sudo tee /etc/systemd/system/inspectra.service
+sudo systemctl daemon-reload && sudo systemctl enable --now inspectra
 ```
 
 ### Docker
@@ -245,7 +245,7 @@ docker compose ps               # should show healthy
 sudo ./deploy/install.sh install --mode docker   # or use the one-shot script
 ```
 
-- Data dir: `./data` (`config.yaml`, `secrets.env`, `pypimeops.db`, `vault/`, `scripts/`, `reports/`, `logs/`).
+- Data dir: `./data` (`config.yaml`, `secrets.env`, `inspectra.db`, `vault/`, `scripts/`, `reports/`, `logs/`).
 - Ownership: the container runs as `PUID:PGID`; set it to the host `./data` owner (`sudo chown -R $PUID:$PGID ./data`).
 - Timezone: `TZ` empty = UTC; set e.g. `Asia/Shanghai` for local time.
 - Network: `host` mode; the port comes from `config.yaml` and real client IPs are preserved (good for the IP allowlist); no port mapping.
@@ -254,10 +254,10 @@ sudo ./deploy/install.sh install --mode docker   # or use the one-shot script
 Single command (equivalent, without compose):
 
 ```bash
-docker build -t pypimeops:local .
-docker run -d --name pypimeops --network host --restart unless-stopped \
+docker build -t inspectra:local .
+docker run -d --name inspectra --network host --restart unless-stopped \
   -e PUID=1000 -e PGID=1000 -e TZ=Asia/Shanghai \
-  -v "$PWD/data:/data" pypimeops:local
+  -v "$PWD/data:/data" inspectra:local
 ```
 
 ## Configuration
@@ -268,7 +268,7 @@ docker run -d --name pypimeops --network host --restart unless-stopped \
 |-----|-------------|
 | `host` / `port` | Web listen address/port (**authoritative**; `--host/--port` override) |
 | `paths.*` | scripts/reports/vault/logs/known_hosts/db paths |
-| `paths.vault_key` | Optional: external `vault.key` path (or env `PYPIMEOPS_VAULT_KEY_PATH`) |
+| `paths.vault_key` | Optional: external `vault.key` path (or env `INSPECTRA_VAULT_KEY_PATH`) |
 | `secrets_env` | Secrets file path |
 | `poll_interval` | Scheduler poll interval (seconds) |
 | `ssh_batch_size` | Batch size (model batches of 5~10 hosts) |
@@ -367,9 +367,9 @@ inspection requires no SSH.**
 - Rollback: stop → restore the `backup.sh` backup → start
 - Uninstall: `sudo ./deploy/install.sh uninstall` (deletes data after confirm; use
   `--keep-data` to keep it)
-- Status: `sudo ./deploy/install.sh status` / `systemctl status pypimeops` /
-  `journalctl -u pypimeops -f`
-- Troubleshooting: `logs/pypimeops.log`, port usage, directory permissions (`vault/` 700,
+- Status: `sudo ./deploy/install.sh status` / `systemctl status inspectra` /
+  `journalctl -u inspectra -f`
+- Troubleshooting: `logs/inspectra.log`, port usage, directory permissions (`vault/` 700,
   `secrets.env`/`vault.key` 600)
 
 ## FAQ

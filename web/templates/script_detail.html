@@ -233,7 +233,7 @@ async function doValidate() {
   resultEl.textContent = __t('js.validating');
   resultEl.className = 'small text-muted';
   try {
-    const body = new URLSearchParams({ csrf_token: window.pypimeops.csrf(), content: area.value, kind: kindSel.value });
+    const body = new URLSearchParams({ csrf_token: window.inspectra.csrf(), content: area.value, kind: kindSel.value });
     const d = await (await fetch('{{ url_for("scripts_validate") }}', { method: 'POST', body })).json();
     resultEl.textContent = d.ok ? ('✅ ' + __t('js.validate_ok')) : ('❌ ' + (d.errors || []).join('; '));
     resultEl.className = 'small ' + (d.ok ? 'text-success' : 'text-danger');

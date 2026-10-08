@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# 整机灾备：备份 pypimeops.db + vault/（含 vault.enc/vault.key/known_hosts）+ scripts/ + secrets.env
+# 整机灾备：备份 inspectra.db + vault/（含 vault.enc/vault.key/known_hosts）+ scripts/ + secrets.env
 # 与 backup.py 配置版本备份并存。恢复流程见 README。
 set -euo pipefail
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-$APP_DIR/backups}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
-ARCHIVE="$BACKUP_DIR/pypimeops_backup_$STAMP.tar.gz"
+ARCHIVE="$BACKUP_DIR/inspectra_backup_$STAMP.tar.gz"
 
 mkdir -p "$BACKUP_DIR"
 cd "$APP_DIR"
@@ -37,7 +37,7 @@ SCRIPTS_DIR="${SCRIPTS_DIR:-./scripts}"
 VAULT_KEY="${VAULT_KEY:-./vault/vault.key}"
 SECRETS_ENV="${SECRETS_ENV:-./secrets.env}"
 
-ITEMS=(pypimeops.db "$SCRIPTS_DIR")
+ITEMS=(inspectra.db "$SCRIPTS_DIR")
 [ -d "$VAULT_DIR" ] && ITEMS+=("$VAULT_DIR")
 [ -f "$SECRETS_ENV" ] && ITEMS+=("$SECRETS_ENV")
 # vault.key 外置时单独加入

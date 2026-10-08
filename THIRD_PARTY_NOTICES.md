@@ -2,12 +2,12 @@
 
 第三方许可声明
 
-PyPiMeOps is licensed under the Apache License 2.0 (see [`LICENSE`](LICENSE)).
+Inspectra is licensed under the Apache License 2.0 (see [`LICENSE`](LICENSE)).
 This file lists the third-party components it uses and their licenses. When you
-redistribute PyPiMeOps (source or a deployed bundle), keep this file and the
+redistribute Inspectra (source or a deployed bundle), keep this file and the
 third-party copyright/license notices.
 
-PyPiMeOps 以 Apache-2.0 发布（见 [`LICENSE`](LICENSE)）。本文件列出其使用的第三方
+Inspectra 以 Apache-2.0 发布（见 [`LICENSE`](LICENSE)）。本文件列出其使用的第三方
 组件及许可；**分发（源码或部署包）时请一并保留本文件与各组件版权/许可声明**。
 
 ## Python runtime dependencies

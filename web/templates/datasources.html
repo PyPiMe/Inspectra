@@ -163,7 +163,7 @@ async function testDsForm(modalId, btn) {
     return el.type === 'checkbox' ? (el.checked ? '1' : '') : el.value;
   };
   const body = new URLSearchParams({
-    csrf_token: window.pypimeops.csrf(),
+    csrf_token: window.inspectra.csrf(),
     base_url: val('base_url'), auth_type: val('auth_type'),
     secret_env: val('secret_env'), verify_tls: val('verify_tls'), timeout: val('timeout'),
   });

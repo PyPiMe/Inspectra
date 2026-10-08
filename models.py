@@ -239,7 +239,7 @@ TABLE_COLUMNS: dict[str, list[str]] = {
 }
 
 DEFAULT_SETTINGS: dict[str, str] = {
-    "site_title": "PyPiMeOps",
+    "site_title": "Inspectra",
     "default_language": "zh-CN",
     "app_log_level": "INFO",
     "allowed_ips": "",

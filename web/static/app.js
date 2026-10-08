@@ -1,9 +1,9 @@
-// PyPiMeOps 前端辅助：为 fetch 自动附带 CSRF token
+// Inspectra 前端辅助：为 fetch 自动附带 CSRF token
 function __t(key, fallback) {
   const d = window.__I18N || {};
   return (key in d) ? d[key] : (fallback !== undefined ? fallback : key);
 }
-window.pypimeops = {
+window.inspectra = {
   csrf() {
     const meta = document.querySelector('meta[name="csrf-token"]');
     return meta ? meta.content : '';

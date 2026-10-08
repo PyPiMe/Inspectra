@@ -41,12 +41,12 @@ class Config:
         self.logs_dir = _abs(paths.get("logs"), "./logs")
         self.known_hosts = _abs(paths.get("known_hosts"), "./vault/known_hosts")
 
-        # vault.key 支持外置：config paths.vault_key 优先，其次环境变量 PYPIMEOPS_VAULT_KEY_PATH，最后默认同目录
-        vault_key = paths.get("vault_key") or os.environ.get("PYPIMEOPS_VAULT_KEY_PATH")
+        # vault.key 支持外置：config paths.vault_key 优先，其次环境变量 INSPECTRA_VAULT_KEY_PATH，最后默认同目录
+        vault_key = paths.get("vault_key") or os.environ.get("INSPECTRA_VAULT_KEY_PATH")
         self.vault_key_path = _abs(vault_key, "./vault/vault.key") if vault_key else os.path.join(self.vault_dir, "vault.key")
 
         self.secrets_env = _abs(data.get("secrets_env"), "./secrets.env")
-        self.db_path = _abs(paths.get("db"), "./pypimeops.db")
+        self.db_path = _abs(paths.get("db"), "./inspectra.db")
 
         self.poll_interval = int(data.get("poll_interval", 15))
         self.ssh_batch_size = int(data.get("ssh_batch_size", 10))
@@ -84,7 +84,7 @@ def load_secrets_env(path: str) -> dict[str, str]:
 
 
 def load_config(path: str | None = None) -> Config:
-    cfg_path = path or os.environ.get("PYPIMEOPS_CONFIG") or _DEFAULT_CONFIG
+    cfg_path = path or os.environ.get("INSPECTRA_CONFIG") or _DEFAULT_CONFIG
     if not os.path.isfile(cfg_path):
         raise FileNotFoundError(
             f"配置文件不存在: {cfg_path}（请先 `cp config.yaml.example config.yaml` 并按需修改）"

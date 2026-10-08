@@ -1,5 +1,5 @@
 [Unit]
-Description=PyPiMeOps 服务器运维巡检 Web 管理端（单进程）
+Description=Inspectra 服务器运维巡检 Web 管理端（单进程）
 After=network-online.target
 Wants=network-online.target
 

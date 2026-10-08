@@ -12,13 +12,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pypimeops"
+name = "inspectra"
 dynamic = ["version"]
 description = "Server O&M inspection web console: SSH scripts + Prometheus metrics, with optional LLM analysis."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "The PyPiMeOps Authors" }]
+authors = [{ name = "The Inspectra Authors" }]
 keywords = ["monitoring", "inspection", "prometheus", "ssh", "operations", "flask"]
 classifiers = [
   "License :: OSI Approved :: Apache Software License",
