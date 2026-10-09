@@ -1081,5 +1081,9 @@
   "common.delete_selected": "删除所选",
   "common.confirm_delete_selected": "确认删除选中的 {n} 项？此操作不可恢复。",
   "common.batch_deleted": "已删除 {n} 项",
-  "common.batch_skipped": "跳过 {n} 项（被引用）"
+  "common.batch_skipped": "跳过 {n} 项（被引用）",
+  "nav.group_overview": "概览",
+  "nav.group_assets": "资产",
+  "nav.group_automation": "自动化",
+  "nav.group_reports": "报告与运维"
 }

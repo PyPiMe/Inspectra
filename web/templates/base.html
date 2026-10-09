@@ -18,7 +18,7 @@
   <link href="{{ url_for('static', filename='style.css') }}" rel="stylesheet">
 </head>
 <body>
-<nav class="navbar navbar-expand-xxl navbar-dark bg-dark">
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
   <div class="container-fluid">
     <a class="navbar-brand d-inline-flex align-items-center gap-2" href="{{ url_for('index') }}">
       <img src="{{ url_for('static', filename='logo.svg') }}" alt="" width="28" height="28" class="d-inline-block align-text-top">
@@ -29,22 +29,27 @@
     </button>
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
-        {% set items = [
-          ('chatbot_page','nav.chatbot','/chatbot'), ('dashboard','nav.dashboard','/dashboard'),
-          ('servers','nav.servers','/servers'), ('datasources','nav.datasources','/datasources'),
-          ('groups','nav.groups','/groups'), ('applications','nav.applications','/applications'),
-          ('credentials','nav.credentials','/credentials'),
-          ('scripts','nav.scripts','/scripts'), ('models_page','nav.models','/models'),
-          ('notifications','nav.notifications','/notifications'), ('schedules','nav.schedules','/schedules'),
-          ('run_page','nav.run','/run'), ('reports','nav.reports','/reports'),
-          ('audit_logs','nav.audit','/audit-logs'), ('backups','nav.backups','/backups'),
-          ('logs_page','nav.logs','/logs'), ('settings_page','nav.settings','/settings')
+        {% set nav_groups = [
+          ('nav.group_overview', [('chatbot_page','nav.chatbot','/chatbot'), ('dashboard','nav.dashboard','/dashboard')]),
+          ('nav.group_assets', [('servers','nav.servers','/servers'), ('datasources','nav.datasources','/datasources'), ('groups','nav.groups','/groups'), ('applications','nav.applications','/applications'), ('credentials','nav.credentials','/credentials')]),
+          ('nav.group_automation', [('scripts','nav.scripts','/scripts'), ('models_page','nav.models','/models'), ('notifications','nav.notifications','/notifications'), ('schedules','nav.schedules','/schedules')]),
+          ('nav.group_reports', [('reports','nav.reports','/reports'), ('audit_logs','nav.audit','/audit-logs'), ('backups','nav.backups','/backups'), ('logs_page','nav.logs','/logs')]),
         ] %}
-        {% for ep, key, href in items %}
-          <li class="nav-item"><a class="nav-link {{ 'active' if nav_active == ep else '' }}" href="{{ href }}">{{ t(key) }}</a></li>
+        {% for gkey, gitems in nav_groups %}
+          {% set is_active = nav_active in (gitems | map(attribute=0) | list) %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle {{ 'active' if is_active else '' }}" href="#" role="button" data-bs-toggle="dropdown">{{ t(gkey) }}</a>
+            <ul class="dropdown-menu">
+              {% for ep, key, href in gitems %}
+              <li><a class="dropdown-item {{ 'active' if nav_active == ep else '' }}" href="{{ href }}">{{ t(key) }}</a></li>
+              {% endfor %}
+            </ul>
+          </li>
         {% endfor %}
       </ul>
-      <ul class="navbar-nav">
+      <ul class="navbar-nav align-items-lg-center">
+        <li class="nav-item me-2"><a class="btn btn-primary btn-sm" href="{{ url_for('run_page') }}">{{ t('nav.run') }}</a></li>
+        <li class="nav-item"><a class="nav-link {{ 'active' if nav_active == 'settings_page' else '' }}" href="{{ url_for('settings_page') }}">{{ t('nav.settings') }}</a></li>
         <li class="nav-item dropdown">
           <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">{{ t('common.language') }}</a>
           <ul class="dropdown-menu dropdown-menu-end">
