@@ -1,0 +1,58 @@
+name: release
+
+# On a version tag: create the GitHub Release with CHANGELOG notes, and attach
+# the SBOM (CycloneDX JSON) + SHA256SUMS. Docker images are not published
+# (build-from-source).
+# 版本标签触发：创建 GitHub Release（notes 取 CHANGELOG），并附加
+# SBOM（CycloneDX JSON）与 SHA256SUMS。不发布 Docker 镜像（build-from-source）。
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract release notes from CHANGELOG
+        # 从 CHANGELOG 提取对应版本段作为 Release notes
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          python - "$ver" <<'PY'
+          import re, sys
+          ver = sys.argv[1]
+          lines = open('CHANGELOG.md', encoding='utf-8').read().splitlines()
+          out, on = [], False
+          for l in lines:
+              if l.startswith('## '):
+                  if on:
+                      break
+                  if re.match(r'^##\s+' + re.escape(ver) + r'(\s|$)', l):
+                      on = True
+              if on:
+                  out.append(l)
+          open('release_notes.md', 'w', encoding='utf-8').write('\n'.join(out).strip() + '\n')
+          print('notes for', ver, '=>', len(out), 'lines')
+          PY
+      - name: Generate SBOM (CycloneDX JSON)
+        # 生成 SBOM（CycloneDX JSON）
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: inspectra-${{ github.ref_name }}-sbom.cdx.json
+          upload-artifact: false
+      - name: Checksums
+        # 生成校验和
+        run: sha256sum inspectra-*.cdx.json > SHA256SUMS
+      - name: Publish GitHub Release
+        # 创建/更新 Release 并上传产物
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: release_notes.md
+          prerelease: ${{ contains(github.ref_name, '-rc') }}
+          files: |
+            inspectra-*.cdx.json
+            SHA256SUMS

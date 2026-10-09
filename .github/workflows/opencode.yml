@@ -1,0 +1,33 @@
+name: opencode
+
+# Mention /oc or /opencode in an issue/PR comment to run OpenCode.
+# 在 Issue/PR 评论中提及 /oc 或 /opencode 以运行 OpenCode。
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  opencode:
+    if: |
+      contains(github.event.comment.body, '/oc') ||
+      contains(github.event.comment.body, '/opencode')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - name: Checkout repository
+        # 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Run OpenCode
+        # 运行 OpenCode
+        uses: anomalyco/opencode/github@latest
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        with:
+          model: deepseek/deepseek-flash
+          share: false

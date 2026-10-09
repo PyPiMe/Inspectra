@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a problem. / 报告问题。
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill in as much detail as possible.
+        请尽量填写完整。
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: A clear description of the bug. / 清晰描述该缺陷。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How to reproduce it. / 如何复现。
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Inspectra version
+      description: See Settings → About. / 见「设置 → 关于」。
+    validations:
+      required: true
+  - type: dropdown
+    id: deploy
+    attributes:
+      label: Deployment
+      description: How you run it. / 运行方式。
+      options:
+        - systemd
+        - Docker
+        - dev (venv)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Relevant logs (desensitized) or screenshots. / 相关日志（须脱敏）或截图。
+    validations:
+      required: false

@@ -1,0 +1,48 @@
+name: ci
+
+# Static checks: compile, locale key parity, templates parse.
+# 静态校验：编译、语言包键集一致、模板解析。
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        # 安装依赖
+        run: pip install -r requirements.txt
+      - name: py_compile
+        # 语法编译检查
+        run: >
+          python -m py_compile
+          app.py engine.py i18n.py collectors.py model_client.py sanitize.py
+          notify.py scheduler.py vault.py backup.py models.py init.py config.py
+          chatbot.py applog.py
+      - name: Locale packs key parity
+        # 语言包键集必须一致
+        run: |
+          python - <<'PY'
+          import json
+          def k(f): return set(json.load(open(f)).keys())
+          zh = k('locales/zh-CN.json'); en = k('locales/en.json'); tp = k('locales/_template.json')
+          assert zh == en == tp, (len(zh ^ en), len(zh ^ tp))
+          print('locales OK', len(zh))
+          PY
+      - name: Jinja templates parse
+        # 模板必须可解析
+        run: |
+          python - <<'PY'
+          import glob, os
+          from jinja2 import Environment, FileSystemLoader
+          env = Environment(loader=FileSystemLoader('web/templates'))
+          for f in sorted(glob.glob('web/templates/*.html')):
+              env.get_template(os.path.basename(f))
+          print('templates OK')
+          PY
