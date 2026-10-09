@@ -10,7 +10,7 @@
 {% set sel_scripts = json_or(s.scripts_json, []) if s else [] %}
 
 <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
-  <h4 class="mb-0">{{ t('schedules.edit_title', id=s.id) if s else t('schedules.new') }}</h4>
+  <h1 class="h4 mb-0">{{ t('schedules.edit_title', id=s.id) if s else t('schedules.new') }}</h1>
   <a class="btn btn-outline-secondary ms-auto" href="{{ back or url_for('schedules') }}">{{ t('server_detail.back_list') }}</a>
 </div>
 

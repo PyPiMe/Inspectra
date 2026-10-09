@@ -21,12 +21,12 @@
 
 <div class="row g-3">
   <div class="col-12" id="contentCol">
-    <h4 class="d-flex align-items-center gap-2 flex-wrap">
+    <h1 class="h4 d-flex align-items-center gap-2 flex-wrap">
       <span>{{ t('reports.title') }}</span>
       {{ status_badge(run.status) }}
       <span class="text-muted small">{{ run.started|local }}</span>
       <span class="text-muted small ms-auto">#{{ run.id }}</span>
-    </h4>
+    </h1>
 
     <div class="card mb-3"><div class="card-body py-2">
       <div class="row g-2 text-center">

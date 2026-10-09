@@ -2,7 +2,7 @@
 {% from "_macros.html" import pager, batch_bar, select_page_row %}
 {% block title %}{{ t('scripts.title') }}{% endblock %}
 {% block content %}
-<h4>{{ t('scripts.title') }}</h4>
+<h1 class="h4">{{ t('scripts.title') }}</h1>
 <div class="alert alert-secondary small mb-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
   <span>{{ t('scripts.note_short') | safe }}</span>
   <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('scripts_help') }}">{{ t('scripts.help') }}</a>

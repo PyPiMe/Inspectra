@@ -2,7 +2,7 @@
 {% from "_macros.html" import pager %}
 {% block title %}{{ t('nav.backups') }}{% endblock %}
 {% block content %}
-<h4>{{ t('backups.title') }}</h4>
+<h1 class="h4">{{ t('backups.title') }}</h1>
 <div class="alert alert-secondary small">{{ t('backups.alert') }}</div>
 
 {% set flt = {'object_type': object_type, 'object_id': object_id, 'action': action} %}

@@ -2,7 +2,7 @@
 {% from "_macros.html" import check_picker, script_picker %}
 {% block title %}{{ t('run.title') }}{% endblock %}
 {% block content %}
-<h4>{{ t('run.title') }}</h4>
+<h1 class="h4">{{ t('run.title') }}</h1>
 {% if running %}<div class="alert alert-warning">{{ t('run.running_alert') }}</div>{% endif %}
 
 <form id="runForm" method="post" action="{{ url_for('run_page') }}">

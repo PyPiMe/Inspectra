@@ -2,9 +2,9 @@
 {% block title %}{{ t('chatbot.title') }}{% endblock %}
 {% block content %}
 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-  <h4 class="mb-0">{{ t('chatbot.title') }} <span class="badge bg-secondary">{{ t('chatbot.readonly') }}</span>
+  <h1 class="h4 mb-0">{{ t('chatbot.title') }} <span class="badge bg-secondary">{{ t('chatbot.readonly') }}</span>
     {% if model_ok %}<span class="badge bg-info text-dark">{{ t('chatbot.model', name=model_label) }}</span>{% endif %}
-  </h4>
+  </h1>
   <form method="post" action="{{ url_for('chatbot_clear') }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <button class="btn btn-sm btn-outline-secondary">{{ t('chatbot.clear') }}</button>

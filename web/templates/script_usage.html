@@ -3,11 +3,11 @@
 {% block title %}{{ script.lname }} - {{ t('scripts.usage') }}{% endblock %}
 {% block content %}
 {% set back_url = back or url_for('scripts') %}
-<h4 class="d-flex align-items-center gap-2 flex-wrap mb-2">
+<h1 class="h4 d-flex align-items-center gap-2 flex-wrap mb-2">
   <span>{{ script.lname }}</span>
   <span class="text-muted">{{ t('scripts.usage') }}</span>
   <span class="text-muted small ms-auto">#{{ script.id }}</span>
-</h4>
+</h1>
 
 <div class="alert alert-secondary small">{{ t('scripts.usage_hint', n=usage_total) }}</div>
 

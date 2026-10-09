@@ -2,13 +2,13 @@
 {% from "_macros.html" import json_view %}
 {% block title %}{{ t('common.version') }} #{{ version.id }}{% endblock %}
 {% block content %}
-<h4 class="d-flex align-items-center gap-2 flex-wrap">
+<h1 class="h4 d-flex align-items-center gap-2 flex-wrap">
   <span>{{ display_name or t('backups.deleted_obj') }}</span>
   <span class="badge bg-secondary">{{ t('type.' ~ version.object_type) }}</span>
   <span class="badge bg-info text-dark">{{ t('audit.' ~ version.action) }}</span>
   <span class="text-muted small">v{{ version.version }}</span>
   <span class="text-muted small ms-auto">#{{ version.id }}</span>
-</h4>
+</h1>
 
 {% if missing %}
 <div class="alert alert-danger">

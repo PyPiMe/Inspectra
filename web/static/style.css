@@ -1,9 +1,10 @@
 body { font-size: 14px; }
 
 /* 顶部导航：标签不换行、分组间距适中；下拉字号与导航一致；客户端 IP 仅宽屏显示 */
-.navbar .nav-link { white-space: nowrap; }
+.navbar .nav-link { white-space: nowrap; font-size: .9375rem; }
 .navbar .navbar-nav .nav-link { padding-left: .75rem; padding-right: .75rem; }
-.navbar .dropdown-menu { --bs-dropdown-font-size: .875rem; }
+.navbar .navbar-brand { font-size: 1.125rem; }
+.navbar .dropdown-menu { --bs-dropdown-font-size: .9375rem; }
 .navbar-ip { display: none; }
 @media (min-width: 1400px) { .navbar-ip { display: inline; } }
 .report-pre {

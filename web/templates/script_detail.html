@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% block title %}{{ script.lname or script.name or t('scripts.new') }}{% endblock %}
 {% block content %}
-<h4 class="d-flex align-items-center gap-2 flex-wrap">
+<h1 class="h4 d-flex align-items-center gap-2 flex-wrap">
   <span>{{ script.lname or script.name or t('scripts.new') }}</span>
   <span class="badge bg-secondary" id="kindBadge">{{ script.kind or 'shell' }}</span>
   {% if script.seed_key %}<span class="badge bg-light text-secondary border" title="{{ t('scripts.builtin_hint') }}">{{ t('scripts.builtin') }}</span>{% endif %}
   {% if script.dirty %}<span class="badge bg-warning text-dark" title="{{ t('scripts.modified_hint') }}">{{ t('scripts.modified') }}</span>{% endif %}
   {% if script.id %}<span class="text-muted small ms-auto">#{{ script.id }}</span>{% endif %}
-</h4>
+</h1>
 {% if meta_warnings %}
 <div class="alert alert-warning py-1 px-2 small mb-2">
   <strong>{{ t('scripts.meta_warning') }}</strong>：{{ meta_warnings | join('；') }}

@@ -3,7 +3,7 @@
 {% block title %}{{ t('reports.title') }}{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center gap-2 flex-wrap">
-  <h4 class="mb-0">{{ t('reports.title') }}</h4>
+  <h1 class="h4 mb-0">{{ t('reports.title') }}</h1>
   </div>
 <div class="alert alert-secondary small my-2">{{ t('reports.note') }} <a href="{{ url_for('audit_logs') }}">{{ t('nav.audit') }}</a>。</div>
 {% set cn = {'success': t('reports.success'), 'partial': t('reports.partial'), 'error': t('reports.error'), 'running': t('reports.running')} %}

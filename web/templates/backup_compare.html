@@ -2,13 +2,13 @@
 {% from "_macros.html" import json_view %}
 {% block title %}{{ t('backup_compare.title') }}{% endblock %}
 {% block content %}
-<h4 class="d-flex align-items-center gap-2 flex-wrap">
+<h1 class="h4 d-flex align-items-center gap-2 flex-wrap">
   <span>{{ t('backup_compare.title') }}</span>
   <span class="text-muted">A：{{ name_a }} <span class="small">v{{ va.version }}</span></span>
   <span class="text-muted">↔</span>
   <span class="text-muted">B：{{ name_b }} <span class="small">v{{ vb.version }}</span></span>
   <span class="text-muted small ms-auto">#{{ va.id }} ↔ #{{ vb.id }}</span>
-</h4>
+</h1>
 
 <div class="row g-3">
   <div class="col-lg-6">

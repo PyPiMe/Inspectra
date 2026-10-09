@@ -2,7 +2,7 @@
 {% from "_macros.html" import pager %}
 {% block title %}{{ t('nav.audit') }}{% endblock %}
 {% block content %}
-<h4>{{ t('nav.audit') }}</h4>
+<h1 class="h4">{{ t('nav.audit') }}</h1>
 <div class="alert alert-secondary small mb-2">{{ t('audit.note') }} <a href="{{ url_for('reports') }}">{{ t('nav.reports') }}</a>。</div>
 {% set mods = {'ip': request.args.get('ip',''), 'target_type': request.args.get('target_type',''), 'q': request.args.get('q',''), 'status': request.args.get('status',''), 'start': request.args.get('start',''), 'end': request.args.get('end','')} %}
 {% set export_action = cur_action if cur_action not in ('', 'need') else '' %}

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ t('settings.title') }}{% endblock %}
 {% block content %}
-<h4>{{ t('settings.title') }}</h4>
+<h1 class="h4">{{ t('settings.title') }}</h1>
 
 <ul class="nav nav-tabs flex-nowrap overflow-auto" id="settingsTabs" role="tablist">
   {% for tid, key in [('t-basic','settings.tab_basic'),('t-model','settings.tab_model'),('t-collect','settings.tab_collect')] %}

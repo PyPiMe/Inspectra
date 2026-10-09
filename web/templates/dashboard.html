@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ t('nav.dashboard') }}{% endblock %}
 {% block content %}
-<h4 class="mb-3">{{ t('dashboard.title') }}{% if running %} <span class="badge bg-warning text-dark">{{ t('banner.running') }}</span>{% endif %}</h4>
+<h1 class="h4 mb-3">{{ t('dashboard.title') }}{% if running %} <span class="badge bg-warning text-dark">{{ t('banner.running') }}</span>{% endif %}</h1>
 
 {# ① 规模概览 #}
 <h6 class="text-muted">{{ t('dashboard.scale') }}</h6>
