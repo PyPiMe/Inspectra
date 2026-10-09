@@ -42,6 +42,10 @@ jobs:
           import glob, os
           from jinja2 import Environment, FileSystemLoader
           env = Environment(loader=FileSystemLoader('web/templates'))
+          # register app-provided filters so templates compile
+          # 注册应用自定义过滤器，确保模板可编译
+          for name in ('local', 'markdown', 'fp_short'):
+              env.filters[name] = lambda v, *a, **k: v
           for f in sorted(glob.glob('web/templates/*.html')):
               env.get_template(os.path.basename(f))
           print('templates OK')
