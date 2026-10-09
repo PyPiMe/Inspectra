@@ -231,5 +231,6 @@ def js_dict() -> dict[str, str]:
 
 
 def template_dict() -> dict[str, str]:
-    """导出语言模板：以 zh-CN 原文为值。"""
-    return dict(_locales.get(BASE_LANG, {}))
+    """Export the language template based on English (falls back to zh-CN).
+    导出语言模板：以 en 为基准（缺 en 回退 zh-CN）。"""
+    return dict(_locales.get("en") or _locales.get(BASE_LANG, {}))

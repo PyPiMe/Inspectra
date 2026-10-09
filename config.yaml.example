@@ -22,9 +22,6 @@ ssh_batch_size: 10
 # 部署时请替换为随机值：python3 -c "import secrets;print(secrets.token_hex(32))"
 flask_secret: "CHANGE_ME_RANDOM_FLASK_SECRET"
 
-# --- 环境参数示例---
-# 参数：APP_DIR / WEB_HOST / WEB_PORT / TEST_SSH_HOST / TEST_SSH_PORT / TEST_SSH_USER
-#       SSH_KEY_PATH / TEST_PROM_URL / TEST_PROM_AUTH / MODEL_API_KEY_ENV / MODEL_ID / BASE_URL
-# 拓扑：1 控制机 + N 台 SSH 目标 + 现有 Prometheus + 云端真实模型 + 通知仅日志落盘
-# 数据源：base_url=$TEST_PROM_URL, auth_type/secret_env 按 $TEST_PROM_AUTH, verify_tls, timeout
-# 模型：api_key_env=$MODEL_API_KEY_ENV, model_id=$MODEL_ID, base_url=$BASE_URL, data_policy=cloud
+# --- 环境参数示例（按实际环境填写；真实地址与密钥放 secrets.env，勿写入本文件）---
+# 数据源：base_url、auth_type/secret_env、verify_tls、timeout
+# 模型：api_key_env、model_id、base_url、data_policy

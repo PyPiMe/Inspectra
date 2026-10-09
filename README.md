@@ -202,6 +202,14 @@ docker run -d --name inspectra --network host --restart unless-stopped \
   -v "$PWD/data:/data" inspectra:local
 ```
 
+- **受限网络（Docker Hub 不可达）**：可配置镜像加速器，或先用镜像源拉取基础镜像再打标后构建：
+  ```bash
+  docker pull docker.m.daocloud.io/library/python:3.12-slim
+  docker tag  docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim
+  docker compose up -d --build
+  ```
+- **compose v2**：`deploy/install.sh --mode docker` 使用 `docker compose`（v2 插件）；部分发行版仓库仅提供 `docker-compose` v1，请另装 compose v2 插件，或改用上面的单命令 `docker run`。
+
 ## 配置说明
 
 `config.yaml`（不入 git，由 `config.yaml.example` 复制）：

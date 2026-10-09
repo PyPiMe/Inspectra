@@ -283,6 +283,14 @@ docker run -d --name inspectra --network host --restart unless-stopped \
   -v "$PWD/data:/data" inspectra:local
 ```
 
+- **Restricted networks (Docker Hub unreachable)**: configure a registry mirror, or pull the base image via a mirror, tag it, then build:
+  ```bash
+  docker pull docker.m.daocloud.io/library/python:3.12-slim
+  docker tag  docker.m.daocloud.io/library/python:3.12-slim python:3.12-slim
+  docker compose up -d --build
+  ```
+- **compose v2**: `deploy/install.sh --mode docker` uses `docker compose` (v2 plugin); some distro repos only ship the v1 `docker-compose` binary — install the compose v2 plugin, or use the single `docker run` command above.
+
 ## Configuration
 
 `config.yaml` (not in git; copy from `config.yaml.example`):
